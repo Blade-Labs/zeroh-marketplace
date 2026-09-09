@@ -1,17 +1,3 @@
-# UX canon
+# User experience
 
-## Visual language
-
-<visual-language>
-
-## Component vocabulary
-
-<component-vocabulary>
-
-## Interaction rules
-
-<interaction-rules>
-
-## Binding design system
-
-<binding-design-system-path>
+<relevant user journeys, interaction/accessibility expectations and approved design references>

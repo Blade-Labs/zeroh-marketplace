@@ -1,89 +1,21 @@
 ---
 name: "Do Arc"
-description: "Execute a whole arc end to end: launch one per-plane workflow at a time, own the halts it hands back, sweep + validate in-session, and land via the CLI."
+description: "Supervise native phase workers, replenish a bounded planning window, and independently judge the original outcome."
 user-invocable: true
-metadata:
-  keywords: do arc, execute arc, run arc, arc
-  aliases: run-arc
 ---
 
-# Do Arc — Arc Orchestration
+# Do Arc
 
-The terminal evaluation uses the resolved `arc-eval-judge`; its pin and substitutions come from
-`MULTI-DRIVER.md` through the role resolver.
-Phase work resolves `phase-executor`, `software-developer`, and `test-engineer` through that same home.
+The **native supervising session** owns this loop. Read the arc, its approved-intent Git source, legitimate owner ratifications, phase progress and project guidance. Do not launch a workflow file or custom runtime. Native dispatch and fallback rules are in `../../MULTI-DRIVER.md`.
 
-`do-arc` ships an Arc by launching ONE small workflow per plane. Every transition is a
-`roadmap` CLI call and every non-done path a TYPED halt the workflow hands back: you own the
-conversation and the judgment, the CLI owns the mechanics. Invoke the CLI as `roadmap <cmd>`
-(fallback `node ${CLAUDE_PLUGIN_ROOT}/bin/roadmap.mjs <cmd>`).
+1. Acquire the arc's exclusive work claim using `roadmap claim --work <arc-id> --owner <stable-owner>`. Reuse the same owner only when resuming that owner's work. A foreign claim is a stop, not permission to bypass ownership. Read the agreed delivery target/grouping; default to one worktree per arc, shared by its phase workers. Select a clean branch/worktree using ordinary Git; preserve unrelated edits. Run strict `roadmap phase validate <arc-path>` before starting. Active legacy arcs must first establish their actual approved baseline.
+2. Find a ready detailed phase from typed dependencies and progress, not chat memory. Dispatch a fresh native `phase-executor` context for that phase with its file, arc criteria, scope, worktree, permitted writes, check commands and budget. The supervisor keeps authority for queue edits, scope decisions and landing. Run phases serially unless their dependencies and file ownership demonstrate safe independence.
+3. Supervise using the host's actual agent lifecycle and shell tools, following the waiting/recovery contract in `../../MULTI-DRIVER.md`. Retain handles and concise results, not worker transcripts; reconcile pending work instead of yielding a final response that needs a user nudge. If the worker cannot spawn an independent helper, dispatch that helper from the supervisor and relay the result. A worker's self-check is not independent review. If native dispatch is unavailable and the user has not explicitly required delegation, implementation can run inline with honest attribution, but required independent acceptance remains pending.
+4. Read the returned diff and check results. Complete phases only after meaningful checks and independent review. Diagnose failures before retrying. Continue in-scope repairs without repeatedly asking permission; never silently change original criteria. After an interruption, inspect Git, files and actual tool state before retrying. Unknown running work is not completed, and a cached result is not a fresh run.
+5. At the window boundary, compare observed behavior and assumptions with the approved arc. If criteria remain deferred, use `plan-arc`/`plan-phase` to detail the next one or two phases within scope and budget, review and validate them, then continue. Exhausting the current queue does not finish the arc. An assumption change that exceeds a boundary requires a specific owner ruling before dependent work proceeds.
+6. Once all phases are built and no criteria remain deferred, use `arc-sweep` and `validate-arc`. Keep one coherent independent acceptance review rather than redundant panels. Repair gaps within the authorized scope and remaining budget; validate changed records again. Never label the arc complete because the review budget ran out.
+7. Follow the agreed delivery grouping. For a batch, record this arc’s accepted outcome and continue the next authorized arc; present the final PR only after the whole batch and combined acceptance pass. For per-arc or stacked delivery, land in the agreed dependency order and continue the authorized sequence without another permission request when authorization still applies. Present the actual diff/PR and checks. Merge, push or release only within existing user authorization and project policy, using native Git/provider tools. Keep one short retrospective at `<root>/arc-evals/<ID>-<YYYY-MM-DD>.md`, finalized at completion or handoff: what worked, execution friction/failures and resolutions, observed time/cost (unknown if unavailable), and specific follow-ups. Reuse existing notes incrementally; no extra judge, scoring gate or evaluation phase. Product blockers belong in active progress immediately, not only in the retro. Preserve historical eval reports. Release the work claim explicitly with the same owner when work is finished or a checked handoff has been agreed; do not automatically reclaim another owner's stale claim.
 
-## Trigger
+Review rounds are a **ceiling of three, not a target**. Close on a clean first review. Follow-up reviews focus on repairs and impacted behavior. An unresolved issue after the ceiling stays open with its evidence; further spend needs a new bounded decision. Do not restart identical expensive checks without a diagnosed change or unresolved concern.
 
-`do arc <id>`, `/do-arc <id>`, `execute arc <id>`, `run arc <id>`. Optional `--inline` /
-`--recursion` force every phase's band; `--pause-after <N>` stops after phase N.
-
-## Run it
-
-1. `roadmap arm <id>` — claim the lane (refuses a lane a sibling already holds); `roadmap
-   status` shows live lanes.
-2. For each plane in the arc's `planes`, in order: launch `workflows/arc-plane.workflow.mjs`
-   with `{ arcId, planeName, force? }` (`force` from `--inline`/`--recursion`). The workflow
-   drives every member phase of that plane through the CLI and RETURNS at the plane boundary
-   or the moment anything needs you. **Control returns to you between planes** — checkpoints,
-   pauses, and user rulings live there.
-3. Act on the return, then launch the next plane (or run the terminal handoff).
-
-The workflow re-derives position from disk on every call (`roadmap arc next`), so relaunching
-it always fast-forwards past committed work — it never re-runs a completed phase.
-
-## What the workflow hands back — you own it
-
-- **`{ planeDone }`** → launch the next plane.
-- **`{ handoffInline }`** (a trivial/heavy band phase, or `--inline`) → run THAT phase inline
-  yourself via `do-phase` in arc-mode under the **inline-supervised** rules: you drive
-  `software-developer`/`test-engineer` per task while owning every commit, `transparencyReport`,
-  and the gate (the one sanctioned per-task fork — an executor never offloads its own tasks).
-  Then relaunch the plane workflow to continue.
-- **`{ handoff: sweep | validate | land }`** → the judgment-heavy terminals run in-session
-  (below).
-- **A typed halt** — surface it, never narrate past it:
-  - `escalated` → post the architect's `question` + `options` to the user and WAIT.
-  - `self-descope` → the evidence names a compromise/skipped that NARROWS a task or arc
-    acceptanceCriterion. The bounce-vs-ratify call is yours with the user: **bounce** the phase
-    (redo with the criterion honored) or record a user-ratified `Arc.descopes` item. Never wave
-    it through — this is the arc face of the executor's never-rule 1.
-  - `blocked` → surface the reason (unmet dep, foreign lane), resolve it, relaunch.
-  - `stalled` / `exited` → the evidence IS the `roadmap watch` verdict JSON. If the executor
-    session is addressable, `SendMessage` it once with that evidence; otherwise relaunch the
-    plane workflow (resume is free — re-derivation from disk makes a respawn lossless). Still
-    stuck after a bounded wait → escalate to the user. Never restart committed work.
-
-## Terminal handoffs (in-session)
-
-1. **sweep** → run the `arc-sweep` skill (disposes the batched per-phase debt, judges the arc
-   against its `singleSeams` / `honestyRails` / `designRefs`). If it authors an IN-ARC
-   follow-up phase, relaunch a plane workflow covering it — the workflow's per-iteration plane
-   re-resolution picks it up automatically. A SECOND sweep over a loop-back phase may only
-   ACCEPT / DESCOPE / OPERATOR-PENDING — never author again.
-2. **validate** → run `validate-arc <id>`, then `roadmap arc record-validate <id> --verdict
-   <PASS|GAPS|no-op>` (stamps the verdict artifact `arc land` reads). For GAPS, follow
-   validate-arc Step 5's authority rules: reuse existing session authorization, otherwise honor
-   `mergePolicy.gapsCorrection`. Correct and independently re-judge within the existing bound;
-   missing authority or scope expansion requires a ruling. Correction does not authorize landing.
-3. **land** → `roadmap arc land <id>` — the ONE landing engine (preconditions, arc-end suite,
-   the blocker check, backlog regroom, RunnerSummary, and the autonomous push per the
-   consumer's `mergePolicy`). Exit 0 = landed · 3 = held-for-user · 2 = blocker; surface the
-   blocker JSON on any non-zero exit. `baseRef → master` is NEVER part of landing — a release
-   is a held human act. A user instruction to review-before-merge always overrides autonomy.
-
-## Pause & resume
-
-Pause is free — stop anywhere; no state lives in the workflow. Resume is always the same act:
-relaunch the plane workflow. `roadmap arc next` fast-forwards from disk. A
-`roadmap/arcs/<ID>-RESUME.md` is optional human notes, never load-bearing.
-
-## Execution-prompt doc
-
-`roadmap/arc-prompts/<id>-execution-prompt.md` is generated by **`plan-arc`**, not here — read
-it for the arc's bar, honesty rails, and design refs before driving.
+Completion records must satisfy the typed done shape: independent review, completed tasks, and successful required checks or `checks: []` with a justified `checksNotApplicable` reason. Run the consumer’s combined typecheck and `roadmap phase validate --all` command before final closure. Do not invent check results or weaken requirements to satisfy the schema. Runtime refinements remain necessary; a clean `tsc` alone does not verify relationships or original intent.

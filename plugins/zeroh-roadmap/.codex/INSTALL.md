@@ -16,15 +16,14 @@ Verify with `codex debug prompt-input`: every skill below appears in the model-v
 with its description and file path. An installed-plugin listing proves installation, not
 surfacing.
 
-## What is surfaced (v0.40.6)
+## What is surfaced (v0.41.0)
 
-**13 skills** + the always-active bootstrap `using-zeroh-roadmap`:
+**12 skills** + the routing skill `using-zeroh-roadmap`:
 
 - arc-sweep
 - audit-roadmap
 - do-arc
 - do-phase
-- eval-arc
 - full-code-review
 - handoff
 - plan-arc
@@ -34,19 +33,22 @@ surfacing.
 - test-strategy
 - validate-arc
 
-**9 agents** — the roles the skills spawn (see `MULTI-DRIVER.md` §1):
+**7 role briefs** — passed to available native agents (see `MULTI-DRIVER.md`):
 
-- arc-eval-judge
 - code-reviewer
 - intent-validator
 - phase-executor
-- quality-pass
 - software-architect
 - software-developer
 - test-engineer
 - ux-designer
 
+Role briefs do not imply custom-agent registration on Codex; use the actual native tools.
+
 ## Update
+
+Before upgrading, adapt consumer automation that calls retired commands or keep its compatible version.
+Cache updates do not migrate consumer schemas or grant additional authority.
 
 ```bash
 codex plugin marketplace upgrade

@@ -8,7 +8,7 @@
  *
  * Prints ONLY the claimed number(s) on stdout, one per line — callers capture stdout.
  */
-import { existsSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readdirSync, writeFileSync, mkdirSync, readFileSync, unlinkSync, rmdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { gitCommonDir } from '../lib/gitroot.mjs'
 import { maxDeclaredPhase, maxRemotePhase } from '../lib/phasescan.mjs'
@@ -31,6 +31,7 @@ function maxClaim(dir) {
 }
 
 export default async function run(argv) {
+  if (argv.includes('--work')) return claimWork(argv)
   let count = 1
   const positional = []
   for (let i = 0; i < argv.length; i++) {
@@ -104,4 +105,32 @@ export default async function run(argv) {
   }
   process.stdout.write(claimed.join('\n') + '\n')
   return 0
+}
+
+// Serialize work-claim mutations. A crashed lock is held for explicit operator repair;
+// no age/PID heuristic may take over another session's work.
+function claimWork(argv) {
+  const get = flag => { const index = argv.indexOf(flag); return index < 0 ? undefined : argv[index + 1] }
+  const id = get('--work'), owner = get('--owner')
+  if (!id || !owner || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(id) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(owner)) throw new Error('--work ID and --owner SESSION require simple stable identifiers')
+  const positional = argv.filter((arg, i) => !['--work', '--owner', '--release'].includes(arg) && !['--work','--owner'].includes(argv[i - 1]))
+  if (positional.length > 1 || positional.some(arg => arg.startsWith('--'))) throw new Error('Unknown work-claim arguments')
+  const root = positional.length ? resolve(positional[0]) : defaultRoadmapRoot(process.cwd())
+  const dir = join(gitCommonDir(root), 'zeroh-roadmap-work-claims')
+  mkdirSync(dir, { recursive: true })
+  const lock = join(dir, `${id}.lock`), path = join(dir, `${id}.json`)
+  try { mkdirSync(lock) } catch (error) { if (error.code === 'EEXIST') throw new Error(`Ownership mutation held for ${id}. Retry after the other operation; if interrupted, inspect and explicitly repair ${lock}. No automatic reclaim.`); throw error }
+  try {
+    const previous = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null
+    if (previous && previous.owner !== owner) throw new Error(`${id} belongs to ${previous.owner}; explicit checked handoff required`)
+    if (argv.includes('--release')) {
+      if (!previous) throw new Error(`No ownership claim exists for ${id}`)
+      unlinkSync(path); console.log(JSON.stringify({ id, owner, released: true }))
+    } else {
+      const claim = previous ?? { id, owner, root, claimedAt: new Date().toISOString() }
+      if (!previous) writeFileSync(path, JSON.stringify(claim) + '\n', { flag: 'wx', mode: 0o600 })
+      console.log(JSON.stringify(claim))
+    }
+    return 0
+  } finally { rmdirSync(lock) }
 }

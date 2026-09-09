@@ -1,28 +1,17 @@
-# zeroh-roadmap — Phase-Driven Development Plugin
+# Roadmap operator guidance
 
-A Claude Code plugin that adds phase-driven development with validation gates, review reports, and changelog generation. Zero dependencies — Markdown skills, bash scripts, TypeScript templates.
+Use `skills/using-zeroh-roadmap/SKILL.md` for routing and `MULTI-DRIVER.md` for native dispatch. The supervising session owns execution. Read the actual consumer schema and project instructions before editing typed records.
 
-The skill catalog (auto-loaded) is the source of truth for what skills exist and what they do. Agent definitions are loaded when invoked. Operator-facing setup notes (migration script, version bump, contributor docs) live in README.md.
+Supported commands: `status`, `claim`, `init`, `phase validate <path>` (phase or arc). Run strict validation before queueing and completion. The supported hook is fail-soft validation diagnostics; it does not replace explicit validation and is not proof of Codex automatic enforcement.
 
-## Path Conventions
+No workflow module, custom driver, gate runner, phase watchdog, curation or scoring stage remains in the active path. Use native agent/shell/Git tools with existing project checks and host resource admission. Keep independent reviewers separate from the author; when a worker cannot spawn, the supervisor arranges the helper.
 
-Plugin content via `${CLAUDE_PLUGIN_ROOT}/templates/` and `${CLAUDE_PLUGIN_ROOT}/scripts/`.
+## Consumer upgrade boundary
 
-User-repo artifacts. The roadmap ROOT is discovered, not fixed — see the Layout rule in
-`skills/using-zeroh-roadmap/SKILL.md` (mechanics in its `references/layout.md`). Write `<root>/…`,
-never a bare `roadmap/…`:
-- Schema: `<root>/lib/schema.ts` (legacy `lib/roadmap/schema.ts` still recognized)
-- Backlog: `<root>/backlog.ts` (ordered queue — first entry is next)
-- Phases: `<root>/phases/*.phase.ts`
-- Review reports: `reviews/releases/v*-review.json`
-- Dashboard: `reviews/dashboard/index.html`
+Inventory old command callers before upgrading a consumer. Consumers depending on removed automation stay on the compatible release until explicitly adapted. Do not rewrite their scripts, configuration, history or vendored schema merely because the plugin cache changed.
 
-## Core Principles
+Read legacy JSON pointers and explicit policy directly as guidance. Unknown or malformed policy never grants additional authority. New records use the small typed contract; existing strict vendored schemas govern their own writes until a focused opt-in upgrade. Establish a legitimate approved-intent Git reference for active legacy arcs, not a baseline reverse-engineered from current results.
 
-1. **One task at a time.** Sequential execution with commit between each.
-2. **Know the diff before writing the task.** High-confidence planning.
-3. **Validation gate after every phase.** No exceptions.
-4. **Zero findings to pass.** Loop agents until clean.
-5. **Errors are the debugging interface.** Never swallow, summarize, or "clean up" errors.
-6. **`phase.kind` selects the gate set.** Picker rules in plan-phase Step 3.
-7. **One task = one commit.** `batchMode: true` is the only escape; sub-agent forks that absorb phase tasks are forbidden — but the arc executor is one agent = one whole phase (not a fork per task), see do-phase Step 4.
+Work ownership is separate from permanent phase-number allocation. Acquire an exclusive claim with a stable owner; resume only with that same owner. Foreign/stale ownership remains held until explicit checked handoff/release, never by timeout or PID inference.
+
+Historical Gauntlet and optimization documents describe earlier implementations. They are evidence for review, not current execution instructions. Do not revive obsolete mechanisms because an old trial names them.

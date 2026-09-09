@@ -1,54 +1,23 @@
-## Generator
-```sh
-npx create-vite@^8 my-lib --template vanilla-ts
-```
+# Library / CLI
 
-Source: https://vite.dev/guide/. Vite is MIT, tier `Allowed anywhere`.
+Define the smallest public API or command, supported runtime, inputs/outputs and packaging boundary.
 
-## Post-steps
-Install `tsup: ^8.5` and `@types/node`, and include `node` in the TypeScript
-`types` list. tsup is sourced from https://tsup.egoist.dev/; it is MIT and
-`Allowed anywhere`. Set package.json `exports` to `./dist/index.js`, `bin` to
-`./dist/cli.js`, and `files` to `dist`. Configure `tsup.config.ts` with
-`entry: ['src/index.ts', 'src/cli.ts']`, `format: ['esm']`, and `dts: true`.
-Set the package.json `build` script to `tsup`.
-Give the CLI a Node shebang and a stable `--help` path. Add at least one
-`node:test` file for the public API, then run the tsup build before Verify.
+## Prerequisites and creation
 
-## File tree
-```text
-my-lib/
-my-lib/package.json
-my-lib/src/index.ts
-my-lib/src/cli.ts
-my-lib/tsup.config.ts
-```
+The approved language/runtime and its ordinary package/test tools.
 
-## Conventions delta
-Keep the reusable API in `src/index.ts` and the thin executable adapter in
-`src/cli.ts`; publish only built artifacts through `exports`, `bin`, and `files`.
+Create a minimal package directly or use the selected tool generator; Node/TypeScript is an example, not a requirement.
 
-## testConventions
-Use `node --test` for behavior and `node dist/cli.js --help` as the built CLI
-smoke check. Test runner source: https://nodejs.org/api/test.html.
+## Minimal shape and rationale
 
-## designHomes
-Set `designHomes.architecture.home` to `docs/architecture.md` and
-`designHomes.ux.canon` to `docs/ux-canon.md`.
+src/ with exported API or CLI entry, test/ with an input/output behavior, package metadata and README example.
 
-## Verify
-```sh
-test -f my-lib/package.json && test -f my-lib/src/index.ts && test -f my-lib/src/cli.ts && test -f my-lib/tsup.config.ts && (cd my-lib && npm run build && node --test && node dist/cli.js --help && node scripts/check-readme-catalog.mjs --project-root .)
-```
+Keep CLI argument/I/O handling separate from reusable behavior when useful.
 
-## CI and release adapter
+## Run and test
 
-Select `library-cli` in `.github/greenfield-delivery.json` and follow
-[the shared CI/release strategy](../ci-release-strategy.md) for its exact inventory,
-executor, raw report, coverage merge and build contract. Bind runner/build argv
-into the shard manifest before execution; require exact-once leaf/file selection.
-Generate `scripts/ci-shard-plan.mjs`, `.github/workflows/ci.yml` and
-`.github/workflows/release.yml` only from the approved preservation plan.
-Missing tooling/reporters are unavailable with the adapter install remedy.
-Affected PR checks backstop into authoritative full shards on main/manual runs;
-release promotes the same verified artifact bytes without rebuilding.
+Run the documented example and one meaningful success/failure test. Test distributable output if packaging is in scope; do not publish without authorization.
+
+Record concrete commands after inspecting generated output. This recipe is guidance, not an observed platform acceptance result. Missing tooling or an unrun target remains unverified. Canonical architecture and test homes can be README sections.
+
+Sources to check when selecting tooling: https://nodejs.org/api/test.html · https://docs.npmjs.com/cli/configuring-npm/package-json

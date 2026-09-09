@@ -1,72 +1,23 @@
-## Generator
-```sh
-npx create-nx-workspace@^23 my-workspace --preset=ts --workspaceType=integrated --packageManager=npm --nxCloud=skip --interactive=false
-```
+# Nx workspace
 
-Source: https://nx.dev/getting-started/installation. create-nx-workspace is
-MIT, tier `Allowed anywhere` as repository tooling.
+Use only when several current projects justify project graph or boundary tooling; future ambitions alone do not.
 
-## Post-steps
-Create `packages/`, then add `generators.json` for first-party generators and
-`emitted/repo-catalog.json`; the README consumes emitted/repo-catalog.json.
-Adopt five Nx tag axes (`type:`, `scope:`, `domain:`, `kind:`, `stability:`),
-encode them in `depConstraints`, keep `compilerOptions.paths absent` (no base paths),
-and use an Nx-synced solution tsconfig. Preserve `nx:noop` for
-intentionally empty targets.
+## Prerequisites and creation
 
-| language option | workspace contract |
-| --- | --- |
-| TypeScript only | npm workspace packages |
-| TypeScript + Python (uv) | npm packages plus uv-managed Python projects |
+Toolchain for chosen applications, compatible Node/package manager and Nx version.
 
-Not generalized from zeroh: `CODEOWNERS`, `tsdown`, three test runners,
-`radix-nova`, and `.building/` coordination state.
+Use the selected Nx workspace generator after checking current documentation. Simpler workspaces are valid alternatives.
 
-## File tree
-```text
-my-workspace/
-my-workspace/nx.json
-my-workspace/package.json
-my-workspace/tsconfig.base.json
-my-workspace/packages/
-```
+## Minimal shape and rationale
 
-The generated root keeps `libs/` absent until the consumer selects a project.
+apps/ for independent entry points, libs/ or packages/ only for justified shared code, project tests and README commands.
 
-## Conventions delta
-Projects live in `packages/`; boundary tags and `depConstraints` make permitted
-dependencies explicit. Repository metadata is emitted, and the README checks
-the catalog rather than duplicating it.
+Define real dependency boundaries; avoid extracting speculative shared libraries.
 
-## testConventions
-Copy `templates/scripts/run-nx-test-tier.mjs` to `scripts/run-nx-test-tier.mjs`.
+## Run and test
 
-- Full: `node scripts/run-nx-test-tier.mjs invalid`
-- Scoped manifest: `node scripts/run-nx-test-tier.mjs '{manifest}'`
-- Affected manifest: `node scripts/run-nx-test-tier.mjs '{manifest}'`
-- Impacted range: `node scripts/run-nx-test-tier.mjs '{range}'`
+Run the selected application and its actual Nx test target. Check a shared contract only where sharing exists. No copied test-tier adapter or manifest protocol is required.
 
-Local exact tests use scoped manifests, phase source changes use affected manifests,
-arc inputs use impacted ranges, and CI runs the full workspace sweep. The selector
-invokes `npm exec -- nx` with an argv array and fails toward `run-many -t test`.
+Record concrete commands after inspecting generated output. This recipe is guidance, not an observed platform acceptance result. Missing tooling or an unrun target remains unverified. Canonical architecture and test homes can be README sections.
 
-## designHomes
-Set `designHomes.architecture.home` to `docs/architecture.md` and
-`designHomes.ux.canon` to `docs/ux-canon.md`.
-
-## Verify
-```sh
-test -f my-workspace/nx.json && test -f my-workspace/package.json && test -f my-workspace/tsconfig.base.json && test -d my-workspace/packages/ && (cd my-workspace && test ! -e libs && node scripts/check-readme-catalog.mjs --catalog emitted/repo-catalog.json)
-```
-
-## CI and release adapter
-
-Select `nx-monorepo` in `.github/greenfield-delivery.json` and follow
-[the shared CI/release strategy](../ci-release-strategy.md) for its exact inventory,
-executor, raw report, coverage merge and build contract. Bind runner/build argv
-into the shard manifest before execution; require exact-once leaf/file selection.
-Generate `scripts/ci-shard-plan.mjs`, `.github/workflows/ci.yml` and
-`.github/workflows/release.yml` only from the approved preservation plan.
-Missing tooling/reporters are unavailable with the adapter install remedy.
-Affected PR checks backstop into authoritative full shards on main/manual runs;
-release promotes the same verified artifact bytes without rebuilding.
+Sources to check when selecting tooling: https://nx.dev/getting-started/intro

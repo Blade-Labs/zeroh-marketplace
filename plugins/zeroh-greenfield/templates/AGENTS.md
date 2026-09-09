@@ -1,19 +1,5 @@
-# Repository guidance
+# Project guidance
 
-## Conventions
+<links to canonical product intent, architecture and test/run commands>
 
-<conventions>
-
-## Don't
-
-<prohibited-patterns>
-
-## Generalize-forward
-
-<when-to-extract-a-shared-pattern>
-
-## Flag-first delivery
-
-<flag-lifecycle-and-default>
-
-<release-bearing-archetype: hold[]>
+<project-specific conventions that change implementation decisions>

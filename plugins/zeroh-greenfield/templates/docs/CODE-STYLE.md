@@ -1,9 +1,3 @@
-# Code style
+# Code conventions
 
-## Lint
-
-`<lint-command>`
-
-## Format
-
-`<format-command>`
+<only conventions not already supplied by the language/tool configuration>

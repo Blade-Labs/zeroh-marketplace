@@ -1,56 +1,5 @@
-# Design-system step
+# UI choice when needed
 
-Choose after the stack ruling and before generation. Record the choice in the
-design ADR, UX canon, and roadmap pointers; never invent brand values.
+Reuse the project's approved design system and accessibility conventions. If none exists, choose a small suitable foundation for the selected platform and first journey; discuss a material brand or component-library choice with the owner. A specialist design skill is optional when available and useful.
 
-## Web
-
-For an approved React/shadcn stack, the example below uses shadcn/ui with
-Tailwind v4 and its CSS-first configuration. For another selected stack, propose
-its compatible design integration; do not install React components into SvelteKit
-or force a visual framework into a CLI. The proposal must name the actual
-component sources and license tier before installation.
-
-Use this `components.json` shape, replacing registry names only with approved
-open registries:
-
-```json
-{
-  "style": "new-york",
-  "baseColor": "neutral",
-  "cssVariables": true,
-  "iconLibrary": "lucide",
-  "registries": {
-    "@magicui": "https://magicui.design/r/{name}.json"
-  }
-}
-```
-
-Keep one token source and generate the CSS variable projection from it. The byte-check guard fails when generated CSS bytes differ from the token source projection.
-
-Capture `fonts | palette | spacing | ux-canon` as inputs to the UX home. Use
-`external-assets-licensing.md §The tiers` to classify every external source.
-
-## beautifului.dev — MIT — Allowed anywhere
-
-beautifului.dev may supply cited copy-paste AI-interface primitives or an
-approved registry item. Record provenance with the component proposal.
-
-## Mobile mappings
-
-| stack | mapping | UX inputs | source |
-| --- | --- | --- | --- |
-| shadcn_flutter | Share semantic token names with web and project them to Dart | ux-canon fonts palette spacing | shadcn_flutter |
-| Material 3 | Translate semantic roles to Material theme tokens | ux-canon fonts palette spacing | https://m3.material.io |
-| react-native-reusables | Project semantic tokens to React Native primitives | ux-canon fonts palette spacing | @react-native-reusables/cli |
-
-## Blade handoff
-
-Invoke `zeroh-design:blade-design` using Path 2. It owns selection and token
-values. Store only these approved outputs:
-
-- `designHomes.ux.bindingDesignSystem` points to the sibling-owned theme.
-- The `ux-canon pointer line` names that binding without copying tokens.
-- The design-system `ADR line` records the choice and owner.
-
-If zeroh-design is absent, print `/plugin install zeroh-design@zeroh-marketplace` and STOP.
+Do not require a brand plugin, UI registry or web component library for every project. Document relevant interaction/accessibility expectations and verify the actual first screen. Non-UI projects skip this guidance.

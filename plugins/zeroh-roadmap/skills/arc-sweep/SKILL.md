@@ -1,126 +1,15 @@
 ---
 name: "Arc Sweep"
-description: "Pre-merge sweep for a built arc: dispose every accumulated compromise (reusing release-sweep's debt vocabulary) and run one whole-arc software-architect review against the arc's singleSeams + designRefs, then report merge-readiness."
+description: "Inspect a built arc for unresolved compromises and integration gaps before final intent acceptance."
 user-invocable: true
-metadata:
-  keywords: arc sweep, pre-merge sweep, sweep arc
-  aliases: pre-merge-sweep
 ---
 
-# Arc Sweep — Pre-Merge Debt + Whole-Arc Review
+# Arc Sweep
 
-`arc-sweep` is the closing ritual of `do-arc`: after an arc's phases are built but before merge, it
-(1) disposes every accumulated debt item, (2) runs ONE architect over the whole-arc diff as a single
-system, and (3) **reports merge-readiness — it never lands the merge.** Landing authority: **under
-`do-arc`**, do-arc Step 8 owns it (auto-integrate on validate-arc PASS + sweep clean + arc-end suite
-green + no blocker); **standalone** (`/arc-sweep`), hold for the user's go.
+Read the approved arc, member phase progress and whole diff. Confirm every member phase is built and no acceptance criteria remain deferred before treating the arc as ready for final acceptance. Run `roadmap phase validate <arc-path>`; failure or unavailable tooling blocks readiness.
 
-**Read `skills/release-sweep/SKILL.md` FIRST.** arc-sweep reuses release-sweep's debt-disposition
-vocabulary and `debtResolutions[]` persistence verbatim — never a parallel taxonomy.
+Inspect cross-phase integration, changed public contracts, architecture/design references, unresolved review findings and recorded compromises. Use the same independent reviewer as the final acceptance when that keeps the review coherent; add an architect only for an actual unresolved architectural question. Do not require a panel or a fresh full-codebase review by default.
 
-**When vs release-sweep:** arc-sweep runs **pre-merge** on an unversioned arc; release-sweep runs
-**pre-archive** on versioned phases. Same persistence target (`debtResolutions[]`). arc-sweep is NOT
-`full-code-review` (the 8-agent pre-prod audit) — it is a lighter, seam-specific architect pass.
+Fix in-scope defects under existing authorization. A genuine follow-up needs a concrete owner, consequence and destination; creating a backlog item does not make an unmet original criterion acceptable. Only an explicit owner ratification can change the promise. Preserve relevant historical debt records without requiring a new curation or scoring mechanism.
 
-## Step 1: Consolidated debt sweep
-
-**Hand-in (the inputs).** The `PhaseExecutionResult` roll-up arrives two ways: (1) the in-context array
-`do-arc` hands in (fast path, use when complete); (2) `discoverResults()` re-reads `phase.executionResult`
-from disk (the system of record) — use it when the array is missing or short (a resumed / compacted
-arc), never dispose a truncated set. `roadmap debt census` surfaces the same estate slice. The
-free-text `compromises` strings are also re-read from the phase files. Aggregate all of it.
-
-**Disposition → persistence (mechanical — read the row):**
-
-| Disposition | Meaning | `debtResolutions[]` | `status` | `via` |
-|---|---|---|---|---|
-| RESOLVE-NOW | fixed inline now, re-gated | ONE entry | `'fixed'` | `'<commitSHA>'` |
-| PLAN-PHASE / **IN-ARC** (default) | authored + executed in-arc | ONE entry | `'planned'` → `'fixed'` after execution | `'phase-<N>'` |
-| PLAN-PHASE / **DESCOPE** | dropped, user-ratified (even autonomous) | ONE entry + `Arc.descopes[]` | `"won't_fix"` | `'descope — ratified by … (≥20 chars)'` |
-| ACCEPT (won't fix) | correct boundary, reason ≥20 chars | ONE entry | `"won't_fix"` | the reason |
-| ACCEPT (dismiss) | never was debt | ONE entry | `'dismissed'` | the reason |
-| OPERATOR-PENDING | deploy/operator action, not code | ONE entry (+ `roadmap/followups/<arcId>.md`) | `'operator-pending'` | runbook / DEPLOY.md anchor |
-
-(`limitations` never enter this table — see below.)
-
-**Disposition mode — read `mergePolicy` from `roadmap.config.json` first.** Under do-arc AND
-`mergePolicy.arcIntegration: 'autonomous'`, dispose each item YOURSELF by the table — no per-item
-prompt on the clean path. Absent config / `'hold'`, or **standalone** invocation → prompt per item
-(standalone behavior is unchanged, always interactive). **Autonomous mode STILL stops for a human on
-four classes:** a `[PRODUCT]` hard-stop; a `[MULTI-REPO]` hard-stop; a `software-architect`
-**ESCALATE** verdict on a tiebreak; and any **DESCOPE** (narrowing what the arc promised ALWAYS needs
-user ratification, recorded typed on `Arc.descopes`). On a genuinely ambiguous item, spawn
-`software-architect` as a tiebreak advisor (the Prime-Rule-1 pattern) BEFORE disposing.
-
-Each code-disposition persists exactly one `debtResolutions[]` entry (`{ ref: '<taskId>.<field>',
-status, via, date }`); an autonomous disposition writes the SAME entry, marking `via` with
-`autonomous-sweep`.
-
-- **RESOLVE-NOW** == release-sweep **(f) Fix inline** → invoke `zeroh-roadmap:software-architect` for
-  the proper-solution blueprint, apply, re-gate to the phase's `kind`, commit → `{ status: 'fixed',
-  via: '<commitSHA>' }`. `'fixed'` is reserved for work EXECUTED in this sweep (a commit that exists),
-  never a merely-authored follow-up.
-- **PLAN-PHASE** — a real follow-up; **IN-ARC is the DEFAULT**:
-  - **IN-ARC (default)** — author the phase NOW (`plan-phase`, stamp `arcId`, claim a number, append
-    to `planes`) → `{ status: 'planned', via: 'phase-<N>' }`. **do-arc loops back to Step 4 and
-    EXECUTES it before Step 7/8**; on completion the entry flips `'planned'` → `'fixed'`. Authoring
-    alone is NOT resolution.
-  - **DESCOPE** — drop it. Requires **explicit user ratification EVEN in autonomous mode**. Record
-    BOTH `{ status: "won't_fix", via: 'descope — ratified by <who> <when>' }` AND a typed
-    `Arc.descopes[]` `{ item, ratifiedBy, ratifiedAt }` — durable and typed, never buried in prose.
-- **ACCEPT** == release-sweep **(w) Won't fix** (reason ≥20 chars → `"won't_fix"`) or **(d) Dismiss**
-  (never-was-debt → `'dismissed'`).
-- **OPERATOR-PENDING** — a required **deploy/operator action, not code**. Writes `{ status:
-  'operator-pending', via: '<runbook / DEPLOY.md anchor>' }` so deploy debt is schema-visible, detail
-  in `roadmap/followups/<arcId>.md`. **Exempt from the openFollowups budget** but counted + listed in
-  the RunnerSummary notes; stays OPEN until a later release-sweep disposes it post-deploy.
-
-`ref`/`status`/`via`/`date`, the ≥20-char `won't_fix` reason, and the dismissed-ratio nudge are
-release-sweep's — do not redefine them.
-
-**`limitations` are out of scope — by design.** The roll-up carries `compromises`/`skipped`/
-`hardcoded` but NOT `limitations` (a permanent design constraint, not deferred work) — **release-sweep**
-disposes those pre-archive. To avoid a silent hole, arc-sweep re-reads each phase's `limitations` and
-LISTS any present in the Step-3 report under "deferred to release-sweep".
-
-**No summary file.** Like release-sweep, arc-sweep NEVER writes a persisted summary — `debtResolutions[]`
-+ the transparency reports ARE the audit trail; the merge-readiness report is EPHEMERAL chat only.
-`roadmap/followups/<arcId>.md` holds ONLY OPERATOR-PENDING detail + ratified-descope rationale.
-
-## Step 2: Whole-arc cross-phase review (against singleSeams + designRefs)
-
-A per-phase gate sees only its own diff — it CANNOT catch a seam one phase quietly forked (3 hardcodes
-that should be 1 config; a shared type two phases redefined). **Only a whole-arc view catches a forked
-seam** — that is this step's whole job.
-
-Run ONE `zeroh-roadmap:software-architect` over `git diff <arc.baseRef>..HEAD` and judge it as **a
-single system** against `arc.singleSeams`: for each seam, did any consumer fork it, or is it a single
-implementation across the arc? **Spawn it with `model` per the `modelPolicy.judgeModel` home statement
-(review-phase SKILL.md)** — this whole-arc architect is a JUDGE.
-
-**Design-conformance — judge against `arc.designRefs` too.** Read the arc's confirmed `designRefs` and
-judge whether the build implements each: a `reused` pattern genuinely followed (not re-invented), a
-`designed` pattern matching what was extended in the doc, a `ux` designRef's surface matching the
-confirmed preview — layout AND interactions/motion (hover/focus, transitions, animations: same or
-unambiguously better, never flattened — references/parity-rubric.md, Interaction & motion). **The design is
-the spec** — drift from a confirmed designRef is a finding, disposed like any other (RESOLVE-NOW if
-cheap, else PLAN-PHASE). No `designRefs` (mechanical arc) → skip explicitly, never silent.
-
-**Ledger-audit clause (when the arc trims plugin/skill prose).** If the arc diff deletes or compresses
-model-loaded skill/agent prose, the sweep verifies EVERY such deletion in the diff carries a
-`DIET-LEDGER.md` disposition row, and spot-checks the `enforced-by-code(...)` claims against the named
-code (a disposition pointing at code that does not enforce the deleted rule is a BLOCKER finding). A
-trimmed passage with no ledger row is a sweep failure, not a style nit.
-
-Apply any **RESOLVE-NOW** fixes the architect identifies and **re-gate each** to its phase's `kind`;
-author **PLAN-PHASE** follow-ups for real debt that should not block the merge.
-
-## Step 3: Report merge-readiness (ephemeral, chat only)
-
-Aggregate: **per-phase gate status** (every member `done`, passing gate); **debt dispositions** (counts
-by RESOLVE-NOW / PLAN-PHASE IN-ARC vs DESCOPE / ACCEPT / OPERATOR-PENDING + the `debtResolutions[]`
-refs); **whole-arc architect verdict** (seam single-vs-forked + design-conformance, or "no designRefs";
-+ the ledger-audit result when prose was trimmed); **deferred to release-sweep** (`limitations`);
-**overall** (green / blocked + any OPERATOR-PENDING deploy actions). **arc-sweep never merges — it
-reports.** Under `do-arc`, hand it back; standalone, hold for the user's go.
-</content>
+Report ready for `validate-arc`, or the specific unresolved gaps. A sweep does not itself prove the product works and does not authorize a merge or release.

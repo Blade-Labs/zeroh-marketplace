@@ -1,58 +1,16 @@
 ---
 name: brownfield-audit
-description: Handle requests phrased as audit, fill gaps, or reconcile an established repository by proposing only missing, partial, or stale homes before approval.
+description: Inspect an existing project and offer only useful missing or stale foundations while preserving its working conventions.
 ---
 
-# Brownfield audit
+# Improve only the gaps
 
-Use this workflow for an established repository. Invoke `zeroh-greenfield:stack-decision` only when stack evidence is unresolved or conflicting, then resolve `skills/greenfield-init/references/standards.md` and `skills/greenfield-init/references/pointers.md` from the installed zeroh-greenfield plugin root as the contract owners. Read `references/marker-table.md`, `references/harness-files.md`, and `references/readme-reconcile.md` when their stages say so.
-Not this skill: route initial trigger selection through `using-zeroh-greenfield`, marker-free repositories through `greenfield-init`, and unresolved stack selection through `stack-decision`. Use `roadmap/arc-evals/phase-33.peval.json` as the 2026-09-04 fixture and oracle evidence.
+Inspect project guidance, source boundaries, real run/test commands and existing product or architecture records. Follow existing canonical links, including legacy `designHomes` and `testConventions` pointers if present. These are guidance, not an execution protocol. Use [inspection hints](references/marker-table.md) and [README reconciliation](references/readme-reconcile.md) only as needed.
 
-## Detect
+Report each consequential gap with observed evidence, a small suggested change and its benefit. Existing conventions need not match Greenfield's example templates. Do not re-interview known intent or impose a new stack, UI system, document tree, catalog checker or delivery pipeline.
 
-Confirm the repository root and inspect every evidence glob in `references/marker-table.md`. A marker is evidence, not a stack decision; absence never proves a stack. Inventory existing canonical homes and sibling-plugin availability. Resolve roadmap roots using the marker-table procedure; require the same read-only capability preflight as greenfield-init before proposing config changes. Do not call stack-decision to replace a proven existing choice.
+The owner can accept any subset or none. An audit request authorizes inspection, not implementation; reuse an earlier explicit instruction to repair the same scope. If all suggestions are declined, finish with no consumer writes and no further setup question. Declining suggestions does not block Roadmap initialization.
 
-Apply these failure exits:
+Apply only accepted changes, merging into existing homes without replacing unrelated content. Check for changed files before writing; resolve conflicting changes rather than overwriting them. [Agent guidance](references/harness-files.md) should point to existing policy rather than duplicate it.
 
-- zeroh-roadmap absent: STOP and return `/plugin install zeroh-roadmap@zeroh-marketplace`.
-- Only when an approved Blade handoff requires it: zeroh-design absent: STOP and return `/plugin install zeroh-design@zeroh-marketplace`. Continue non-Blade documentation and configuration repairs without this sibling.
-- greenfield-init absent: STOP and return `/plugin install zeroh-greenfield@zeroh-marketplace`.
-- Repository root unresolved: STOP and name the unresolved path.
-
-## Gap table
-
-Inspect architecture, stack, test strategy and a runnable development path first. Missing documentation is an offer to improve the project, not a reason to replace working code. Expand detection categories into one row per applicable artifact (PRD, tech-stack ADR, design-system ADR, CODE-STYLE, architecture index, UX canon, README catalog, each harness file, and roadmap config), plus each independently actionable stale/partial asset. Alternative canonical homes count as present; inspect their contents before classifying. Optional framework or Superpowers absence is not a gap unless selected by the approved project requirements. Emit rows with columns `Artefact | State | Evidence path | Proposed action | Existing home to LINK`. Classify each row `present`, `partial`, `missing`, or `stale`; cite concrete evidence. Consult `references/harness-files.md` for harness rows and `references/readme-reconcile.md` for catalog currency.
-
-## Propose
-
-Emit proposals ONLY for gap-table rows in state `missing`, `partial`, or `stale`.
-Emit no proposal for a `present` row.
-Record approval before any write.
-
-For each eligible row, show the target, source facts, minimal delta, preservation guard, and verification. Do not select a new stack or duplicate an owner contract.
-
-## Approval
-
-The user may accept all, choose individual rows, or decline all improvements. Reuse existing explicit scope approval. For a subset, execute independent accepted rows; explain a dependency before requesting any additional scope. Do not turn a declined suggestion into a mandatory gate or create a new arc. If approval is absent or ambiguous, return the proposal without writes.
-
-## Act
-
-Apply only approved gap rows. An existing home is LINKED from the index/canon, never replaced. Follow `skills/greenfield-init/references/standards.md` for conventions and generated blocks, and `skills/greenfield-init/references/pointers.md` for roadmap configuration. Call `zeroh-greenfield:stack-decision` if stack evidence conflicts; never infer a replacement stack.
-
-For harness reconciliation, execute the approved pointer diffs in `references/harness-files.md`. For README reconciliation, use only the checker named in `references/readme-reconcile.md`.
-
-## Verify
-
-Run every approved row's falsifiable check. Re-run the README checker when applicable, byte-compare generated harness marker blocks, and confirm present rows remain unchanged. On any red result, STOP and report the row, command, and evidence without marking it complete.
-
-## Done
-
-Return the final five-column gap table, approval record, changed paths, verification commands and exit codes, linked canonical homes, and any stopped rows. Done exists only when this artifact is complete and every acted row is green.
-
-Emit its parser-bound form with concrete values:
-
-```json
-{"type":"audit-result","proposals":[{"path":"<repository-relative-path>","reason":"<reason>"}],"writes":["<repository-relative-path>"],"gaps":["<artifact>: <missing|partial|stale>: <evidence-path>"]}
-```
-
-Record declined/deferred suggestions separately from acted rows; completion of accepted rows does not claim all gaps were fixed. On an idempotent rerun with no remaining applicable gaps emit empty `proposals`, `writes`, and `gaps`. `plugins/zeroh-roadmap/test/fixture-consumer/greenfield-live-evidence.test.mjs` enforces native event ordering and observed writes; treat gap-only preservation as honor-system. Treat sibling routing, approval interpretation, and every other unbound STOP/ONLY/never rule as honor-system.
+Verify changed commands and the affected behavior using the project's real tools. Report failures or missing tooling and remaining gaps. Do not manufacture approval markers, audit JSON or a claim of platform validation from a static inspection.

@@ -1,0 +1,41 @@
+# Native core migration and review
+
+Roadmap **0.41.0** retains **23 production source files** (15 runtime modules/adapters, three maintenance/scaffolding scripts and five typed templates), down from 91. Greenfield **2.0.0** retains **one optional helper**, down from four code files. Tests, Markdown, manifests and history are outside these source counts. Three archived Python Gauntlet report builders are retained separately under `docs/reviews/gauntlet-2.0/`; they are not part of the current plugin runtime or maintenance path. These are candidate versions, not a release announcement.
+
+The native session now owns workers, independent review, tests, rolling planning and Git. The retained CLI owns status, reservations/ownership, init and typed validation. Greenfield supplies a PRD interview and selected project recipes without a required Roadmap engine. The change removes orchestration responsibilities rather than moving them into the validator.
+
+## Before updating a consumer
+
+Inventory its scripts, skills and automation calling removed commands. Keep that consumer on its compatible plugin version until the callers are explicitly adapted to native tools and the supported CLI. Do not automatically update caches or overwrite consumer files, configuration, workflows, archives or vendored schemas.
+
+Read explicit legacy design/test/validation/merge policy as guidance; malformed or unknown policy grants no authority. Active legacy arcs need a legitimate approved-intent reference. If their schema strips or rejects that metadata, review a focused opt-in schema extension first, preserving the existing record meaning. Merely adding an unknown field does not make it survive parsing.
+
+Strict validation reads both the current committed HEAD record and the approved baseline. Both must use supported literal declarative arc data; computed spreads and imported helper values are rejected rather than evaluated from the mutable working tree. Preserve the recorded full commit/path reference and append-only legitimate owner ratifications. An unreadable committed record is a blocker, not an absent baseline. The validator checks recorded consistency; it cannot authenticate consent or prove the product works.
+
+Install the package's declared dependencies or the consumer's corresponding tooling: `tsx` and `zod` for typed loading, and `typescript` for literal intent parsing. Missing tooling is unavailable, never green. Run strict `roadmap phase validate <path>` before queueing and completion on both hosts; fail-soft hooks are supplemental diagnostics.
+
+## Bounded native observations
+
+The Codex observation took approximately 378 seconds including independent review and window replenishment. A real local bookmark phase implemented persistent add/list behavior; its independent reviewer ran two tests and separate HTTP/HTTPS add/list processes. A failed README assumption led to an in-scope documentation phase. The replenished window had two pending phases and two explicitly deferred criteria; independent plan review and strict arc/phase validation passed.
+
+The first Claude attempt took 526 seconds and encountered an allowlist limitation; its static review did not establish runtime acceptance. The single corrective attempt took approximately 195 seconds. A native independent agent actually ran seven tests and the CLI journey using the host's admission wrapper. Fresh initialization, strict validation by file and phase number, status and emitted progress passed; the reviewed fixture HEAD was `3247b04`.
+
+Both observations deliberately ended with arcs still in progress, two pending phases and two deferred criteria. They establish bounded native phase execution and rolling continuation, **not whole-arc completion**, platform-matrix support, a performance improvement or superiority to another framework. No raw session transcripts or credentials are part of this review note. Required CI and outstanding review findings still govern merge/release readiness.
+
+## Completion reminders
+
+The candidate restores status-dependent compile-time completion requirements without the retired gate engine. Include typed roadmap records in the consumer TypeScript project and run `roadmap phase validate --all` alongside typechecking. Done records require review and explicit check disposition; a no-executable-check case uses `checks: []` plus `checksNotApplicable`. Runtime refinements and Git/record checks remain necessary for relationships and original intent. The retained Claude Write/Edit hook provides earlier feedback only; it is not a closure authority and is not required by Codex.
+
+## Arc-scoped migration command
+
+Run `roadmap migrate --arc <root>/arcs/ID.arc.ts` for a read-only preview. It reads literal TypeScript without executing legacy source. It reports proposed files, preserved completed phases, missing information and recognizable retired command callers and sibling legacy-schema importers in tracked files. The caller scan is advisory, not an exhaustive automation audit.
+
+Supply missing `intent`, `scope` and `status` in a small JSON file based on the existing approved plan, then rerun with `--decisions <file>`. Review the preview and use the same arguments plus `--apply` to write it. A gap returns exit 2 without writes; an operational failure returns nonzero. A repeated migration of an already native arc makes no writes; that is not a fresh validation.
+
+The command translates plane membership, legacy criterion job/signal/bar text and task title/done fields. It preserves the original declarative record under `extensions.roadmapMigration.original` and an immutable Git `sourceRef` for the exact original source, including inline comments, task steps, design references and discarded engine metadata. Commit the selected source records before applying: uncommitted source is refused so its comments cannot be lost. The snapshot is historical: current typed status/tasks/checks govern progress. Read preserved product requirements as binding guidance; old engine settings do not reactivate retired commands. New records retain strict known fields and an explicit `extensions` object, so misspelled dependencies are not silently accepted. No permissive parser bypasses current completion requirements.
+
+Unfinished member phases use the new schema. Completed/historical/cancelled phases, existing backlog and their original schema remain unchanged. A small consumer-local schema facade validates native records with the native schema and historical records with the legacy schema. This first migration path supports the existing `lib/roadmap/schema.ts` layout used by Atlas. A conflicting root-local `<root>/lib/schema.ts`, computed records, ambiguous task states or dependency objects require a focused repair; the command refuses rather than guessing. Keep using the compatible release until these are resolved. It does not delete legacy helpers that historical records still import.
+
+Commit and review the format migration before establishing the active arc's literal approved-intent baseline. The old acceptance format is preserved but cannot silently serve as a normalized new baseline. Do not fabricate an owner ruling or mark the arc backlog to evade an existing execution state. Supply the actual status. A migration can typecheck while still requiring an intent reference before execution; run strict validation separately. Legacy emitters/registries may still assume plane/task/gate shapes even when schema validation passes. Replace a JSON status caller with `roadmap status --json` where its consumers accept that output, or adapt its renderer explicitly; do not promise the old output contract. Then adapt retired callers and run the consumer typecheck plus `roadmap phase validate --all`. Unrelated active arcs can remain blockers until individually migrated; a successful selected-arc migration is not whole-repository readiness.
+
+The command does not commit or stage files, update caches, grant permissions, claim product acceptance or execute the arc. Use a clean worktree. Its writes are ordinary files, not a crash-recovery transaction; if interrupted, inspect the diff before retrying and restore incomplete generated files from that diff.

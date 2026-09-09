@@ -1,5 +1,13 @@
 ## 0.40.3 — 2026-09-06
 
+## 0.41.0 — unreleased
+
+- Replace the custom execution/gate/driver machinery with native supervising skills, independent reviewers and typed progress. Keep 22 production source files, down from 91.
+- Plan one or two phases at a time while preserving deferred criteria, original intent and scoped authority. End clean reviews early; three rounds is a ceiling.
+- Keep exclusive same-repository work claims, non-overwriting init, factual status and strict phase/arc validation. Read committed literal intent without executing mutable helper imports.
+- Pair with Greenfield 2.0.0's independent PRD interview and project recipes. Existing consumers must pin/adapt retired automation and explicitly review schema upgrades; no automatic migration.
+- Bounded native Codex and Claude observations exercised real workers/checks and rolling continuation. These were accepted phase/window observations, not completed whole arcs or broad performance proof. See [migration and review limits](docs/native-core-migration.md).
+
 - codex lane model pinned back to `gpt-5.6-sol` (was `gpt-6-astra` since 0.40.0) — owner ruling 2026-09-06 17:53 UTC ("use fable as architect and sol 5.6 as implementor"), after the astra account hit its usage limit mid-arc on 2026-09-05 18:29 UTC. `MODEL_IDS.SOL` and `MODEL_ALIASES.sol` follow the one home; preset `codex` (sol builders, fable architect) IS the ruled combination, no per-role override needed. Probe re-verified on illumination 2026-09-06 (`codex debug models` lists `gpt-5.6-sol`; `codex exec -m gpt-5.6-sol` answered).
 
 ## 0.40.2 — 2026-09-06

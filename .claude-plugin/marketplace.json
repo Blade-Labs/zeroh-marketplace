@@ -26,14 +26,14 @@
     },
     {
       "name": "zeroh-roadmap",
-      "description": "Phase-driven development — shape-enforced task schemas, validation gates, sequential execution, review reports, changelog generation",
+      "description": "Native agent skills, rolling outcome planning and typed roadmap progress",
       "source": "./plugins/zeroh-roadmap",
       "category": "development",
-      "tags": ["roadmap", "phases", "shapes", "gates", "review", "changelog"]
+      "tags": ["roadmap", "phases", "native-agents", "rolling-planning", "review"]
     },
     {
       "name": "zeroh-greenfield",
-      "description": "Approval-gated project initialization and brownfield standards gap filling for new and existing repositories",
+      "description": "Short PRD interviews, project recipes and selective foundation improvements for runnable first prototypes.",
       "source": "./plugins/zeroh-greenfield",
       "category": "development",
       "tags": ["greenfield", "brownfield", "project-init", "standards", "roadmap"]

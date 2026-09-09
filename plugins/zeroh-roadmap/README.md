@@ -1,147 +1,60 @@
 # ZeroH Roadmap
 
-Phase-driven development for AI-assisted teams. Break work into phases, execute one task at a time, validate with review agents, generate audit reports.
+Skills and typed progress for getting from intent to accepted software with native Claude or Codex agents. Agree the outcome and boundaries, plan the next useful window, implement with meaningful checks, and independently review the result. Fix gaps within scope without repeatedly asking for the same permission.
 
-**Requires:** TypeScript project with `zod` in dependencies.
+## The loop
 
-## Why
+1. **Plan intent:** record observable acceptance, assumptions, non-goals and canonical design/PRD references. Reuse existing decisions and ask only consequential unknowns.
+2. **Plan the next window:** detail one or two phases; keep later criteria explicitly deferred. A phase delivers an independently testable user journey.
+3. **Execute natively:** the supervising session dispatches a phase worker and independent reviewers using the host's actual tools. It owns scope, queue and Git operations.
+4. **Observe and replan:** use results to detail the next window within agreed scope and budget. Empty queued work does not finish an arc with deferred outcomes.
+5. **Judge intent:** an independent reviewer reads the committed original criteria and legitimate owner ratifications, then drives the delivered behavior. Repair real gaps before claiming completion.
 
-Long-context LLM sessions degrade. Decisions get forgotten, work gets re-done, Claude declares "all done!" after 3 of 5 tasks. This plugin solves it by giving every session a phase file that says exactly what to do, in what order, with what acceptance criteria. Two review agents validate the result. Zero findings to pass.
+One clean review is enough. Three rounds is a ceiling, not a target. No mandatory quality-pass chain, scorecard, proof collection or detached workflow engine is required.
 
-New here? Read [docs/orientation.html](docs/orientation.html) — a ten-minute engineer's orientation explaining what this is, how the lifecycle works, and how it compares to prompt-discipline frameworks like superpowers.
+## Start
 
-## Install
+Install the plugin through your host's supported marketplace flow, then ask to plan a phase or arc. Invoke the installed `roadmap` executable (or `node <actual-plugin-root>/bin/roadmap.mjs`).
 
-```bash
-claude plugin install zeroh-roadmap
+```sh
+roadmap init
+roadmap status
+roadmap claim --count 2
+roadmap claim --work EXAMPLE --owner session-owner
+roadmap phase validate roadmap/arcs/EXAMPLE.arc.ts
+roadmap claim --work EXAMPLE --owner session-owner --release
 ```
 
-Run `roadmap init` to scaffold the roadmap infrastructure. When project homes are missing, install `zeroh-greenfield` and use its `brownfield-audit` workflow as directed by `using-zeroh-roadmap/references/layout.md §Missing homes`.
+Use the discovered root, which may be `docs/roadmap/` or an explicit `ROADMAP_ROOT`, rather than copying the example path. Init creates typed scaffolding without overwriting existing consumer files; follow its dependency instructions. Typed records require `tsx` and `zod` in the consumer or installed plugin dependency setup. Active intent validation also needs the `typescript` parser, supplied by the Roadmap package dependencies or the consumer's dependencies. Install missing dependencies with the appropriate package manager and lockfile; missing tooling is unavailable, never a green check.
 
-## Get started
+The CLI has four responsibilities: factual status, permanent number reservations and explicit exclusive work claims, non-overwriting init, and strict phase/arc validation. Native sessions own tests, agents, review, replanning and Git. Work claims coordinate sessions in the same Git repository; they are not distributed locks and never expire automatically.
 
-After install, start your first session and say:
+## Greenfield
 
-> "create a phase for adding user authentication"
+For a new project, Greenfield offers a short PRD interview and selected web/mobile/desktop/combined or library/CLI recipe. It helps establish a runnable foundation before Roadmap plans the next outcome. For an existing project, offer missing architecture/test/run guidance selectively; declining those improvements does not block Roadmap. Greenfield is optional and usable independently.
 
-The plugin reads your code, identifies the specific files and changes needed, and writes a typed phase file. Then say `do phase 1` and watch it execute.
+## Compatibility
 
-## Usage
+Existing consumer files and vendored schemas stay owned by their projects. Strict legacy schemas still govern their writes until an explicit focused upgrade; historical records remain readable. Active arcs must establish an actual approved-intent baseline before proceeding. A legacy schema that rejects or strips `intentRef` needs a focused, reviewed opt-in metadata/schema upgrade before continuation; adding the property to an arc alone cannot fix that. Preserve its historical records and acceptance meaning, or stay on the compatible plugin release until the upgrade is ready. Approved baseline source must contain a literal declarative arc object: imported helper values, computed acceptance and spreads are unsupported rather than evaluated against mutable working-tree code. Existing JSON design/test/validation/merge policy remains guidance, not a gate-engine configuration.
 
-| What you say | What happens |
-|-------------|-------------|
-| "create phase for X" | Reads the code, identifies specific files + changes, writes `phase-N.phase.ts` |
-| "do phase 5" | Executes tasks one at a time, commits each, runs validation gate, reports compromises |
-| "review phase 5" | Verifies claimed work actually happened — checks code, not just commit messages |
-| "what's in the roadmap?" | Lists backlog by priority, shows in-progress and recent done phases |
-| "can phases 5 and 7 run parallel?" | Checks if key files overlap — if no, two sessions can work simultaneously |
-| "run full code review" | 8 specialist agents audit the codebase — required before release |
+Automation using retired commands must remain on a compatible release until explicitly adapted. A plugin/cache update does not migrate consumers, overwrite schemas or grant authority. See [CLAUDE.md](CLAUDE.md) for the migration boundary and [MULTI-DRIVER.md](MULTI-DRIVER.md) for native execution.
 
-## How it works
+These instructions and validators enforce recorded consistency, not truthfulness or product quality by themselves. Real checks and independent judgment remain necessary. Host support and performance claims require observed native runs.
 
-```
-/plan-phase    → reads code, creates phase-N.phase.ts (backlog)
-/do-phase N    → one task at a time, commit between each, gate at the end
-/review-phase N → verify the work was done correctly
+## Updating the plugin version
 
-# Arc lifecycle (a named block of phases shipped as one unit)
-/plan-arc      → author the Arc + design-first gate (reuse-or-design the architecture & UX, confirmed) → plan phases against the design (parallel review)
-/do-arc <id>   → build every phase in order, then the pre-merge sweep + intent validation
-/arc-sweep     → dispose arc debt + whole-arc seam + design-conformance review before merge
-/validate-arc  → drive the real flow + an independent judge vs the acceptance criteria
-```
+From `plugins/zeroh-roadmap`, run `npm version <new-version> --no-git-tag-version`. npm updates the single source in `package.json` and its lockfile, then the version lifecycle automatically runs the existing manifest generator. All five host manifests and the generated install guide receive that value. Review and commit those generated changes together; tagging and publishing remain separate.
 
-The arc lifecycle is a **design → build → validate** loop: `plan-arc`'s **design-first gate** (Step 1b) classifies the arc and, for a new pattern or a surface, has the `software-architect` (architecture) and the `ux-designer` (UX) reuse an existing design or design a new one — confirmed by you — and records it as the arc's `designRefs`. Phases then plan and build *against* that confirmed design, and `arc-sweep` judges the build's conformance to it.
+Do not hand-edit manifest versions. If you edited `package.json` directly, run `npm install --package-lock-only --ignore-scripts` and `npm run version` to synchronize the lockfile and generated files. CI already runs `node scripts/emit-manifests.mjs --check` to reject manifest drift. Historical changelog entries and recorded evidence retain their original versions.
 
-Each phase is a `.phase.ts` file with typed tasks. The plugin creates them for you — you describe what you want, it reads the code and writes the phase:
+See the [documentation index](docs/README.md) for current guidance and historical reviews.
 
-```typescript
-export default definePhase({
-  phase: 5,
-  name: 'Add rate limiting to public endpoints',
-  status: 'backlog',
-  priority: 'HIGH',
-  tasks: [
-    {
-      id: '5.1',
-      title: 'Add rate limiter middleware to login route',
-      problem: 'Login endpoint has no rate limiting — brute force possible.',
-      steps: [{ file: 'middleware.ts', description: 'Add sliding window rate check' }],
-      acceptanceCriteria: ['10 requests/min limit enforced, 429 returned on 11th'],
-      files: ['middleware.ts'],
-      done: false,
-    },
-  ],
-})
-```
+## Completion checks
 
-### Validation gate (runs automatically after every phase)
+Include the roadmap records in the consumer's TypeScript project. A `done` record requires independent review and explicit verification: a nonempty `checks` list with a successful required check, or `checks: []` with a meaningful `checksNotApplicable` reason. Done phases require completed tasks; done arcs require their intent reference and accepted results. Runtime refinements check duplicate identities and relationships that TypeScript cannot prove.
 
-1. Lint
-2. Type-check
-3. Tests
-4. Build
-5. Code review — 2 parallel agents, >=80% confidence filter
-6. Fix all findings → loop until zero
+Wire `roadmap phase validate --all` into the consumer's existing check/CI command alongside its typechecker (for example `tsc --noEmit && roadmap phase validate --all`, using the actual installed executable). Preserve existing commands and use the consumer's package manager; initialization prints guidance instead of overwriting project configuration. Existing consumers must adapt their schema explicitly before adopting the new completion shape. The command exits nonzero for invalid records or unavailable validation; `emit.ts` alone is not the full intent check.
 
-No exceptions. No "this phase is low-risk." Every phase gets the full gate. A typical gate takes 2-4 minutes and ~150k tokens (2 agents, 1-2 rounds).
+Claude's advisory Write/Edit hook remains an early reminder only. It does not cover shell writes or guarantee closure, and Codex does not need an equivalent hook: both hosts use the same explicit checks before completion. The hook is not a substitute for the normal check command or real independent review.
 
-### Review reports
-
-Each release produces `reviews/releases/v{version}-review.json` — gate results, agent findings per round, resolution status, verdict. Build the HTML dashboard: `bash scripts/build-dashboard.sh`
-
-## What gets created in your project
-
-`roadmap init [--root <dir>]` scaffolds the tree below under `<root>` — `roadmap` by default,
-`docs/roadmap` for a repo that keeps its workflows as sibling doc folders. The root is then
-DISCOVERED, never configured (`ROADMAP_ROOT` overrides; a repo carrying both candidates is
-refused by name). Existing consumers with the legacy toplevel `lib/roadmap/schema.ts` seam are
-untouched — it stays recognized. Full rules:
-`skills/using-zeroh-roadmap/references/layout.md`.
-
-| Path | Purpose |
-|------|---------|
-| `<root>/lib/schema.ts` | `definePhase()` + `defineBacklog()` with Zod validation (flat or tiered backlog input — see `<root>/backlog.ts`) |
-| `<root>/lib/registry.ts` | Phase discovery (glob + dynamic import + duplicate detection) |
-| `<root>/lib/emit.ts` | Changelog emission from `.phase.ts` files |
-| `<root>/phases/` | Where `.phase.ts` files live (each imports `../lib/schema`) |
-| `<root>/ROADMAP.md` | Gate protocol + git strategy |
-| `reviews/releases/` | Release review report JSONs |
-| `scripts/pre-review.sh` | Automated checks (catches 40% of findings before agents) |
-| `scripts/build-dashboard.sh` | Self-contained HTML review dashboard |
-| `scripts/generate-changelog-md.ts` | Changelog from phase data |
-
-## Skills reference
-
-| Skill | Trigger |
-|-------|---------|
-| `/do-phase N` | Execute phase — sequential tasks, commits, transparency reports, gate |
-| `/plan-phase` | Create phase — reads code first, writes specific tasks with file paths |
-| `/review-phase N` | Verify phase — checks code matches claims, finds missed patterns |
-| `/code-review` | Review code — confidence-filtered, >=80% only |
-| `/full-code-review` | Pre-release — 8 parallel agents (security, dead code, DRY, perf, arch, edge cases, data flow, domain) |
-| `/test-strategy` | Test conventions — pyramid, coverage targets, quality bar |
-| `/audit-roadmap` | Audit roadmap — read-only structural consistency checks |
-| `/release-sweep <version>` | Release prep — dispose outstanding debts, optionally archive |
-| `/plan-arc` | Plan arc — author the Arc + design-first gate (reuse-or-design the architecture & UX, confirmed), then plan phases against the design (parallel review) |
-| `/do-arc <id>` | Execute arc — build every phase in order, serialize mutation, end in the pre-merge sweep + intent validation |
-| `/arc-sweep` | Pre-merge sweep — dispose arc debt + whole-arc seam + design-conformance review |
-| `/validate-arc <id>` | Terminal intent gate — drive the arc's real flow + an independent `intent-validator` judge against its acceptance criteria; PASS/GAPS + a bounded corrective loop |
-| `using-zeroh-roadmap` | Always-active router — dispatches the requests above to the right skill |
-
-## Multi-platform
-
-Works on Claude Code, Cursor, GitHub Copilot, Gemini CLI, and Codex.
-
-## License
-
-Apache 2.0 — See [LICENSE](LICENSE)
-
-### Product regressions and recorded native audits
-
-`npm test` runs product and validator regressions, followed by the schema suite.
-`npm run test:native-evidence` separately audits retained native observations against
-their original environment and current source. Stale snapshots or unavailable host
-bindings fail that audit; historical evidence is never a fresh run. Synthetic wrapper
-checks use explicit filesystem fixtures; native audits still check the actual host
-executable. Release records state which evidence was used.
+For an explicit legacy upgrade, start with `roadmap migrate --arc <arc-path>` (preview only). See the [arc-scoped migration procedure](docs/native-core-migration.md#arc-scoped-migration-command). This preserves historical schemas and records; it is not a cache-only upgrade.

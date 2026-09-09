@@ -1,7 +1,7 @@
 {
   "name": "zeroh-greenfield",
-  "version": "1.0.0",
-  "description": "Approval-gated project initialization and brownfield standards gap filling for new and existing repositories.",
+  "version": "2.0.0",
+  "description": "Short PRD interviews, project recipes and selective foundation improvements for runnable first prototypes.",
   "author": {
     "name": "Blade Labs",
     "url": "https://blade-labs.com"
@@ -11,8 +11,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "ZeroH Greenfield",
-    "shortDescription": "Approval-gated setup and brownfield gap filling",
-    "longDescription": "Route new and established repositories through sourced stack decisions, approved project-home creation, and gap-only brownfield reconciliation.",
+    "shortDescription": "PRD interviews and useful project foundations",
+    "longDescription": "Short PRD interviews, project recipes and selective foundation improvements for runnable first prototypes.",
     "developerName": "Blade Labs",
     "category": "Coding",
     "capabilities": [

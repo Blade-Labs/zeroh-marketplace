@@ -1,10 +1,3 @@
 # Architecture
 
-This file indexes the authoritative architecture homes. Link each topic to its
-owner instead of copying the content.
-
-## Topic index
-
-| Topic | Home |
-| --- | --- |
-| <topic> | <path> |
+<actual boundaries and rationale; link code and meaningful test seams>

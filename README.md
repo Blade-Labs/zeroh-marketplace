@@ -5,6 +5,8 @@ A curated directory of plugins for LLM coding agents, maintained by Blade Labs. 
 ## Structure
 
 - **`/plugins`** - All plugins live here as directories
+- **`/roadmap`** - This marketplace’s own typed plans, progress and arc reviews
+- Plugin documentation: [Roadmap](plugins/zeroh-roadmap/docs/README.md) · [Greenfield](plugins/zeroh-greenfield/docs/README.md). Historical plugin campaigns belong in each plugin’s `docs/reviews/`, not its root.
 
 ## Listed plugins
 
@@ -12,7 +14,7 @@ A curated directory of plugins for LLM coding agents, maintained by Blade Labs. 
 
 - **`zeroh-sdd`** — LLM-agent Shape-Driven Development runtime for vibecoding (canonical SDD planning, staged docs, epic planning, execution-spec control plane, active-stage guardrails, proof receipts, Zod shape gates, scoped Claude/Codex adapter support)
 - **`zeroh-design`** — Blade Labs branded UI and collateral generator (4 design themes)
-- **`zeroh-roadmap`** — Phase-driven development (shape-enforced task schemas, validation gates, review reports)
+- **`zeroh-roadmap`** — Native agent skills, rolling outcome planning and typed roadmap progress
 
 ### GRC agentic-infrastructure suite (new)
 

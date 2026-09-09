@@ -1,7 +1,7 @@
 {
   "name": "zeroh-roadmap",
-  "version": "0.40.6",
-  "description": "Phase-driven development with a design-first gate, validation gates, intent validation, review reports, and changelog generation",
+  "version": "0.41.0",
+  "description": "Native agent skills, rolling outcome planning and typed roadmap progress",
   "author": {
     "name": "Blade Labs",
     "url": "https://blade-labs.com"
@@ -11,10 +11,9 @@
   "keywords": [
     "roadmap",
     "phases",
-    "tdd",
-    "review",
-    "gates",
-    "changelog"
+    "native-agents",
+    "rolling-planning",
+    "review"
   ],
   "skills": "./skills/",
   "hooks": {}

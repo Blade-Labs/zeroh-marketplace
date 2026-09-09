@@ -1,19 +1,10 @@
-# PRD interview
+# Short product interview
 
-Reuse answers from the current conversation. Ask one unresolved question at a time. Accept `Don't know yet` without filling in an
-answer or inventing a decision. Preserve the user's words in the proposal.
+Reuse the user's answers and existing PRD. Ask one consequential question at a time; stop when the first prototype can be scoped.
 
-| Interview field | Destination |
-| --- | --- |
-| Product | docs/PRD.md §Product |
-| Audience | docs/PRD.md §Audience |
-| Platforms | docs/PRD.md §Platforms |
-| Constraints | docs/PRD.md §Constraints |
-| Non-goals | docs/PRD.md §Non-goals |
-| Success signals | docs/PRD.md §Success signals |
-| Brand | docs/PRD.md §Brand |
+- Who uses it, and what first useful behavior should they complete?
+- Which surfaces are required now: web, Android, iOS, desktop, or a combination?
+- Which constraints change the foundation: native APIs, offline use, sensitive data, integrations, existing stack or delivery environment?
+- What is explicitly outside this prototype, and how will we observe success?
 
-For Platforms, distinguish web-only, Android-only and multi-platform; do not infer a monorepo from multiple future ambitions. For Success signals, identify one observable first-prototype behavior and how the user will run it locally. Ask delivery questions only if delivery is selected.
-
-For Brand, ask whether Blade branding applies. Do not select a theme or write
-tokens during the interview.
+Keep genuine unknowns visible. Do not require cloud, CI or distribution decisions for a local prototype. A compact PRD records user/journey, success check, platforms, constraints, non-goals, assumptions and approved choices. Follow existing documentation homes.

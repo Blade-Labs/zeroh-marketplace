@@ -1,5 +1,12 @@
 # Changelog — zeroh-greenfield
 
+## 2.0.0 — unreleased
+
+- Focus four skills on a short PRD interview, requirements-driven project recipes and optional improvements to existing projects. Reuse supplied answers and approval.
+- Keep one optional prepared-program helper, down from four production code files; remove copied CI selectors, catalog checking and coupled delivery workflows.
+- Decouple initialization from Roadmap capability negotiation and gate configuration. Roadmap can consult the resulting foundation guidance, but either plugin works independently.
+- Add desktop and combined recipe guidance without claiming unobserved platform support. Existing consumer scripts/configuration remain untouched; this breaking release requires explicit adaptation where old automation is used.
+
 ## 1.0.0 — 2026-09-06
 
 - Default to a local first prototype with architecture, stack rationale and a meaningful test; reuse supplied answers and follow the approved stack. CI/release infrastructure is added only when selected.

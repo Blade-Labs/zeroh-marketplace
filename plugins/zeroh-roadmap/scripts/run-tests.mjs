@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 // Use the host's shared admission pool when installed; CI keeps a bounded
-// portable runner. Schema validation runs once after every test file passes.
+// portable runner. Manifest consistency runs once after every test file passes.
 import { readdirSync, existsSync, accessSync, constants } from 'node:fs'
-import { join, delimiter, resolve, dirname } from 'node:path'
+import { join, delimiter, resolve } from 'node:path'
 import { availableParallelism } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 function discover(dir) {
+  if (!existsSync(dir)) return []
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const path = join(dir, entry.name)
     return entry.isDirectory() ? discover(path) : entry.isFile() && entry.name.endsWith('.test.mjs') ? [path] : []
   })
 }
-const files = ['bin', 'cli', 'hooks', 'scripts', 'test'].flatMap(dir => discover(join(root, dir))).sort()
+const files = [...['bin', 'cli', 'hooks', 'scripts', 'test'].flatMap(dir => discover(join(root, dir))), ...discover(join(root, '../zeroh-greenfield/test'))].sort()
 const requested = process.env.TEST_CONCURRENCY ?? 'auto'
 if (requested !== 'auto' && !/^[1-8]$/.test(requested)) {
   console.error('TEST_CONCURRENCY must be auto or 1..8')
@@ -35,5 +36,4 @@ if (helper) {
   console.log(`Node test runner: ${files.length} files, concurrency=${workers}`)
   run(process.execPath, ['--test', `--test-concurrency=${workers}`, ...files])
 }
-if (helper) run(join(dirname(helper), 'capbuild'), ['--timeout', '300', 'npx', '--no-install', 'tsx', 'scripts/schema.test.ts'])
-else run('npx', ['--no-install', 'tsx', 'scripts/schema.test.ts'])
+run(process.execPath, ['scripts/emit-manifests.mjs', '--check'])

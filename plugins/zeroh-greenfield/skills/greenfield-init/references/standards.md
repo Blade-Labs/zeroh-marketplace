@@ -1,20 +1,7 @@
-## Proposal and approval
-Before writing, present `file | source facts | planned sections` for every target and wait for approval. The approved interview, selected archetype, and `design-gate.md` are the only source facts.
+# A foundation proportional to the project
 
-## AGENTS.md
-AGENTS.md is the sole conventions home. Fill `## Conventions`, `## Don’t`, and `## Generalize-forward`; require Flag-first delivery and keep release-only work in `hold[]`.
+Reuse existing conventions. Separate the first user-facing entry point, domain behavior and external I/O where that creates a useful test seam; a small project does not require a layered framework.
 
-## Harness pointers
-CLAUDE.md contains `@AGENTS.md` plus harness-only lines. Other harness files point to AGENTS.md and never copy conventions.
+Document real run/test commands and one meaningful behavior check. Use the selected language's normal formatter, type checking where applicable and test runner. Include secret/environment handling only where needed. Keep architecture and test rationale beside the code or in a concise README/AGENTS.md; create dedicated documents as they earn their place.
 
-## Generated blocks
-Preserve generated blocks byte-for-byte, including everything from `<!-- nx configuration start -->` through `<!-- nx configuration end -->`.
-
-## CODE-STYLE.md
-Derive code style from the repository's lint and format configuration; do not invent another standard.
-
-## Architecture index
-Index the approved architecture records and link to their canonical homes.
-
-## UX canon
-Link the UX canon to its design token home from `references/design-system.md`.
+Templates are optional fragments. Do not copy every template or require a feature flag, shared abstraction, UI registry, catalog, monorepo or release pipeline for a prototype.

@@ -43,7 +43,7 @@ export const GENERATED_TARGETS = Object.freeze([
 
 const GENERATED_PATHS = new Set(GENERATED_TARGETS.map((t) => t.path))
 
-/** The always-active bootstrap skill, listed apart from the routed ones. */
+/** The routing skill, listed apart from the execution/planning skills. */
 const BOOTSTRAP_SKILL = 'using-zeroh-roadmap'
 
 class SourceError extends Error {}
@@ -133,15 +133,20 @@ function renderInstall(root, src) {
     '',
     `## What is surfaced (v${src.version})`,
     '',
-    `**${routed.length} skills**${hasBootstrap ? ` + the always-active bootstrap \`${BOOTSTRAP_SKILL}\`` : ''}:`,
+    `**${routed.length} skills**${hasBootstrap ? ` + the routing skill \`${BOOTSTRAP_SKILL}\`` : ''}:`,
     '',
     ...routed.map((s) => `- ${s}`),
     '',
-    `**${src.agents.length} agents** — the roles the skills spawn (see \`MULTI-DRIVER.md\` §1):`,
+    `**${src.agents.length} role briefs** — passed to available native agents (see \`MULTI-DRIVER.md\`):`,
     '',
     ...src.agents.map((a) => `- ${a}`),
     '',
+    'Role briefs do not imply custom-agent registration on Codex; use the actual native tools.',
+    '',
     '## Update',
+    '',
+    'Before upgrading, adapt consumer automation that calls retired commands or keep its compatible version.',
+    'Cache updates do not migrate consumer schemas or grant additional authority.',
     '',
     '```bash',
     'codex plugin marketplace upgrade',

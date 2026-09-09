@@ -1,76 +1,17 @@
 ---
 name: "Test Strategy"
-description: "Test pyramid, coverage targets, and conventions. Use when writing tests, reviewing test quality, or planning test phases."
+description: "Select proportionate checks that catch real regressions using the project test conventions."
 user-invocable: true
-metadata:
-  keywords: test, coverage, unit, integration, e2e, pyramid, conventions
 ---
 
 # Test Strategy
 
-**This skill is consumer-bound.** The runner, commands, layout, and mock seams are the
-consumer repo's, never this plugin's. Two bindings, both in the consumer's `roadmap.config.json`:
+Read the consumer's test strategy, package scripts and nearby tests. Existing `testConventions` JSON pointers remain useful guidance; missing pointers do not require configuration negotiation. Infer conventions from actual code and say what remains uncertain.
 
-1. **`testConventions`** — the repo's test runner, test file layout (colocated vs `__tests__/`),
-   mock seam (which boundary to fake), fixture home, assertion style. Read it before writing any
-   test. Absent → infer from 2-3 existing test files nearest the code under test and say so. (remedy: using-zeroh-roadmap/references/layout.md §Missing homes)
-2. **`gateCommands`** — the `unit` / `integration` / `e2e` slots bind the commands (resolved by
-   `roadmap gate run`).
+Use unit checks for pure rules and error boundaries; integration checks for real wiring; end-to-end checks for actual user journeys. Put assertions at the cheapest level that honestly observes the behavior. Test reruns, populated state and failures when they can differ from a clean first run. Prefer a regression test that fails without the repair. Exercise exact boundaries where they matter, including the threshold itself and either side.
 
-Also check the consumer's own test-strategy document if one exists (e.g. `docs/TEST-STRATEGY.md`)
-— it outranks the generic guidance below.
+Do not test copied source text, class lists or a manifest's exact bytes simply to claim coverage. Existing parsers/validators can check declarative invariants; visual checks can judge presentation. Runtime loaders and schema behavior still deserve meaningful behavioral checks. Use project coverage requirements rather than inventing universal percentage gates.
 
-## Test Pyramid (generic shape — counts/runtimes are the consumer's)
+Use existing scoped runner options when their semantics are known. Respect the host's actual shared-resource admission for heavy tests; never turn a local concurrency guess into a plugin-wide scheduler. Confirm selected tests actually ran: zero selected tests, conditional paths with no assertions, and an exit-zero pipeline tail cannot establish success. Preserve the runner’s actual failure status and use assertions that distinguish the broken state. Observe exit codes, distinguish interruption from test failure, diagnose before rerunning, and do not rerun a full expensive suite after a small repair when focused checks plus required CI cover it.
 
-| Tier | What | Bound by |
-|------|------|----------|
-| 1a — Unit | Pure logic, no I/O, colocated with source | the `unit` slot |
-| 1b — Integration | Real wiring through the app's entrypoints, external boundaries faked | the `integration` slot |
-| 2 — E2E | Real user journeys against a running instance | the `e2e` slot |
-
-Push every assertion as far DOWN the pyramid as it can live: a rule provable in a unit test
-does not belong in an E2E test.
-
-## What gets a test at all — the declarative-artifact rule
-
-The pyramid ranks WHERE an assertion lives; this rule decides WHETHER one exists. (testMode
-assignment and the deviation protocol live in
-`skills/using-zeroh-roadmap/references/test-worthiness.md` — the two homes must not drift.) Before writing
-a test, name what a RED would mean. *A function's behavior changed* is a test. *A data file's
-contents changed* is not: declarative artifacts (yaml/json/md, images, manifests, lockfiles, seed
-data) get no bespoke test file, and never a byte-for-byte content assertion — that is a second
-copy of the data that moves with it, guarding nothing. The honest guard for an artifact is its
-INVARIANT (parses, references resolve, set exhaustive, ids unique), expressed as one more CASE in
-a lane the consumer already runs (`gateCommands.ratchets` / `lint` / `emit`, or its documented
-validator script). One scan extended with a case beats one new file per rule: a new `*.test.ts`
-is permanently wired into the unit tier (inventory checks, coverage floors), while a lane leg is
-one line.
-
-This is NOT a carve-out for the loader, resolver, or schema parser that reads an artifact — that
-is runtime logic and carries the full coverage targets below. Nor for checks that execute a
-mapping function over a contract union, nor for the wired test a new governed surface owes.
-
-## Coverage Targets
-
-Coverage scores EXECUTABLE LOGIC only; a declarative artifact has no coverage number.
-
-| Risk Tier | Target |
-|-----------|--------|
-| Core business rules / money math (as the consumer defines them) | 90%+ |
-| Auth/security | 80%+ |
-| New code | 80%+ minimum |
-
-## Quality Bar
-
-- Tests enforce INVARIANTS, not just outputs
-- Tests fail if the bug existed — mentally revert the fix and check the test goes red
-- No test capitulation (changing tests to match broken behavior)
-- No no-op assertions (always-true checks) and no conditional assertions wrapped in `if` blocks
-- Mock at the consumer's declared mock seam; verify call ARGUMENTS, not just call counts
-- Boundary tests sit EXACTLY at thresholds
-
-## E2E Rules & Patterns
-
-E2E rules (real-user-flow principle, selector priority, spec structure) belong to the
-consumer — look for an "E2E" section in its CLAUDE.md or test-strategy doc, and reuse its
-existing spec files as the pattern source.
+Never weaken assertions to accommodate a regression. Mock at real external seams, verify relevant arguments and boundaries, and drive required shipped integrations independently of mocks.
