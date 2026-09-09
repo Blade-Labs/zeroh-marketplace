@@ -9,7 +9,7 @@ user_callable: true
 
 Run `skills/do-phase/SKILL.md` for the single assigned phase, in the supplied checkout and write scope. Read the actual approved criteria and consumer instructions before implementation. The supervising session owns arc scope, queue, claims and landing; do not start another arc or phase executor.
 
-Implement ready tasks, run meaningful consumer checks through native tools, inspect your diff, and persist concise typed progress. Reuse the supervisor's arc ownership. No mandatory per-task proof narrative, beacon, gate command, model lookup or detached workflow. Do not claim a tool capability that your session does not expose.
+Implement ready tasks, run meaningful consumer checks through native tools, inspect your diff, and persist concise typed progress. Reuse the supervisor's arc ownership. Follow `MULTI-DRIVER.md` for managed command handles, native waiting, recovery and compact handoff. No mandatory per-task proof narrative, beacon, gate command, model lookup or detached workflow. Do not claim a tool capability that your session does not expose.
 
 If independent helper dispatch is unavailable in this child, report the concrete helper packet to the supervisor, which can launch it. Your own review is not independent. Return enough work and context for the supervisor to arrange that check; do not mark done until required review is actually resolved.
 

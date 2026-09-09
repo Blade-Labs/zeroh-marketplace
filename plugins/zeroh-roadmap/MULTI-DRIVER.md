@@ -8,7 +8,7 @@ The supervising session reads the selected skill and coordinates the next phase.
 
 Give each worker a bounded packet: actual checkout, phase and approved intent, relevant conventions, write ownership, existing check commands and budget. Avoid duplicating the entire session into every helper. A phase-executor is a worker for one phase, not a nested arc orchestrator.
 
-A worker that cannot spawn requests the helper from the supervisor; the supervisor dispatches and relays its result. Use the host's actual follow-up/wait facilities. If native worker dispatch is absent, implementation can run inline with honest attribution. Required independent review cannot be replaced by the author's own role-play; report it pending if a separate reviewer is unavailable.
+A worker that cannot spawn requests the helper from the supervisor; the supervisor dispatches and relays its result. Use the host's actual follow-up/wait facilities. If native worker dispatch is absent and the user has not explicitly required delegation, implementation can run inline with honest attribution. Required independent review cannot be replaced by the author's own role-play; report it pending if a separate reviewer is unavailable.
 
 ## Models and authority
 
@@ -23,3 +23,29 @@ The session selects work from typed progress and dependencies, obtains an exclus
 Run `roadmap phase validate <path>` before queueing/completion on both hosts. Hooks are fail-soft, incomplete diagnostics and are not evidence of automatic prevention on Codex. Observe actual command exits, native worker completion and relevant runtime behavior. Unknown or interrupted checks remain unresolved.
 
 Review is proportional: close on a clean first pass; follow up on changed behavior; three rounds is a ceiling. Original-intent acceptance remains independent and must exercise the actual required behavior. Neither a typed record nor an agent's confident prose authenticates owner consent or proves a product works.
+
+## Long-running phase ownership
+
+Use a fresh executor context for each phase. Give it the phase, approved arc, checkout, relevant conventions and a bounded budget; do not fork the entire accumulated arc conversation by default. Keep exploration and build logs in the worker. The supervisor retains decisions, dependency readiness, worker/job handles and short results, inspecting detailed output only for a specific gap. Resume that worker for repairs; after acceptance close or retire it using available native lifecycle tools. If the user requests delegated execution, do not silently replace it with an inline multi-phase run when dispatch is unavailable.
+
+A worker owns its managed command from launch to observed terminal result. Launch heavy commands through the installed resource wrapper inside a native command/session tool. Capture the returned handle immediately; use native waiting/result tools, not detached shell work plus a promise to check later. A wait timeout means the wait ended, not the command. Keep waiting or inspect the actual handle; do not end supervision merely because authorized work is pending. Prefer event waits over rapid polling. Respect the approved total time/spend budget; on exhaustion retain pending work and its last observed state for a checked handoff or bounded extension, never infer death or launch a duplicate.
+
+The supervisor owns the worker's lifecycle. Use native completion notifications/waits as the primary path, with a bounded reconciliation interval supported by the host. On a wait timeout, inspect worker state and any pending command handle. A quiet compiler or admission queue is not a stalled agent. No model-generated heartbeat, transcript age, sibling commit or elapsed wall-time alone establishes death. Native task handles must be attributed to the actual worker and checkout.
+
+When a worker returns with unfinished work, inspect its result and saved progress. Resume it after a recoverable failure or helper review; if replacing it, first confirm the old worker and writers stopped or explicitly transfer the running command. Resume the owning worker first: native command handles can be scoped to its context and inaccessible to another agent. Preserve the handle and observe through that owner rather than relaunching the command. Transfer observation only after the host confirms that the receiving context can access it; an unknown handle is not evidence the process died. Unknown ownership blocks duplicate execution, not investigation. After a terminal failure, diagnose and retry only the affected operation within the approved budget; honor explicit user cancellation.
+
+Before compaction or a worker handoff, persist only what another context needs: checkout/branch, phase, worker ID, outstanding command handles, last observed state, next action and ownership. Use existing progress and a small local checkpoint where necessary; do not copy logs into the main conversation or commit transient host handles as product evidence. A new context reconciles those handles against current host state before acting. Handles may not transfer between agents or survive a full host restart. When the owner cannot resume, inspect authoritative process/resource-wrapper state and retained terminal output through supported host tools; if ownership or completion cannot be established, report that specific recovery limitation instead of inventing an exit code.
+
+Native waits provide continuation while the host remains active. Automatic recovery after a dead CLI/session or a genuinely lost notification requires a tested session-host wake/restart facility; Roadmap does not provide that service. Do not claim unattended crash recovery from a written skill, beacon or completion schema. The installed resource wrapper may intentionally terminate orphaned commands; inspect its real result and retained output instead of interpreting disappearance as success.
+
+## Worktrees and delivery
+
+Default to one branch/worktree per arc, shared sequentially by its phase workers. Review that same worktree read-only. Do not create one worktree per phase; use extra worktrees only for genuinely independent concurrent work with an explicit integration owner. Different worktrees in one repository share ownership claims, so use distinct arc IDs and preserve the actual claim owner.
+
+Agree delivery once for the authorized arc sequence and record it in the approved plan or linked project guidance: target branch, arc order/dependencies, PR grouping and merge authority. Respect the actual repository policy; never assume the target is `main` or `develop`.
+
+- **Per arc:** one PR for each independently useful arc. Each lands when its own acceptance and required integration checks pass and merging is authorized; later arcs need not delay it.
+- **Stacked:** dependent arcs use separate branches/worktrees based on their predecessor and PRs targeting that predecessor until it lands. Retarget/rebase in dependency order and rerun impacted checks; never publish the same cumulative diff as three independent PRs to the target branch.
+- **Batch:** a tightly coupled sequence has one integration branch and one final PR to the agreed target. Sequential arcs may deliberately reuse its worktree; concurrent arcs integrate through their separate worktrees. Land the batch only after all included arcs and combined acceptance pass. Keep per-arc progress and ownership distinct even when delivery is grouped.
+
+Creating, pushing, merging and releasing follow existing authorization. A batch is not automatically released merely because its final arc is done. A user may select three PRs instead of one without replanning the product outcomes.

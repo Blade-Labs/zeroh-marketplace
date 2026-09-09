@@ -16,3 +16,5 @@ Read the repository and existing product/design decisions first. Reuse supplied 
 6. Queue only ready detailed phases and report deferred outcomes plainly. Do not write an execution-prompt document duplicating the arc. The typed arc and linked canonical decisions are the handoff.
 
 After executing the window, `do-arc` replans the next window from observed results inside these same boundaries. An empty detailed queue with deferred criteria is still executing. Changing scope, acceptance or the spending boundary requires an owner decision; implementation tactics within approved scope do not.
+
+For an authorized sequence of arcs, agree the delivery target and per-arc, stacked or batch PR grouping once; preserve that decision in the plan or linked guidance. Follow `../../MULTI-DRIVER.md` for worktree ownership and landing order. Delivery grouping does not change product scope or allow unfinished acceptance to be marked done.
