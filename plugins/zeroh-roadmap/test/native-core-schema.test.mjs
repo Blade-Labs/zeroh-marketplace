@@ -6,6 +6,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import 'tsx/cjs'
+import { register } from 'tsx/esm/api'
+register()
 import { createRequire } from 'node:module'
 // Use the registered CJS loader consistently on both supported Node versions.
 const require = createRequire(import.meta.url)
