@@ -14,3 +14,5 @@ Use native edits and the selected framework's ordinary commands. The sole option
 Roadmap can consult these skills and link the resulting canonical homes. Greenfield does not require Roadmap configuration, gate slots, proof objects or delivery adapters. Existing consumer workflows and configuration remain consumer-owned; updating this plugin does not migrate or delete them.
 
 Run deterministic helper regressions with `node --test plugins/zeroh-greenfield/test/*.test.mjs` from the marketplace root. Historical dry-run records describe earlier versions and do not establish acceptance of this revision.
+
+See the [documentation index](docs/README.md) for current guidance and historical reviews.

@@ -1,4 +1,4 @@
-> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](../../README.md) and [MULTI-DRIVER.md](../../MULTI-DRIVER.md).
 
 # Gauntlet 2.0 — Protocol diet with a ruler (2026-09-02/03, shipped as v0.38.0)
 

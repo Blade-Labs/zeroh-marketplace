@@ -29,9 +29,9 @@ const expected=[
   "templates/registry.ts",
   "templates/schema.ts"
 ]
-const excluded=path=>path.split('/').some(part=>['test','tests','fixtures','dry-runs','testdata'].includes(part)) || /\.test\.[^.]+$/.test(path)
+const excluded=path=>path.startsWith('docs/reviews/') || path.split('/').some(part=>['test','tests','fixtures','dry-runs','testdata'].includes(part)) || /\.test\.[^.]+$/.test(path)
 test('the shipped native core contains exactly the reviewed 22 production sources',()=>{
- const production=files(root).map(path=>relative(root,path)).filter(path=>/\.(?:mjs|js|ts|mts|sh)$/.test(path)&&!excluded(path)).sort()
+ const production=files(root).map(path=>relative(root,path)).filter(path=>/\.(?:mjs|js|ts|mts|sh|py)$/.test(path)&&!excluded(path)).sort()
  assert.deepEqual(production,expected)
  for(const name of production.filter(name=>name.endsWith('.mjs'))) {
   const path=join(root,name),text=readFileSync(path,'utf8')
@@ -40,7 +40,7 @@ test('the shipped native core contains exactly the reviewed 22 production source
 })
 test('Greenfield ships one optional helper and no coupled delivery templates',()=>{
  const green=resolve(root,'../zeroh-greenfield')
- assert.deepEqual(files(green).map(path=>relative(green,path)).filter(path=>/\.(?:mjs|js|ts|mts|sh)$/.test(path)&&!excluded(path)).sort(),['scripts/prepared-program.mjs'])
+ assert.deepEqual(files(green).map(path=>relative(green,path)).filter(path=>/\.(?:mjs|js|ts|mts|sh|py)$/.test(path)&&!excluded(path)).sort(),['scripts/prepared-program.mjs'])
  assert.equal(existsSync(join(green,'templates/github/workflows/ci.yml')),false)
 })
 test('native hook manifest keeps only the validation adapter, Codex makes no hook promise',()=>{

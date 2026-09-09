@@ -1,6 +1,6 @@
 import re, json
 import os
-P = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')) + '/'
+P = os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) + '/'
 def cells(line):
     return [c.strip() for c in line.strip().strip('|').split('|')]
 def tables(path):

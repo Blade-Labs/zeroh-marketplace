@@ -46,3 +46,5 @@ These instructions and validators enforce recorded consistency, not truthfulness
 From `plugins/zeroh-roadmap`, run `npm version <new-version> --no-git-tag-version`. npm updates the single source in `package.json` and its lockfile, then the version lifecycle automatically runs the existing manifest generator. All five host manifests and the generated install guide receive that value. Review and commit those generated changes together; tagging and publishing remain separate.
 
 Do not hand-edit manifest versions. If you edited `package.json` directly, run `npm install --package-lock-only --ignore-scripts` and `npm run version` to synchronize the lockfile and generated files. CI already runs `node scripts/emit-manifests.mjs --check` to reject manifest drift. Historical changelog entries and recorded evidence retain their original versions.
+
+See the [documentation index](docs/README.md) for current guidance and historical reviews.

@@ -1,8 +1,8 @@
-"""Rebuild GAUNTLET-2.0.html from the repo:  python3 scripts/gauntlet-2.0/build.py
+"""Rebuild GAUNTLET-2.0.html from the repo:  python3 docs/reviews/gauntlet-2.0/build.py
 
 gen-diff.py diffs the pre-diet tree against the landed phase-26 tree for the ten mapped bodies;
 gen-eval.py reads DIET-PLAN-2026-09.md, DIET-TRIAL-2026-09.md, DIET-LEDGER.md and
-GAUNTLET-2026-08.md; template.html is the page. Output: plugins/zeroh-roadmap/GAUNTLET-2.0.html.
+GAUNTLET-2026-08.md; template.html is the page. Output: plugins/zeroh-roadmap/docs/reviews/GAUNTLET-2.0.html.
 """
 import os
 import subprocess
@@ -27,7 +27,7 @@ html = (
     '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
     + head + '</style>\n</head>\n<body>' + body + '\n</body>\n</html>\n'
 )
-out = os.path.abspath(os.path.join(HERE, '..', '..', 'GAUNTLET-2.0.html'))
+out = os.path.abspath(os.path.join(HERE, '..', 'GAUNTLET-2.0.html'))
 open(out, 'w').write(html)
 for name in ('diff-data.json', 'eval-data.json'):
     os.remove(os.path.join(HERE, name))

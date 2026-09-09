@@ -1,6 +1,6 @@
 import subprocess, json, difflib, html
 import os
-REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 BEFORE, AFTER = 'c1c4edf', '189599e'
 P = 'plugins/zeroh-roadmap/'
 FILES = [

@@ -1,4 +1,4 @@
-> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](README.md) and [MULTI-DRIVER.md](MULTI-DRIVER.md).
+> Historical investigation record. This describes an earlier implementation, not the current execution contract. See [README.md](../../README.md) and [MULTI-DRIVER.md](../../MULTI-DRIVER.md).
 
 # Protocol diet execution trial — September 2026
 

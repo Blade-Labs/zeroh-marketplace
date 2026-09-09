@@ -1,6 +1,6 @@
 # Native core migration and review
 
-Roadmap **0.41.0** retains **22 production source files** (14 runtime modules/adapters, three maintenance/scaffolding scripts and five typed templates), down from 91. Greenfield **2.0.0** retains **one optional helper**, down from four code files. Tests, Markdown, manifests and history are outside these source counts. These are candidate versions, not a release announcement.
+Roadmap **0.41.0** retains **22 production source files** (14 runtime modules/adapters, three maintenance/scaffolding scripts and five typed templates), down from 91. Greenfield **2.0.0** retains **one optional helper**, down from four code files. Tests, Markdown, manifests and history are outside these source counts. Three archived Python Gauntlet report builders are retained separately under `docs/reviews/gauntlet-2.0/`; they are not part of the current plugin runtime or maintenance path. These are candidate versions, not a release announcement.
 
 The native session now owns workers, independent review, tests, rolling planning and Git. The retained CLI owns status, reservations/ownership, init and typed validation. Greenfield supplies a PRD interview and selected project recipes without a required Roadmap engine. The change removes orchestration responsibilities rather than moving them into the validator.
 
