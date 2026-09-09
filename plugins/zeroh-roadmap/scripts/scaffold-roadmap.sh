@@ -36,5 +36,6 @@ for (const [source, dest] of copies) {
  catch (error) { if (error.code !== 'EEXIST') throw error; console.log('Preserved ' + target) }
 }
 if (!['roadmap', 'docs/roadmap'].includes(rel.split(sep).join('/'))) console.log('Custom root: set ROADMAP_ROOT=' + JSON.stringify(root) + ' for subsequent roadmap and emit commands; default discovery only finds roadmap/ or docs/roadmap/.')
+console.log('Add this roadmap to the consumer TypeScript project and wire roadmap phase validate --all into its existing check/CI command alongside typechecking. Use the actual installed roadmap executable; no project scripts are overwritten.')
 console.log('Install tsx and zod with the consumer package manager if absent. Run tsx ' + join(root,'lib/emit.ts') + ' for progress. Existing project configuration is unchanged.')
 JS

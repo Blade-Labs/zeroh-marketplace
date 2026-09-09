@@ -29,10 +29,10 @@ test('criterion identities cannot duplicate, vanish from deferred references, or
   assert.throws(() => defineArc({ ...arc(), acceptanceCriteria: [...arc().acceptanceCriteria, ...arc().acceptanceCriteria] }), /Duplicate acceptance/)
   for (const deferredCriteria of [['missing'], ['journey', 'journey']])
     assert.throws(() => defineArc({ ...arc(), planning: { mode: 'rolling', deferredCriteria } }), /Unknown criterion|Duplicate deferred/)
-  const done = { ...arc(), status: 'done', independentReview: review, acceptanceResults: [{ criterionId: 'journey', accepted: true, summary: 'Journey observed' }] }
+  const done = { ...arc(), status: 'done', intentRef: 'a'.repeat(40) + ':roadmap/arcs/A.arc.ts', checks: [], checksNotApplicable: 'Acceptance was independently inspected; no shell check applies', independentReview: review, acceptanceResults: [{ criterionId: 'journey', accepted: true, summary: 'Journey observed' }] }
   assert.equal(defineArc(done).status, 'done')
   assert.throws(() => defineArc({ ...done, planning: { mode: 'rolling', deferredCriteria: ['journey'] } }), /deferred/)
-  assert.throws(() => defineArc({ ...done, acceptanceResults: [] }), /acceptance result/)
+  assert.throws(() => defineArc({ ...done, acceptanceResults: [] }), /acceptanceResults|acceptance result/)
 })
 
 test('baseline references must be immutable SHA and repository-relative arc paths', () => {
@@ -45,11 +45,14 @@ test('baseline references must be immutable SHA and repository-relative arc path
 test('phase completion needs actual successful required checks and resolved independent review', () => {
   const done = { ...phase(), status: 'done', tasks: [{ id: 'implement', description: 'Journey', status: 'done' }], independentReview: review, checks: [{ command: 'node --test journey.test.mjs', exitCode: 0, summary: 'Journey and error case passed' }] }
   assert.equal(definePhase(done).status, 'done')
-  for (const exitCode of [null, 1]) assert.throws(() => definePhase({ ...done, checks: [{ ...done.checks[0], exitCode }] }), /unknown is not green/)
+  for (const exitCode of [null, 1]) assert.throws(() => definePhase({ ...done, checks: [{ ...done.checks[0], exitCode }] }), /exitCode/)
   assert.throws(() => definePhase({ ...done, independentReview: undefined }), /independentReview/)
-  assert.deepEqual(definePhase({ ...done, checks: [] }).checks, [], 'A documentation-only phase does not need an invented shell check')
-  assert.throws(() => definePhase({ ...done, findings: [{ ...review, resolved: false }] }), /unresolved/)
-  assert.throws(() => definePhase({ ...done, tasks: phase().tasks }), /all tasks done/)
+  assert.throws(() => definePhase({ ...done, checks: [], checksNotApplicable: '   ' }), /checksNotApplicable/)
+  assert.throws(() => definePhase({ ...done, checks: [{ ...done.checks[0], required: false }] }), /successful required check/)
+  assert.throws(() => definePhase({ ...done, checks: [] }), /checks|checksNotApplicable/)
+  assert.deepEqual(definePhase({ ...done, checks: [], checksNotApplicable: 'Documentation-only change reviewed against source; no executable behavior changed' }).checks, [], 'Documentation changes explain why shell checks do not apply')
+  assert.throws(() => definePhase({ ...done, findings: [{ ...review, resolved: false }] }), /resolved|unresolved/)
+  assert.throws(() => definePhase({ ...done, tasks: phase().tasks }), /status|all tasks done/)
 })
 
 test('cross-record integrity rejects dangling membership, criteria and dependencies', () => {
@@ -130,4 +133,42 @@ test('real emit rejects malformed arc exports instead of omitting their promises
   const result = fixture.run()
   assert.equal(result.status, 1, result.stderr)
   assert.equal(JSON.parse(result.stdout).errors.length, 1)
+})
+
+
+test('TypeScript rejects structurally incomplete done records while accepting checked and documented completion', t => {
+  const fixture = emitFixture(t)
+  const file = path.join(fixture.root, 'completion-types.ts')
+  fs.writeFileSync(file, `import { definePhase, defineArc } from './lib/schema';
+const review = { reviewer: 'independent', summary: 'Reviewed change and acceptance' };
+const base = { phase: 1, name: 'Journey' };
+const tasks: [{ id: string; description: string; status: 'done' }] = [{ id: 'work', description: 'Implement journey', status: 'done' }];
+const checks: [{ command: string; exitCode: 0; summary: string }] = [{ command: 'node --test', exitCode: 0, summary: 'Passed' }];
+definePhase({ ...base, tasks: [{ id: 'work', description: 'Plan first window' }] });
+definePhase({ ...base, status: 'done', tasks, checks, independentReview: review });
+definePhase({ ...base, status: 'done', tasks, checks: [], checksNotApplicable: 'Docs-only source review; no executable behavior changed', independentReview: review });
+// @ts-expect-error Done cannot omit independent review.
+definePhase({ ...base, status: 'done', tasks, checks });
+// @ts-expect-error Done cannot contain a pending task.
+definePhase({ ...base, status: 'done', tasks: [{ id: 'work', description: 'Journey', status: 'pending' }], checks, independentReview: review });
+// @ts-expect-error Empty checks need an explicit explanation.
+definePhase({ ...base, status: 'done', tasks, checks: [], independentReview: review });
+// @ts-expect-error Done findings must be resolved.
+definePhase({ ...base, status: 'done', tasks, checks, independentReview: review, findings: [{ reviewer: 'independent', summary: 'Gap', resolved: false }] });
+const arc = { id: 'A', name: 'Journey', intent: 'Complete journey', scope: ['Local app'], acceptanceCriteria: [{ id: 'journey', description: 'Journey succeeds' }] };
+const phases: [number] = [1];
+const acceptanceResults: [{ criterionId: string; accepted: true; summary: string }] = [{ criterionId: 'journey', accepted: true, summary: 'Observed journey' }];
+defineArc(arc);
+defineArc({ ...arc, status: 'done', intentRef: '${'a'.repeat(40)}:roadmap/arcs/A.arc.ts', phases, acceptanceResults, checks, independentReview: review });
+// @ts-expect-error Done arc needs its approved intent reference.
+defineArc({ ...arc, status: 'done', phases, acceptanceResults, checks, independentReview: review });
+// @ts-expect-error Done arc cannot have no member phases.
+defineArc({ ...arc, status: 'done', intentRef: '${'a'.repeat(40)}:roadmap/arcs/A.arc.ts', phases: [], acceptanceResults, checks, independentReview: review });
+// @ts-expect-error Done arc cannot omit acceptance results.
+defineArc({ ...arc, status: 'done', intentRef: '${'a'.repeat(40)}:roadmap/arcs/A.arc.ts', phases, acceptanceResults: [], checks, independentReview: review });
+// @ts-expect-error Done arc cannot contain rejected acceptance.
+defineArc({ ...arc, status: 'done', intentRef: '${'a'.repeat(40)}:roadmap/arcs/A.arc.ts', phases, acceptanceResults: [{ criterionId: 'journey', accepted: false, summary: 'Gap' }], checks, independentReview: review });
+`)
+  const result = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '--noEmit', '--strict', '--skipLibCheck', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', file], { encoding: 'utf8', timeout: 20000 })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
 })

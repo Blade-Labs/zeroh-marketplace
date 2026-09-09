@@ -13,7 +13,10 @@ const stable = value => typeof value==='string' ? value.trim() : Array.isArray(v
 const same = (a,b) => JSON.stringify(stable(a)) === JSON.stringify(stable(b))
 const issue = (rule,msg) => ({ rule,msg,fix:'Repair the record or resolve the actual missing requirement; do not manufacture a passing result.' })
 export const firstMeaningfulLine = text => String(text).split('\n').find(line => line.trim()) ?? 'Validation unavailable'
-export const renderZodIssues = (file,issues) => issues.map(item => `${file}: ${item.path?.join('.') ?? ''}: ${item.message}`)
+export const renderZodIssues = (file,issues) => [...new Set(issues.flatMap(item =>
+  item.code === 'invalid_union' && Array.isArray(item.errors)
+    ? item.errors.flatMap(branch => renderZodIssues(file, branch))
+    : [`${file}: ${item.path?.join('.') ?? ''}: ${item.message}`]))]
 
 function committedRecord(repo, ref, path) {
   const result = defaultExec('git', ['show', `${ref}:${path}`], { cwd: repo })
@@ -61,7 +64,7 @@ function intentChecks(arc, path, repo) {
   return errors
 }
 
-export function validateRoadmapFile(filePath,{strict=true}={}) {
+export function validateRoadmapFile(filePath,{strict=true, context}={}) {
   const requested = resolve(filePath)
   const path = existsSync(requested) ? realpathSync(requested) : requested, name = basename(path)
   const phaseFile = name.endsWith('.phase.ts'), arcFile = name.endsWith('.arc.ts'), backlogFile = name === 'backlog.ts'
@@ -72,7 +75,16 @@ export function validateRoadmapFile(filePath,{strict=true}={}) {
   const root = backlogFile ? dirname(path) : dirname(dirname(path))
   let schema
   try { schema=existsSync(join(root,'lib/schema.ts')) ? join(root,'lib/schema.ts') : consumerSchemaPath(repo) } catch(error) { return {ok:false,kind:'load-error',loadError:error.message} }
-  const imported = bridgeValidate(path,schema,phaseFile?'PhaseShape':arcFile?'ArcShape':'BacklogShape',repo)
+  // Shared only within one explicit validation run; never reuse results across edits/runs.
+  const cache = context ?? {}
+  cache.records ??= new Map()
+  cache.scans ??= new Map()
+  function load(file, shape) {
+    const key = JSON.stringify([file, schema, shape])
+    if (!cache.records.has(key)) cache.records.set(key, bridgeValidate(file, schema, shape, repo))
+    return cache.records.get(key)
+  }
+  const imported = load(path,phaseFile?'PhaseShape':arcFile?'ArcShape':'BacklogShape')
   if (!imported.ok) {
     if (imported.kind === 'tsx-absent') return {ok:!strict,kind:'toolchain-missing',loadError:imported.stderr}
     if (imported.kind === 'zod') return {ok:false,kind:'zod',zod:{file:name,issues:imported.issues},loadError:renderZodIssues(name,imported.issues).join('\n')}
@@ -80,7 +92,8 @@ export function validateRoadmapFile(filePath,{strict=true}={}) {
   }
   const record = imported.parsed
   if (!record || typeof record !== 'object') return {ok:false,kind:'errors',errors:[issue('record','No typed record exported')]}
-  const state = scanProgress(root), errors = state.errors.map(message => issue('load',message))
+  if (!cache.scans.has(root)) cache.scans.set(root, scanProgress(root))
+  const state = cache.scans.get(root), errors = state.errors.map(message => issue('load',message))
   const phases = new Map(), arcs = new Map()
   for (const phase of state.phases) {
     if (phases.has(phase.phase)) errors.push(issue('duplicate-phase',`Duplicate phase ${phase.phase}`))
@@ -97,7 +110,7 @@ export function validateRoadmapFile(filePath,{strict=true}={}) {
     if (!candidate) return null
     const file=realpathSync(candidate.file)
     if (checked.has(file)) return checked.get(file)
-    const loaded=bridgeValidate(file,schema,shape,repo)
+    const loaded=load(file,shape)
     if (!loaded.ok) {
       errors.push(issue('related-record',`Invalid related record ${candidate.file}: ${loaded.stderr || loaded.kind}`))
       checked.set(file,null)

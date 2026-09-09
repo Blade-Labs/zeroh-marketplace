@@ -94,7 +94,7 @@ test('multiple phases may contribute to a criterion while partial work remains d
 
 test('completion depends on completed members, not merely acceptance text', t => {
   const f = fixture(t)
-  const done = { ...f.current, status: 'done', independentReview: review, acceptanceResults: [{ criterionId: 'journey', accepted: true, summary: 'Observed' }] }
+  const done = { ...f.current, status: 'done', checks: [], checksNotApplicable: 'Acceptance reviewed directly; no additional shell check applies', independentReview: review, acceptanceResults: [{ criterionId: 'journey', accepted: true, summary: 'Observed' }] }
   f.write(f.arcPath, 'Arc', done)
   expectFailure(validateRoadmapFile(f.arcPath), /completion/)
   f.write(f.phasePath, 'Phase', { ...phase(1), status: 'done', independentReview: review, tasks: [{ id: 'work', description: 'Implement journey', status: 'done' }], checks: [{ command: 'node journey.mjs', exitCode: 0, summary: 'Passed' }] })
@@ -153,7 +153,7 @@ test('plain exports cannot bypass the consumer schema completion checks', t => {
   const result = validateRoadmapFile(f.phasePath)
   assert.equal(result.ok, false)
   assert.equal(result.kind, 'zod')
-  assert.match(result.loadError, /independentReview|tasks done/)
+  assert.match(JSON.stringify(result.zod.issues), /independentReview/)
 })
 
 test('committed imported or computed intent is refused without executing it or writing consumer files', t => {
@@ -174,7 +174,7 @@ test('committed imported or computed intent is refused without executing it or w
 
 test('arc completion cannot trust an invalid plain-export member marked done', t => {
   const f = fixture(t)
-  f.write(f.arcPath, 'Arc', { ...f.current, status: 'done', independentReview: review, acceptanceResults: [{ criterionId: 'journey', accepted: true, summary: 'Observed' }] })
+  f.write(f.arcPath, 'Arc', { ...f.current, status: 'done', checks: [], checksNotApplicable: 'Acceptance reviewed directly; no additional shell check applies', independentReview: review, acceptanceResults: [{ criterionId: 'journey', accepted: true, summary: 'Observed' }] })
   fs.writeFileSync(f.phasePath, `export default ${JSON.stringify({ ...phase(1), status: 'done' })}`)
   expectFailure(validateRoadmapFile(f.arcPath))
 })

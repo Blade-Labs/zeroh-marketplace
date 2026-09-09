@@ -166,3 +166,24 @@ test('held ownership mutation lock blocks acquire and release without automatic 
   good(run(other, 'claim', '--work', 'ARC', '--owner', 'session-a', '--release'))
   assert.equal(existsSync(path), false)
 })
+
+test('validate --all catches incomplete closure through plain exports and fails on missing roots', t => {
+  const { repo } = fixture(t)
+  assert.notEqual(run(repo, 'phase', 'validate', '--all').status, 0)
+  good(run(repo, 'init'))
+  symlinkSync(fileURLToPath(new URL('../node_modules', import.meta.url)), join(repo, 'node_modules'), 'dir')
+  const file = join(repo, 'roadmap', 'phases', 'phase-1.phase.ts')
+  const phase = { phase: 1, name: 'Docs', status: 'done', tasks: [{ id: 'docs', description: 'Explain usage', status: 'pending' }] }
+  writeFileSync(file, 'export default ' + JSON.stringify(phase))
+  const bad = run(repo, 'phase', 'validate', '--all', '--json')
+  assert.equal(bad.status, 1)
+  assert.ok(JSON.parse(bad.stdout).some(record => !record.ok))
+  assert.match(run(repo, 'phase', 'validate', '--all').stderr, /independentReview|tasks/)
+  phase.tasks[0].status = 'done'
+  phase.independentReview = { reviewer: 'independent', summary: 'Checked usage and links' }
+  phase.checks = []
+  phase.checksNotApplicable = 'Documentation only; links and claims inspected in independent review'
+  writeFileSync(file, 'export default ' + JSON.stringify(phase))
+  assert.ok(JSON.parse(good(run(repo, 'phase', 'validate', '--all', '--json'))).every(record => record.ok))
+  assert.equal(run(repo, 'phase', 'validate', '--all', '--unknown').status, 1)
+})

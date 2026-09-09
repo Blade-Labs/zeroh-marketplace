@@ -4,7 +4,7 @@ const help = `Usage: roadmap status [root] [--json]
        roadmap claim [root] [--count N]
        roadmap claim [root] --work ID --owner SESSION [--release]
        roadmap init [--root path]
-       roadmap phase validate <phase-or-arc-path> [--json]
+       roadmap phase validate <phase-or-arc-path|--all> [--json]
 Removed workflow/config/gate commands are not compatibility aliases. Read README.md for migration.`
 const [command, ...args] = process.argv.slice(2)
 if (!command || ['--help', '-h', 'help'].includes(command) || args.includes('--help')) console.log(help)

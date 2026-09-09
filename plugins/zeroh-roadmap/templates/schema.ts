@@ -7,7 +7,7 @@ const text = z.string().trim().min(1)
 const phaseNumber = z.number().int().positive()
 const id = z.union([text, phaseNumber])
 const taskStatus = z.enum(['pending', 'in-progress', 'blocked', 'done'])
-const status = z.enum(['backlog', 'in-progress', 'blocked', 'executing', 'swept', 'done'])
+const openStatus = z.enum(['backlog', 'in-progress', 'blocked', 'executing', 'swept'])
 const review = z.object({ reviewer: text, summary: text }).strict()
 const finding = z.object({ reviewer: text, summary: text, resolved: z.boolean() }).strict()
 const check = z.object({
@@ -31,38 +31,48 @@ const progress = {
   independentReview: review.optional(),
   limitations: z.array(text).default([]),
 }
-function completed(record: z.infer<typeof CompletionShape>, ctx: z.RefinementCtx) {
-  if (record.status !== 'done') return
-  if (!record.independentReview) ctx.addIssue({ code: 'custom', message: 'Done requires independentReview' })
-  if (record.findings.some(f => !f.resolved)) ctx.addIssue({ code: 'custom', message: 'Done has unresolved findings' })
-  if (record.checks.some(c => c.required && c.exitCode !== 0))
-    ctx.addIssue({ code: 'custom', message: 'Done requires successful required checks; unknown is not green' })
+// Required fields are encoded in the input type, not hidden in runtime refinements.
+const doneProgress = {
+  independentReview: review,
+  findings: z.array(finding.extend({ resolved: z.literal(true) })).default([]),
 }
-const CompletionShape = z.object({ status, ...progress })
+const passingCheck = z.union([
+  check.extend({ exitCode: z.literal(0), required: z.literal(true).default(true) }),
+  check.extend({ required: z.literal(false) }),
+])
+const checkedCompletion = { checks: z.tuple([passingCheck]).rest(passingCheck), checksNotApplicable: z.never().optional() }
+const manualCompletion = { checks: z.tuple([]), checksNotApplicable: text }
+function completed(record: { status: string; checks: z.infer<typeof check>[]; checksNotApplicable?: string }, ctx: z.RefinementCtx) {
+  if (record.status === 'done' && !record.checksNotApplicable && !record.checks.some(c => c.required))
+    ctx.addIssue({ code: 'custom', message: 'Done requires a successful required check or an explicit checksNotApplicable reason' })
+}
+const task = z.object({ id: text, description: text, status: taskStatus.default('pending') }).strict()
 
-export const PhaseShape = z.object({
+const PhaseBase = z.object({
   schemaVersion: z.literal(1).default(1),
-  phase: phaseNumber, name: text, status: status.default('backlog'),
+  phase: phaseNumber, name: text, status: openStatus.default('backlog'),
   arcId: id.optional(), intent: text.optional(),
   dependsOn: z.array(phaseNumber).default([]),
   criteria: z.array(text).default([]),
-  tasks: z.array(z.object({ id: text, description: text, status: taskStatus.default('pending') }).strict()).min(1),
+  tasks: z.array(task).min(1),
   ...progress,
-}).strict().superRefine((record, ctx) => {
+}).strict()
+const DonePhase = PhaseBase.extend({ status: z.literal('done'), ...doneProgress, tasks: z.tuple([task.extend({ status: z.literal('done') })]).rest(task.extend({ status: z.literal('done') })) })
+export const PhaseShape = z.union([
+  PhaseBase, DonePhase.extend(checkedCompletion), DonePhase.extend(manualCompletion),
+]).superRefine((record, ctx) => {
   unique(record.tasks.map(t => t.id), 'task IDs', ctx)
   unique(record.criteria, 'phase criteria', ctx)
   unique(record.dependsOn, 'dependencies', ctx)
   if (record.dependsOn.includes(record.phase)) ctx.addIssue({ code: 'custom', message: 'Phase depends on itself' })
   completed(record, ctx)
-  if (record.status === 'done' && record.tasks.some(t => t.status !== 'done'))
-    ctx.addIssue({ code: 'custom', message: 'Done requires all tasks done' })
 })
 export type Phase = z.infer<typeof PhaseShape>
 export function definePhase(input: z.input<typeof PhaseShape>): Phase { return PhaseShape.parse(input) }
 
-export const ArcShape = z.object({
+const ArcBase = z.object({
   schemaVersion: z.literal(1).default(1), id, name: text,
-  status: status.default('backlog'), intent: text,
+  status: openStatus.default('backlog'), intent: text,
   scope: z.array(text).min(1), nonGoals: z.array(text).default([]),
   assumptions: z.array(z.object({ claim: text, check: text, onFalse: z.enum(['replan', 'ask']) }).strict()).default([]),
   acceptanceCriteria: z.array(z.object({ id: text, description: text }).strict()).min(1),
@@ -75,7 +85,15 @@ export const ArcShape = z.object({
   planning: z.object({ mode: z.literal('rolling'), windowSize: z.number().int().min(1).max(3).default(2), deferredCriteria: z.array(text) }).strict().optional(),
   acceptanceResults: z.array(z.object({ criterionId: text, accepted: z.boolean(), summary: text }).strict()).default([]),
   ...progress,
-}).strict().superRefine((record, ctx) => {
+}).strict()
+const DoneArc = ArcBase.extend({
+  status: z.literal('done'), ...doneProgress, intentRef,
+  phases: z.tuple([phaseNumber]).rest(phaseNumber),
+  acceptanceResults: z.tuple([z.object({ criterionId: text, accepted: z.literal(true), summary: text }).strict()]).rest(z.object({ criterionId: text, accepted: z.literal(true), summary: text }).strict()),
+})
+export const ArcShape = z.union([
+  ArcBase, DoneArc.extend(checkedCompletion), DoneArc.extend(manualCompletion),
+]).superRefine((record, ctx) => {
   const criteria = record.acceptanceCriteria.map(c => c.id)
   unique(criteria, 'acceptance criteria', ctx)
   unique(record.phases, 'member phases', ctx)

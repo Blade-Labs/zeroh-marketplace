@@ -48,3 +48,11 @@ From `plugins/zeroh-roadmap`, run `npm version <new-version> --no-git-tag-versio
 Do not hand-edit manifest versions. If you edited `package.json` directly, run `npm install --package-lock-only --ignore-scripts` and `npm run version` to synchronize the lockfile and generated files. CI already runs `node scripts/emit-manifests.mjs --check` to reject manifest drift. Historical changelog entries and recorded evidence retain their original versions.
 
 See the [documentation index](docs/README.md) for current guidance and historical reviews.
+
+## Completion checks
+
+Include the roadmap records in the consumer's TypeScript project. A `done` record requires independent review and explicit verification: a nonempty `checks` list with a successful required check, or `checks: []` with a meaningful `checksNotApplicable` reason. Done phases require completed tasks; done arcs require their intent reference and accepted results. Runtime refinements check duplicate identities and relationships that TypeScript cannot prove.
+
+Wire `roadmap phase validate --all` into the consumer's existing check/CI command alongside its typechecker (for example `tsc --noEmit && roadmap phase validate --all`, using the actual installed executable). Preserve existing commands and use the consumer's package manager; initialization prints guidance instead of overwriting project configuration. Existing consumers must adapt their schema explicitly before adopting the new completion shape. The command exits nonzero for invalid records or unavailable validation; `emit.ts` alone is not the full intent check.
+
+Claude's advisory Write/Edit hook remains an early reminder only. It does not cover shell writes or guarantee closure, and Codex does not need an equivalent hook: both hosts use the same explicit checks before completion. The hook is not a substitute for the normal check command or real independent review.
