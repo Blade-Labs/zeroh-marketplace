@@ -37,3 +37,9 @@ One worktree per arc is the normal ownership unit, reused by its phase workers. 
 These observations support managed waiting and same-worker continuation while the native host is alive. They do not establish automatic recovery after the entire CLI/session dies, a notification is genuinely lost, or the original worker becomes permanently inaccessible. Installed Herdr 0.8.0 help exposes lifecycle inspection/wait/prompt operations, but no dedicated restart/wake guarantee was verified. Such recovery needs a tested host facility; neither an advisory write hook nor a beacon file provides it.
 
 The Roadmap instructions now state this boundary instead of claiming complete unattended crash recovery. A broader guarantee must be tested at the host layer before advertising it.
+
+## Follow-up review: acceptance still pending
+
+A skeptical review after `013d016` found that the earlier READY verdict covered instruction coherence, not the user's full unattended multi-arc goal. These job-level observations did not run the installed Roadmap plugin through a completed arc and into its successor, nor arm and verify an independent host wake mechanism. Both acceptance claims remain pending. A green repository CI run does not close them.
+
+Corrected direct instructions now preserve explicitly requested delegation, require an actual native wait before yielding, keep stacked child PRs open until their predecessor lands, and distinguish per-arc landing from final batch delivery. These are instruction repairs, not implementation of a persistent supervisor. A future bounded acceptance run should exercise the installed skills through arc transitions and an actual supported wake/recovery path before declaring unattended execution reliable.
