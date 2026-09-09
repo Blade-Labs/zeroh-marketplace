@@ -16,6 +16,31 @@ Respect explicit owner model choices and the active host configuration. Do not o
 
 Reuse the user's existing scope and authorization. Native tools enforce their own access and permission boundaries. A child cannot increase authority by being dispatched. Resolve an actual refusal with the host's documented access mechanism or report it; do not copy an inaccessible workflow into a scratch driver to bypass the boundary.
 
+## Role choices and cross-harness delegation
+
+Architect and developer are responsibilities, not fixed models. Reuse the owner's explicit role choices from the session or canonical project guidance, and record a pointer in the arc plan when the choice must survive a fresh session. Name both harness and model for each role; configure them through actual host settings or supported invocation options. The absence of `model` in a shared role card does not establish the desired split: default inheritance can otherwise put every role on the supervisor's model.
+
+Examples of valid intended splits, subject to installed model availability:
+
+| Architect | Developer / phase executor | Natural execution path |
+| --- | --- | --- |
+| Claude Fable | GPT-5.6 Sol | Claude architecture context; Codex developer context |
+| GPT-6 Astra | Claude Opus 5 | Codex architecture context; Claude developer context |
+| Claude Fable | Claude Opus 5 | Claude native subagents with explicit per-role models |
+| GPT-6 Astra | GPT-5.6 Sol | Codex native subagents with explicit per-role models |
+
+The supervisor can run in either harness. Prefer native subagents when the selected role model is supported there; using a native agent tool does not by itself make the other provider's model available. Use the actual exposed model parameter or supported custom-agent configuration. Respect an exact requested version; do not replace it with a floating family alias or claim that the requested model ran without checking available host metadata. Account restrictions and host overrides can change resolution; report a mismatch and honor the owner's choice instead of silently continuing on another model.
+
+The developer choice applies to phase execution unless the owner separately selected a phase-executor model. Architect work includes consequential architecture decisions and planning/replanning that needs that judgment; it does not require another architecture agent for every routine task. Reviewer/tester choices remain separate when explicitly supplied; otherwise follow host configuration with honest attribution. Independent review requires a distinct context, not necessarily a different provider.
+
+An authorized cross-harness call is supported as a deliberate execution path, not a silent fallback or permission workaround. A supervisor or a bounded worker with permitted shell access may start the other installed CLI (`codex exec --model ...` or `claude -p --model ...`). If that child lacks the necessary tool/access, ask its supervisor to perform the already-authorized delegation. Both CLIs have their own authentication, permissions, configuration and plugin discovery; none is inherited merely because the parent launched a subprocess. Do not strip safety settings or bypass a refusal to make the crossing work.
+
+Pass the selected role brief, exact checkout, bounded task, relevant intent, write ownership, chosen model and budget. Check that the target can read those inputs. If it needs Roadmap skills, verify their installed availability or provide the relevant current instructions explicitly; a prompt naming a plugin is not proof it loaded. Keep writes in the arc's existing worktree, with no concurrent writer to the same scope.
+
+Launch through a managed native shell task, retain its handle and consume its real terminal result. Use supported structured output and the CLI's returned session identity for follow-ups; never assume a native Agent ID and a CLI session ID are interchangeable. Resume through the original owning context and target CLI's supported resume facility. The child harness may use its own native subagents for the assigned task, but must not create another arc orchestrator or an uncontrolled chain back into the first harness. The caller remains responsible for result collection, recovery and the overall budget.
+
+Cross-harness output is a proposed result: inspect actual files, checks and role outcome before accepting it; exit zero alone does not prove completion. This transport does not confer unattended full-host recovery. Earlier pilots exercised Codex-supervised Claude CLI calls and same-harness native workers; the full four-pair architecture/development matrix and reverse Claude-to-Codex execution have not been validated by those observations.
+
 ## Progress and checks
 
 The session selects work from typed progress and dependencies, obtains an exclusive work claim, and executes ordinary project commands through its shell. Respect installed host resource admission for heavy work. No plugin heartbeat, process reaper, gate runner or custom scheduler participates.
