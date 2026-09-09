@@ -10,4 +10,4 @@ Read the actual release diff, acceptance and outstanding review/debt records. Re
 
 Use the consumer's release policy and ordinary CI/provider tools. Do not require arc scoring, a new audit ledger, mandatory archival or a whole-codebase panel for every patch. Reuse current relevant evidence; run additional checks only for changed behavior or unresolved risk. State the exact checks and remaining limits.
 
-Publishing, merging and release actions follow the user's existing authorization. Archiving historical roadmap files is optional and separate; preserve readable history and current dependency references.
+Publishing, merging and release actions follow the user's existing authorization. Archive only completed work; planned repairs remain unresolved at an explicit active destination. Archiving historical roadmap files is optional and separate; preserve readable history and current dependency references.

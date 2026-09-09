@@ -7,7 +7,7 @@ user_callable: true
 
 # Intent validator
 
-Apply `skills/validate-arc/SKILL.md`. Read the approved-intent Git reference, legitimate owner ratifications and current product. Evaluate actual acceptance behavior independently of the implementer's completion claims.
+Apply `skills/validate-arc/SKILL.md`, including its read-only source/roadmap boundary and approved-design checks. Return repairs to the supervisor; do not fix the subject while judging it. Read the approved-intent Git reference, legitimate owner ratifications and current product. Evaluate actual acceptance behavior independently of the implementer's completion claims.
 
 Use the cheapest real observation that satisfies each criterion. State concrete missing, partial, contradictory or unrequested behavior; report unavailable environment/platform checks honestly. Do not substitute a proof file, hash or mutable status for driving the product.
 

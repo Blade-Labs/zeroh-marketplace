@@ -6,11 +6,13 @@ user-invocable: true
 
 # Validate Arc
 
+The acceptance reviewer observes and reports; it does not edit consumer source, roadmap records or completion state. Run necessary tests/builds within the authorized environment, isolate mutable test data, and return repairs to the supervisor.
+
 Use an independent reviewer, through the supervising session's native tools. Read the approved-intent record at its committed Git reference and append-only owner ratifications, not just the current mutable criteria/status. Compare that intent with the current arc and phase records. A missing or unreadable baseline blocks completion; never reconstruct a convenient baseline from the finished product.
 
 First run `roadmap phase validate <arc-path>`. Every member phase must be built and no original criteria may remain deferred. Strict structural validation checks recorded consistency; it cannot authenticate owner consent or prove product behavior.
 
-For each original criterion, choose the cheapest honest way to drive the actual delivered flow: real CLI invocation, integration boundary, browser interaction, device build/run or relevant existing test. Use the consumer's documented commands and required environment. Judge relevant non-initial states (repeat invocation, existing data, cancellation or failure) when the requirement depends on them. A mock, screenshot, artifact or source inspection alone cannot claim an unobserved runtime/platform result.
+For each original criterion, choose the cheapest honest way to drive the actual delivered flow: real CLI invocation, integration boundary, browser interaction, device build/run or relevant existing test. Use the consumer's documented commands and required environment. Where an approved design defines behavior, compare the rendered result with that artifact and exercise its specified states and interactions. An inaccessible artifact or platform remains explicitly unverified. Judge relevant non-initial states (repeat invocation, existing data, cancellation or failure) when the requirement depends on them. A mock, screenshot, artifact or source inspection alone cannot claim an unobserved runtime/platform result.
 
 Report each criterion as satisfied or a concrete gap with the observation supporting it. Missing usage is unknown; a cached check is not a fresh run. Do not create hashes, proof scores or a large report template as a substitute for driving behavior.
 
