@@ -40,3 +40,9 @@ Existing consumer files and vendored schemas stay owned by their projects. Stric
 Automation using retired commands must remain on a compatible release until explicitly adapted. A plugin/cache update does not migrate consumers, overwrite schemas or grant authority. See [CLAUDE.md](CLAUDE.md) for the migration boundary and [MULTI-DRIVER.md](MULTI-DRIVER.md) for native execution.
 
 These instructions and validators enforce recorded consistency, not truthfulness or product quality by themselves. Real checks and independent judgment remain necessary. Host support and performance claims require observed native runs.
+
+## Updating the plugin version
+
+From `plugins/zeroh-roadmap`, run `npm version <new-version> --no-git-tag-version`. npm updates the single source in `package.json` and its lockfile, then the version lifecycle automatically runs the existing manifest generator. All five host manifests and the generated install guide receive that value. Review and commit those generated changes together; tagging and publishing remain separate.
+
+Do not hand-edit manifest versions. If you edited `package.json` directly, run `npm install --package-lock-only --ignore-scripts` and `npm run version` to synchronize the lockfile and generated files. CI already runs `node scripts/emit-manifests.mjs --check` to reject manifest drift. Historical changelog entries and recorded evidence retain their original versions.

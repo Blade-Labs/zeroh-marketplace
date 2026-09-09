@@ -9,7 +9,8 @@
     "roadmap": "bin/roadmap.mjs"
   },
   "scripts": {
-    "test": "node scripts/run-tests.mjs"
+    "test": "node scripts/run-tests.mjs",
+    "version": "node scripts/emit-manifests.mjs"
   },
   "dependencies": {
     "typescript": "5.9.3",
