@@ -1,0 +1,10 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "zeroh",
+  "description": "ZeroH plugins by Blade Labs: keep keys and personal data on your machine while AI tools do the work.",
+  "owner": {
+    "name": "Blade Labs",
+    "email": "info@blade-labs.com"
+  },
+  "plugins": []
+}
