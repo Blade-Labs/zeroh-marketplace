@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Blade-Labs/zeroh-marketplace/security/policy
+    about: Report it privately, as SECURITY.md describes. Never in a public issue.
+  - name: Try ZeroH Disclosure step by step
+    url: https://witty-river-07cbf8503.1.azurestaticapps.net/try/
+    about: The test guide on the website, to compare what you see with what is expected.
