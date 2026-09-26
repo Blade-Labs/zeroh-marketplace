@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "Unchanged CommonJS modules from validator (see SOURCE.json); this file only tells Node they are CommonJS."
+}

@@ -4,7 +4,18 @@
   "description": "ZeroH plugins by Blade Labs: keep keys and personal data on your machine while AI tools do the work.",
   "owner": {
     "name": "Blade Labs",
-    "email": "info@blade-labs.com"
+    "email": "hello@bladelabs.io"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "zeroh-disclosure",
+      "description": "Keeps API keys, passwords and personal data away from the model in Claude Code: masks prompts and tool output as tokens, puts real values back only on your machine for allowed hosts, shows real values on screen, and signs a local receipt per turn. A local proxy, on by default, masks what you type.",
+      "version": "1.0.0-rc.1",
+      "source": "./plugins/zeroh-disclosure",
+      "category": "security",
+      "license": "AGPL-3.0-only",
+      "homepage": "https://github.com/Blade-Labs/zeroh-marketplace",
+      "repository": "https://github.com/Blade-Labs/zeroh-marketplace"
+    }
+  ]
 }

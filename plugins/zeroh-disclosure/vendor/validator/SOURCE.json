@@ -1,0 +1,31 @@
+{
+  "project": "validator",
+  "repository": "https://github.com/validatorjs/validator.js",
+  "version": "13.15.35",
+  "license": "MIT",
+  "url": "https://registry.npmjs.org/validator/-/validator-13.15.35.tgz",
+  "integrity": "sha512-TQ5pAGhd5whStmqWvYF4OjQROlmv9SMFVt37qoCBdqRffuuklWYQlCNnEs2ZaIBD1kZRNnikiZOS1eqgkar0iw==",
+  "files": {
+    "lib/isBtcAddress.js": "5c83d03bc19585368d9851c47d91f41f5d00b10c15746311ef81bb774ade5722",
+    "lib/isByteLength.js": "c41290afdae94569da7b092f37feacdbc4bca6b0354288002f140e4b85af361d",
+    "lib/isCreditCard.js": "fe8bd65192aabeda1fbd1f1fdd94f0f9394b6b1bf87f185da49befc6ac05f49b",
+    "lib/isDate.js": "2e03c7f6d090819e675a1356124ed0e38e6637632214d95fc3aa9384a857dfc6",
+    "lib/isEmail.js": "87b76ec61c0be294d4aea38fbc77e717c8fa9b354c1c034bc6dcde0b7fadf4ab",
+    "lib/isEthereumAddress.js": "e5ec0342436a0f5cfb10b476056fcec712c36f0e85dd67e0a7a9139148a60247",
+    "lib/isFQDN.js": "9d6761851ec2d3874aadf6c93bc7c604f65a5f5b5cd2d412a860604497807c66",
+    "lib/isIBAN.js": "e66500cb8bf87a87fb07fefa8e86ff7b3d290550d8b3b919efba844ffc8e664d",
+    "lib/isIP.js": "56daa309d8c63ce911cc4b495cfac8b1dc95a3d9daa7945b0f1fd3a093130b45",
+    "lib/isIdentityCard.js": "a1608b5e95f6b7e945baf16817db19544d2600ca2b375d4141f36da1d1b6ed40",
+    "lib/isInt.js": "0c488f06ee1d46ae8f30829052e0c851c471ec0a42d263b25c99d169ec95b7c8",
+    "lib/isLuhnNumber.js": "aae1f9fd58872a6973ae29a2fbc93dd6de930371ef88ebffcf404ce24f9b5499",
+    "lib/isPassportNumber.js": "bbe34e8f112f771ec029ac9d02769e1c6c23d5b27c3ac04c313305766b48a6aa",
+    "lib/isTaxID.js": "44d2c252f495eb76bdc949d157fe1ca894881734ec478298f85c754aa08d3260",
+    "lib/util/algorithms.js": "40c841bf06ac484552f1bee167ef0ed1571d39919562cd7098ad571334fb3e21",
+    "lib/util/assertString.js": "3df725d58ff031b59e9b5e63bd3a710e08d734cf2a37b46d4169d22cab28c65b",
+    "lib/util/checkHost.js": "01b0ca750aecbe76882c251422ce6f22d8069c6b5164e28c9d8c671918d5ea7b",
+    "lib/util/includesArray.js": "e8770639dc8f9abb777429585058b39a5331ecad664db4b2d056d5ad57cbf98b",
+    "lib/util/merge.js": "8d56cf94fd370bf1637d1fd21a32a38a9b68bfbfd27ea30402ad821fa398876d",
+    "lib/util/nullUndefinedCheck.js": "b0dae278af71bd0e70b4c52fdcaa325d3339dd1864913d14aadddb9af7cc8fa7",
+    "LICENSE": "683b3c34623e01daad41cb2a3d0a93578c590f8d0206cbd8b0b579fb7def2603"
+  }
+}

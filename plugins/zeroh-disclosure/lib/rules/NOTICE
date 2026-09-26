@@ -1,0 +1,7 @@
+Provider detection rules are derived from gitleaks/gitleaks v8.30.1,
+commit 83d9cd684c87. Gitleaks is licensed under the MIT License; the
+corresponding licence text is retained at vendor/gitleaks/LICENSE.
+
+Top-level domains are derived from the IANA Root Zone Database list,
+version 2026092500, last updated Fri Sep 25 07:07:01 2026 UTC. The unchanged
+source is retained at vendor/iana/tlds-alpha-by-domain.txt.

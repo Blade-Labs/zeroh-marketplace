@@ -1,33 +1,36 @@
-# ZeroH marketplace
+# ZeroH marketplace for Claude Code
 
-Public Claude Code plugins from [Blade Labs](https://bladelabs.io), built on the ZeroH platform.
-
-| Plugin | What it does | Status |
-| --- | --- | --- |
-| **ZeroH Disclosure** | Keeps API keys, passwords and personal data on your machine. The model works with tokens such as `[API_KEY-7a3f9e]`; commands get the real value back locally, only for the hosts each key may reach. | Coming with 1.0 |
-
-## Install
+Open-source Claude Code plugins from [Blade Labs](https://bladelabs.io). Add the marketplace once,
+then install the plugins you want:
 
 ```bash
 claude plugin marketplace add Blade-Labs/zeroh-marketplace
 claude plugin install zeroh-disclosure@zeroh
 ```
 
-## How this repository is updated
+Restart Claude Code after installing so the plugin's hooks load.
 
-Plugins are built and tested in Blade Labs' private monorepo. Each release tag copies the released
-plugin here, with its licence, so this repository only ever holds released versions.
+## Plugins
+
+| Plugin                                              | Version | Status      | What it does                                                                                                                                                                             |
+| --------------------------------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.0.0-rc.1 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
+
+Each plugin's folder has its own README, changelog and documentation. Releases are listed under
+[Releases](https://github.com/Blade-Labs/zeroh-marketplace/releases).
+
+## Contributing and security
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to report bugs and missed detections, run the tests and
+  send a pull request (see the contribution terms in CONTRIBUTING.md).
+- [SECURITY.md](SECURITY.md): report vulnerabilities privately through GitHub's private
+  vulnerability reporting or hello@bladelabs.io. Never post a real secret in an issue.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): Contributor Covenant 2.1.
 
 ## Licence
 
-GNU Affero General Public License v3.0 (AGPL-3.0-only). See [LICENSE](LICENSE). You may use, study,
-modify and share the plugins. If you distribute a modified version, or run one for others over a
-network, you must publish your changes under the same licence and keep the copyright notices.
+The plugins are licensed under the GNU Affero General Public License, version 3 only
+(`AGPL-3.0-only`); see [LICENSE](LICENSE). Copyright © 2026 Blade Labs Holdings Private Limited.
+Third-party material is listed in each plugin's `NOTICE`.
 
-Copyright © 2026 Blade Labs Holdings Private Limited.
-
-## Contributing
-
-Issues are welcome. Before a pull request can be merged, contributors sign a short contributor
-licence agreement, so Blade Labs can keep offering the plugins under other terms as well
-(for example inside its hosted Premium and Enterprise services).
+Contact: hello@bladelabs.io

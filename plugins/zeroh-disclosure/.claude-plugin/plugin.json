@@ -1,0 +1,14 @@
+{
+  "name": "zeroh-disclosure",
+  "version": "1.0.0-rc.1",
+  "description": "Keeps API keys, passwords and personal data away from the model in Claude Code: masks prompts and tool output as tokens, puts real values back only on your machine for allowed hosts, shows real values on screen, and signs a local receipt per turn. A local proxy, on by default, masks what you type.",
+  "author": {
+    "name": "Blade Labs",
+    "email": "hello@bladelabs.io",
+    "url": "https://bladelabs.io"
+  },
+  "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/Blade-Labs/zeroh-marketplace",
+  "repository": "https://github.com/Blade-Labs/zeroh-marketplace",
+  "keywords": ["security", "secrets", "privacy", "pii", "masking", "hooks"]
+}

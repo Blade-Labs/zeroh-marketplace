@@ -1,0 +1,16 @@
+{
+  "project": "alhazmy13/Saudi-ID-Validator",
+  "repository": "https://github.com/alhazmy13/Saudi-ID-Validator",
+  "version": "069fb64846f32f41082bcc0e24ed96b0a5817fe2",
+  "license": "MIT",
+  "files": {
+    "validateSAID.js": {
+      "from": "https://raw.githubusercontent.com/alhazmy13/Saudi-ID-Validator/069fb64846f32f41082bcc0e24ed96b0a5817fe2/validateSAID.js",
+      "sha256": "1203d245e233a37dacba78be06fc4f37b61b1109759c6cf73e43a41122304ff6"
+    },
+    "LICENSE": {
+      "from": "https://raw.githubusercontent.com/alhazmy13/Saudi-ID-Validator/069fb64846f32f41082bcc0e24ed96b0a5817fe2/LICENSE",
+      "sha256": "b806a079ff54e77e51da07d6a4bfd1f158c8fcc677939143a5883090459da0a9"
+    }
+  }
+}

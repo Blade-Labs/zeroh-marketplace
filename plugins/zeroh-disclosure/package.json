@@ -1,0 +1,26 @@
+{
+  "name": "zeroh-disclosure",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "description": "ZeroH Disclosure for Claude Code: keeps API keys, passwords and personal data away from the model. The hooks and proxy use Node built-ins and vendored libraries only; nothing to install.",
+  "homepage": "https://github.com/Blade-Labs/zeroh-marketplace/tree/main/plugins/zeroh-disclosure#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Blade-Labs/zeroh-marketplace.git",
+    "directory": "plugins/zeroh-disclosure"
+  },
+  "bugs": {
+    "url": "https://github.com/Blade-Labs/zeroh-marketplace/issues"
+  },
+  "bin": {
+    "zeroh-disclosure": "./bin/zeroh-disclosure.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

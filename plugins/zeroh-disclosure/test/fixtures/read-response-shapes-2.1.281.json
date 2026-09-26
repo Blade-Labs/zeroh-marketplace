@@ -1,0 +1,68 @@
+[
+  {
+    "tool_input": {
+      "file_path": "/tmp/zeroh-fixture/invoice.pdf"
+    },
+    "tool_response": {
+      "type": "pdf",
+      "file": {
+        "filePath": "/tmp/zeroh-fixture/invoice.pdf",
+        "base64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0\u2026(868 chars)",
+        "originalSize": 650
+      }
+    }
+  },
+  {
+    "tool_input": {
+      "file_path": "/tmp/zeroh-fixture/screenshot.png"
+    },
+    "tool_response": {
+      "type": "image",
+      "file": {
+        "base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQ\u2026(92 chars)",
+        "type": "image/png",
+        "originalSize": 69,
+        "dimensions": {
+          "originalWidth": 1,
+          "originalHeight": 1,
+          "displayWidth": 1,
+          "displayHeight": 1
+        }
+      }
+    }
+  },
+  {
+    "tool_input": {
+      "file_path": "/tmp/zeroh-fixture/analysis.ipynb"
+    },
+    "tool_response": {
+      "type": "notebook",
+      "file": {
+        "filePath": "/tmp/zeroh-fixture/analysis.ipynb",
+        "cells": [
+          {
+            "cellType": "code",
+            "source": "print('sk_live_ZEROHFAKE_NB_1234567890')",
+            "execution_count": 1,
+            "cell_id": "cell-0",
+            "language": "python",
+            "outputs": [
+              {
+                "output_type": "stream",
+                "text": "sk_live_ZEROHFAKE_NB_1234567890\n"
+              },
+              {
+                "output_type": "display_data",
+                "text": "<Figure>",
+                "image": {
+                  "image_data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQ\u2026(92 chars)",
+                  "media_type": "image/png"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+]
