@@ -8,7 +8,10 @@ the source files, see [Where things live](development.md#where-things-live).
 
 - [Components](#components)
 - [Hook lifecycle](#hook-lifecycle)
+- [Local proxy](#local-proxy)
 - [Local unmask grants](#local-unmask-grants)
+- [Vault and tokens](#vault-and-tokens)
+- [Destination enforcement](#destination-enforcement)
 - [PostToolUse format decisions](#posttooluse-format-decisions)
 - [Bash late binding](#bash-late-binding)
 - [PowerShell late binding](#powershell-late-binding)
@@ -16,6 +19,7 @@ the source files, see [Where things live](development.md#where-things-live).
 - [Exit-status wrapper](#exit-status-wrapper)
 - [Settings guard](#settings-guard)
 - [Evidence contracts](#evidence-contracts)
+- [Project root](#project-root)
 
 ## Components
 
@@ -50,7 +54,7 @@ flowchart LR
     PROJECT[(ZEROH_HOME/projects per-project sessions and allow rules)]
     CLI[zeroh-disclosure CLI and slash commands]
     PROXY[Copied local masking proxy]
-    SETTINGS[Claude Code settings backup]
+    SETTINGS[Claude Code settings and restore record]
     UPSTREAM[Prior gateway or Anthropic]
     MCP[Unmask and report-miss MCP server]
     GRANTS[(ZEROH_HOME signed caps and grants)]
@@ -77,8 +81,9 @@ flowchart LR
 ```
 
 The hooks and default local proxy use Node built-ins and the libraries vendored under `vendor/`
-(validator.js and libphonenumber-js, which decide what counts as personal data); the proxy's
-runtime copy under `ZEROH_HOME` takes those vendored folders with it.
+(validator.js, libphonenumber-js, i18n-iso-countries and Saudi-ID-Validator, which decide what
+counts as personal data); the proxy's runtime copy under `ZEROH_HOME` takes those vendored folders
+with it. [What ZeroH Disclosure detects](detection.md) lists the rules.
 
 ## Hook lifecycle
 
@@ -97,7 +102,9 @@ that fails while it runs (`hooks/fail-closed.js`).
 | `Stop`             | Finalizes ledgers (which never hold the typed prompt, only masked text), writes signed receipts, writes `receipt.html`, and builds the session receipt bundle.                                                                                                                                                                            |
 | `SessionEnd`       | Applies vault retention with the policy `SessionStart` stored: under `session` retention it removes the values the ending session used; under `7d` or `30d` it removes values past the window.                                                                                                                                            |
 
-Naming a token. The screen shows the real value for every plain `[TYPE-xxxxxx]` in Claude's reply,
+### Naming a token
+
+The screen shows the real value for every plain `[TYPE-xxxxxx]` in Claude's reply,
 so a sentence about the token itself ("I saw the token [API_KEY-3f9a1c]") would show the key, as if
 the model had seen it. Nothing leaks, but the display rules cannot tell which of the two the model
 means: "STRIPE_KEY=[API_KEY-3f9a1c]" and "I saw [API_KEY-3f9a1c]" have the same shape. So the model
@@ -110,6 +117,8 @@ safety net for the one unambiguous case: the word `token` or `placeholder` direc
 token (backticks allowed), or `is`/`was` `a`/`the`/`just a`/`only a` `token`/`placeholder`
 directly after it, shows that token as `⟦TYPE-xxxxxx⟧`. Only the keywords ignore case; a keyword
 inside a name (`GITHUB_TOKEN`) does not count, and every other plain token shows the real value.
+
+## Local proxy
 
 The local proxy is a separate request boundary. It masks user text, tool-result content, and the
 text of system blocks, including `CLAUDE.md`, imports, and auto-memory. It refuses a text field
@@ -127,7 +136,9 @@ session that does not use the proxy yet writes `env.ANTHROPIC_BASE_URL` as
 Claude Code applies a changed settings file to the running session, so that prompt already goes
 through the proxy (a write at `SessionStart` lands before Claude Code watches the file and is
 missed). A session whose `ANTHROPIC_BASE_URL` comes from elsewhere (the shell, a higher-precedence
-settings file) is never routed, and its typed secrets are stopped. The proxy's state is one file, `<ZEROH_HOME>/proxy/proxy.json`: the port, the control
+settings file) is never routed, and its typed secrets are stopped.
+
+The proxy's state is one file, `<ZEROH_HOME>/proxy/proxy.json`: the port, the control
 token, and one install per settings file (its key, upstream and the user's previous
 `ANTHROPIC_BASE_URL`), written under a lock. A restore record next to each settings file holds the
 previous `ANTHROPIC_BASE_URL` and the URL ZeroH wrote, so two Claude profiles share one daemon and
@@ -144,11 +155,11 @@ with a body is masked with the project vault of the live route of its `x-claude-
 and the daemon records that it has seen the session. A request without a session header, or of a
 session no hook registered, is masked while any plugin session of the same settings file is live
 and not ended (with that project's vault, or with each live project's vault in turn), and passes
-through unmasked only when none is: the plugin is disabled or removed everywhere (D-12). A session
+through unmasked only when none is: the plugin is disabled or removed everywhere. A session
 opted out passes through. Routes older than 36 hours are pruned. Hooks decide whether typed secrets
 are masked by asking the daemon about their own session (with a nonce proof), and then either by
 the daemon's record that it has seen a request under that session id, or by the hook's own
-environment naming this install's proxy URL for the active settings file (T-29): Claude Code then
+environment naming this install's proxy URL for the active settings file: Claude Code then
 sends the session's requests there, and the daemon masks the session's own requests and, while it
 is live, any it cannot attribute. Only a session put behind the proxy by the current prompt (its
 environment does not name the proxy yet) waits for "seen". Nothing in the environment alone can
@@ -157,6 +168,7 @@ with a body carries the session id (subagents, `--resume`, `--continue` and `--f
 included); only `HEAD /api/hello` has none, and on resume one start-up quota request carries a new
 id before the session switches to the resumed one. Provider
 authentication environment values are neither catalogued nor copied into the daemon environment.
+
 After 24 hours without a live route from an installed plugin, the daemon restores every recorded
 settings file, unregisters the login item, logs one line, and exits. It also exits within seconds
 when `proxy.json` is deleted (removing its login item) or replaced by another daemon's, on
@@ -166,18 +178,21 @@ files it serves (`takeEntryOut`, the one rule for taking an entry out), except f
 with a live plugin session it has masked (seen, not ended, within the route window; remembered
 from the routes while the home exists): Claude Code applies a changed settings file to a running
 session, so the rest of that session's turn would go straight to the API with its whole history.
-That session's next prompt restarts the daemon (D-10). While the home exists it decides under the
+That session's next prompt restarts the daemon. While the home exists it decides under the
 manager lock; when someone else holds the lock (a re-registered login item boots the daemon out
 during `SessionStart`), it keeps every entry. A leaving daemon releases its port at once and drains
-open requests for up to ten minutes. The daemon reaches its upstream with explicit agents built
+open requests for up to ten minutes.
+
+The daemon reaches its upstream with explicit agents built
 from the network environment (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`,
 `SSL_CERT_FILE`) that `SessionStart` records in `proxy.json`; a session with a different one
 restarts it. When the recorded network proxy itself cannot be reached, the daemon drops it (in
 memory and in `proxy.json`, keeping the CA files) and connects directly. A network failure on the
 way to the upstream is a retryable 502; everything else the proxy produces is a final 4xx with the
 fix. A start that finds the port taken by another program moves to a free port and rewrites the
-entry. `proxy off`
-restores the current settings file, records the choice next to it (hooks and `SessionStart` honour
+entry.
+
+`proxy off` restores the current settings file, records the choice next to it (hooks and `SessionStart` honour
 it until `proxy on` or `doctor --fix`) and stops the daemon when no other settings file uses it;
 `doctor --fix` does the same without recording, forgets a `proxy off`, and also stops any ZeroH
 daemon it finds by probing the ports ZeroH records name, except this home's daemon while another
@@ -226,6 +241,8 @@ is not rewritten. `UserPromptSubmit` emits the active countdown as a one-line `s
 The main Claude Code status line remains user-owned; the optional `zeroh-disclosure statusline`
 command prints the same text.
 
+## Vault and tokens
+
 The vault creates its key with exclusive-create semantics. Saves take an exclusive sibling lock,
 remove only stale locks, re-read and merge the encrypted map while holding the lock, then replace it
 with a temporary-file rename. Token names are HMAC-SHA256 of `type:value`, truncated to six hex
@@ -233,6 +250,8 @@ characters, under a per-install token key derived from the vault key, so a token
 test guesses of the value. A value already in the vault keeps its stored token, including tokens
 minted by earlier versions. Token collisions probe `type:value:N` instead of overwriting an
 existing value.
+
+## Destination enforcement
 
 Destination enforcement extracts scheme and scheme-less URLs, bare public-looking domains,
 IPv4/IPv6 literals, `user@host`, `host:port`, and PowerShell `-Uri` values from the complete restored
@@ -378,7 +397,7 @@ proxy on, the proxy masks that output.
 `settings-guard.js` protects:
 
 - the full user `ZEROH_HOME` directory, except Read and Grep access to the project's receipts
-  under `<ZEROH_HOME>/projects/<project>/sessions` (D-15: nothing lives in the project);
+  under `<ZEROH_HOME>/projects/<project>/sessions` (nothing lives in the project);
 - a `<project>/.zeroh` folder left by an earlier build;
 - `.zeroh.env` and `.zeroh.policy` (Read stays allowed; earlier builds read `.zeroh.policy`);
 - Claude Code settings files (user, `CLAUDE_CONFIG_DIR`, project, local and managed) against
@@ -416,11 +435,8 @@ The architecture uses three linked evidence layers:
 2. A signed receipt exposes public claims and selectively disclosable details.
 3. A session receipt bundle contains receipt records, summary counts, and chain evidence.
 
-The contracts are documented separately:
-
-- [Receipt format](receipt-format.md)
-
-Receipts are signed and verified locally; verification makes no network call.
+[Receipt format](receipt-format.md) documents the contracts. Receipts are signed and verified
+locally; verification makes no network call.
 
 ## Project root
 

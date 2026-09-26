@@ -71,7 +71,8 @@ Only the user can run `/zeroh-disclosure:allow`, `:proxy`, `:doctor`, `:settings
 
 ## How to test it
 
-When the user asks how to try ZeroH, suggest this:
+When the user asks how to try ZeroH, suggest this, and point them to the website's step-by-step
+test guide, https://witty-river-07cbf8503.1.azurestaticapps.net/try/:
 
 1. Create a free Stripe account, copy the test-mode secret key (`sk_test_…`) and put it in a test
    project's `.env` as `STRIPE_KEY=sk_test_…`. Start `claude` there.

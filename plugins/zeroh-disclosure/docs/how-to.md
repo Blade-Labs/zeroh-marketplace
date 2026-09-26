@@ -1,13 +1,17 @@
 # How to use ZeroH Disclosure
 
-Use these recipes to manage destinations, inspect local evidence, respond to notices, run PowerShell, and remove the plugin.
+Use these recipes to try the plugin, manage destinations, inspect local evidence, respond to
+notices, work with the local proxy, run PowerShell, and remove the plugin.
 
 ## Contents
 
+- [Try it without a Stripe account](#try-it-without-a-stripe-account)
 - [Run the CLI](#run-the-cli)
 - [Control the session banner](#control-the-session-banner)
 - [Manage vault retention](#manage-vault-retention)
+- [Keep receipts for longer or shorter](#keep-receipts-for-longer-or-shorter)
 - [Allow a destination host](#allow-a-destination-host)
+- [Allow a value into an MCP tool](#allow-a-value-into-an-mcp-tool)
 - [Manage unmask caps, grants, and the optional status line](#manage-unmask-caps-grants-and-the-optional-status-line)
 - [Report a value that was not masked](#report-a-value-that-was-not-masked)
 - [Read and verify a receipt](#read-and-verify-a-receipt)
@@ -16,8 +20,46 @@ Use these recipes to manage destinations, inspect local evidence, respond to not
 - [Respond to notices](#respond-to-notices)
 - [Find settings, keys, and session data](#find-settings-keys-and-session-data)
 - [Understand the settings guard](#understand-the-settings-guard)
+- [Work with the local proxy](#work-with-the-local-proxy)
 - [Run with PowerShell](#run-with-powershell)
 - [Uninstall and clean up](#uninstall-and-clean-up)
+
+## Try it without a Stripe account
+
+The [README](../README.md#try-it) walks through a Stripe test key against the real Stripe API.
+Without a Stripe account, any made-up value works against `httpbin.org`, which echoes the Bearer
+token it received:
+
+1. Put `STRIPE_KEY=sk_test_ZEROHFAKE123` in a test project's `.env` and start `claude` there.
+2. Allow the host first: `/zeroh-disclosure:allow STRIPE_KEY httpbin.org`.
+3. Ask Claude to "call https://httpbin.org/bearer with STRIPE_KEY as a Bearer token". httpbin
+   answers `200` with `"authenticated": true`: the real value reached the server, while its echo
+   came back to the model as `[API_KEY-…]`.
+4. Ask for a host you have not allowed, and see it blocked.
+
+Personal data works the same way, and you can show one kind of it to Claude for a while. Put a few
+addresses a sign-up form rejected into a log:
+
+```text
+$ cat > signup-errors.log <<'EOF'
+rejected anna.o'neil@example.co.uk by validateEmail
+rejected lars+work@example.com by validateEmail
+rejected jürgen@müller.example by validateEmail
+rejected "quoted name"@example.com by validateEmail
+rejected user@[192.0.2.1] by validateEmail
+EOF
+$ claude
+> Read signup-errors.log and find out why validateEmail rejects these addresses.
+```
+
+Claude sees `rejected [EMAIL-…] by validateEmail` on every line, so it asks to unmask `EMAIL` with
+its reason (you can also type `/zeroh-disclosure:unmask EMAIL find why validateEmail rejects
+them`). Accept Claude Code's dialog for 15 minutes and Claude sees the addresses: an apostrophe, a
+`+` tag, non-ASCII letters, a quoted local part and an IP literal, all valid addresses that a
+simple pattern rejects. Tell Claude to stop, and email addresses are masked again at once.
+
+The website's [step-by-step test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/)
+goes further: naming tokens, a value ZeroH misses, and receipts.
 
 ## Run the CLI
 
@@ -48,7 +90,8 @@ The first session for a `ZEROH_HOME` shows the full view: the five-line banner p
 coverage, current limitations, receipt location, and these controls. ZeroH creates
 `<ZEROH_HOME>/banner-shown` after that view, then uses the five-line banner on later sessions.
 
-Choose a persistent mode from your terminal:
+Choose a persistent mode with `/zeroh-disclosure:settings banner full|compact|off`, or from your
+terminal:
 
 ```bash
 zeroh-disclosure banner full
@@ -102,7 +145,8 @@ becomes detected and starts following the configured window. Values you reported
 last-use metadata, or with a last-use time in the future after a clock change, are treated as used
 now.
 
-Inspect aggregate state without revealing a stored value:
+Inspect aggregate state without revealing a stored value, with
+`/zeroh-disclosure:settings vault status` or:
 
 ```bash
 zeroh-disclosure vault status
@@ -117,7 +161,8 @@ zeroh-disclosure vault clear
 zeroh-disclosure vault clear --yes
 ```
 
-The first form asks for confirmation; `--yes` is intended for deliberate automation. From a
+The first form asks for confirmation; `--yes` is intended for deliberate automation.
+`/zeroh-disclosure:settings vault clear --yes` does the same inside Claude Code. From a
 subdirectory it clears the project the directory belongs to, and it says how many values it
 removed (or that the project had no vault). It also removes pending restore files under
 `<ZEROH_HOME>/run` and the keys behind this project's receipt commitments, so nothing you asked
@@ -130,11 +175,21 @@ never reassigned to a different value, and a tool call that uses one is denied w
 asking the model to have you share the value again. Re-encountering the same value gives it a new
 token. A value that is still retained keeps its existing stable token.
 
+## Keep receipts for longer or shorter
+
+Receipts are kept for 90 days by default. Change it with
+`/zeroh-disclosure:settings receipts keep <forever|1y|90d|30d>`, with
+`zeroh-disclosure receipts keep <period>`, or with `ZEROH_RECEIPT_RETENTION` in the environment or
+`<ZEROH_HOME>/config.env`. A project's `.zeroh.env` may only shorten it. Older sessions are removed
+at the next Claude Code start, at most once a day; the current session and the vault are never
+touched. `/zeroh-disclosure:status` shows the policy in force. Receipts contain no values.
+
 ## Allow a destination host
 
-Run allow-list commands yourself in a terminal. Rules apply to the current project (or the one
-given with `--cwd`). When a destination is blocked, the denial shows the exact command to run,
-including `--cwd`, and you can run it with Claude Code's `!` prefix.
+Only you can allow a host: type `/zeroh-disclosure:allow NAME HOST` in Claude Code, or run the
+terminal form below. Rules apply to the current project (or the one given with `--cwd`). When a
+destination is blocked, the denial shows the exact slash command, and the terminal form with
+`--cwd` filled in.
 
 Allow one known variable name:
 
@@ -499,6 +554,98 @@ settings file or a project `.claude/settings*.json` file.
 
 This is a static path and command-string guard. A determined shell can construct a protected path
 at run time. Treat it as a direct-access control and audit signal, not an operating-system sandbox.
+
+## Work with the local proxy
+
+The proxy masks every request on its way to the model, including what you type. It runs as you
+(no administrator rights, nothing system-wide) and writes only under `ZEROH_HOME` and your Claude
+Code settings.
+
+### What the first session sets up
+
+- It copies the proxy into `<ZEROH_HOME>/bin/zeroh-disclosure-proxy` and starts it on
+  `127.0.0.1`.
+- It registers a per-user login item named `zeroh-disclosure-proxy` so the proxy runs after a
+  reboot: a user systemd unit on Linux (or an XDG autostart entry in a desktop session), a
+  LaunchAgent on macOS, a per-user scheduled task on Windows, started through
+  `conhost.exe --headless` so no console window opens (Windows 10 version 1809 or later). It starts
+  the `node` on your `PATH` (for example `/opt/homebrew/bin/node`), so a Node.js upgrade does not
+  break it. Each session start checks that the login item is still loaded and its Node.js still
+  exists, and registers it again if not.
+- If your machine does not allow login items (a managed Mac, background items switched off, a
+  locked-down Windows, Linux without a systemd user session or a desktop, such as SSH, WSL or a
+  container), ZeroH says so and leaves your Claude Code settings alone: nothing would keep the
+  proxy running after a reboot, and every session would then meet a dead port. Typed secrets are
+  then stopped, not masked.
+- On your first prompt it sets `env.ANTHROPIC_BASE_URL` in `~/.claude/settings.json` (or
+  `$CLAUDE_CONFIG_DIR/settings.json`, or `ZEROH_CLAUDE_SETTINGS`) to
+  `http://127.0.0.1:<port>/z/<key>`, and keeps a small restore record next to that file with your
+  previous `ANTHROPIC_BASE_URL`. It never keeps a copy of the settings file or its other values.
+  Claude Code applies a changed settings file to the running session, so that prompt waits about
+  two seconds once and then goes through the proxy. A secret in that prompt is stopped, in case it
+  would still go out directly. The few requests Claude Code sends while it starts, before your
+  first prompt, carry no prompt text and go directly.
+
+ZeroH treats typed text as masked when the session's own environment names this install's proxy
+and the proxy answers, or once the proxy has seen a request of the session.
+
+If your shell (or a settings file that takes precedence, such as a project's
+`.claude/settings.json`) sets `ANTHROPIC_BASE_URL`, Claude Code ignores ZeroH's entry, so what you
+type cannot be masked in that setup: the session start says so, and a prompt with a secret is
+stopped instead. Files and command output are still masked.
+
+### Where it forwards
+
+The proxy forwards to the `ANTHROPIC_BASE_URL` you had before, or to `api.anthropic.com`, and to
+no other host. Each settings file gets its own access key in that URL. A request with a key the
+proxy does not know (an entry left by a deleted ZeroH folder or an earlier build) is not refused
+but forwarded to the one upstream all your settings files agree on (else to `api.anthropic.com`),
+noted in a local report, and the next session start repairs the entry. The proxy never stores
+request or response bodies and leaves responses unchanged.
+
+### Corporate networks
+
+When your environment sets `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS` or
+`SSL_CERT_FILE`, the session start records them in ZeroH's private `proxy/proxy.json` (readable
+only by you), and the proxy uses them for its own connection, also after a reboot when the login
+item starts it without your shell's variables. A session with different values restarts the proxy
+with them; a session with none (an app started from the Dock) keeps the recorded ones. When the
+recorded network proxy cannot be reached (you left the office or the VPN), the proxy drops it and
+connects directly, so Claude Code's retry goes through; the next session that names a network
+proxy records it again. `doctor --fix` forgets them.
+
+### Sessions without the plugin
+
+The settings entry applies to every Claude Code session, also in a project where you disabled
+ZeroH Disclosure. While a ZeroH Disclosure session is running, any request the proxy cannot tie
+to a session of its own is masked too, never sent as it is. When no ZeroH Disclosure session is
+running, a session without the plugin passes through unmasked, as if the proxy were not there,
+and is never refused. After the plugin has been gone for 24 hours, the proxy restores your
+setting and removes itself. (Claude Code 2.1.283 sends the session id with every request that
+carries conversation text, including subagents, `--resume`, `--continue` and `--fork-session`.)
+
+### When the proxy stops
+
+The proxy never leaves a dead address behind for a new session: when it stops for a shutdown or
+logout, or because ZeroH's folder was deleted, it first takes its entry out of your Claude Code
+settings (your own setting goes back); the next session or prompt with ZeroH Disclosure puts it
+back at the same address. The one exception is a settings file a running ZeroH Disclosure session
+is using: its entry stays, because taking it out would send the rest of that session's turn, with
+its whole history, straight to the model API. That session's next prompt starts the proxy again.
+A plugin update restarts the proxy with the new code at the next session start; answers in
+progress finish first.
+
+### Turn it off
+
+```text
+/zeroh-disclosure:proxy off    # restores your settings and stops the proxy
+/zeroh-disclosure:proxy on     # turn it back on
+```
+
+`proxy off` stays off, also in new sessions, until `proxy on` or `doctor --fix`.
+`ZEROH_PROXY=off claude` skips the proxy for one session without changing settings. When it does
+not work as expected, see
+[The local proxy is unavailable](troubleshooting.md#the-local-proxy-is-unavailable).
 
 ## Run with PowerShell
 

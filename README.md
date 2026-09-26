@@ -8,13 +8,15 @@ claude plugin marketplace add Blade-Labs/zeroh-marketplace
 claude plugin install zeroh-disclosure@zeroh
 ```
 
-Restart Claude Code after installing so the plugin's hooks load.
+Restart Claude Code after installing so the plugin's hooks load. To try ZeroH Disclosure, follow
+the [step-by-step test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/) on the
+website, or start with the plugin's [README](plugins/zeroh-disclosure#readme).
 
 ## Plugins
 
 | Plugin                                              | Version | Status      | What it does                                                                                                                                                                             |
 | --------------------------------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.0.0-rc.1 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
+| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.0.0-rc.1 | Release candidate | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
 
 Each plugin's folder has its own README, changelog and documentation. Releases are listed under
 [Releases](https://github.com/Blade-Labs/zeroh-marketplace/releases).

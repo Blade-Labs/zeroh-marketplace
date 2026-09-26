@@ -1,6 +1,6 @@
 ---
-description: Print the ZeroH Disclosure receipt for 7d, 30d, 90d, or all time
-argument-hint: [period]
+description: Print the ZeroH Disclosure receipt slip for the last 7d, 30d or 90d, or all time
+argument-hint: '[7d|30d|90d|all]'
 allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/commands/scripts/report.js" *), PowerShell(node "${CLAUDE_PLUGIN_ROOT}/commands/scripts/report.js" *)
 ---
 

@@ -6,7 +6,17 @@
 
 <!-- For example: `npm test` in plugins/zeroh-disclosure, and what you tried in Claude Code. -->
 
-## Contribution terms
+- Operating system and shell:
+- Claude Code version (`claude --version`):
+- Plugin version or commit:
 
-- [ ] I agree to the [contribution terms](../CONTRIBUTING.md#contribution-terms): this is my own
-      work, it is published under AGPL-3.0-only, and Blade Labs may use, modify and relicense it.
+## Checklist
+
+- [ ] `npm test` passes in `plugins/zeroh-disclosure`.
+- [ ] Tests, fixtures and examples use fake values only (`ZEROHFAKE` in secret-shaped values,
+      `example.com` hosts).
+- [ ] User-facing changes update the plugin's `README.md` or `docs/`, and `CHANGELOG.md`.
+- [ ] I agree to the
+      [contribution terms](https://github.com/Blade-Labs/zeroh-marketplace/blob/main/CONTRIBUTING.md#contribution-terms):
+      this is my own work, it is published under AGPL-3.0-only, and Blade Labs may use, modify and
+      relicense it.

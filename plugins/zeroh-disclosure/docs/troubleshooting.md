@@ -1,6 +1,10 @@
 # Troubleshooting ZeroH Disclosure
 
 Match the symptom below to its likely cause, then use the smallest fix that preserves local evidence.
+Where a fix names `zeroh-disclosure <command>`, use the slash command inside Claude Code when there
+is one (`/zeroh-disclosure:doctor --fix`, `/zeroh-disclosure:proxy off`), or run
+`node "<plugin>/bin/zeroh-disclosure.mjs" <command>` in a terminal; see
+[Run the CLI](how-to.md#run-the-cli).
 
 ## Contents
 
@@ -370,11 +374,13 @@ model API. Its next prompt starts the proxy again.
 ### "ZeroH proxy upstream loops back to itself" after an upgrade
 
 Builds before 1.0 wrote `http://127.0.0.1:<port>` without `/z/<key>` into your settings. Press
-Esc, quit Claude Code, run `zeroh-disclosure doctor --fix` from the updated plugin (`node
-<plugin>/bin/zeroh-disclosure.mjs doctor --fix`), and start Claude Code again. Without the command,
-delete the `ANTHROPIC_BASE_URL` line that points at `http://127.0.0.1:…` from
-`~/.claude/settings.json` and remove the `proxy` folder in ZeroH's folder (`~/.zeroh/proxy`, or
-`%LOCALAPPDATA%\ZeroH\proxy` on Windows).
+Esc, quit Claude Code, run `zeroh-disclosure doctor --fix` from the updated plugin
+(`node "<plugin>/bin/zeroh-disclosure.mjs" doctor --fix`), and start Claude Code again.
+
+If no command is available at all, remove ZeroH's entry by hand: delete the
+`"ANTHROPIC_BASE_URL": "http://127.0.0.1:…"` line under `env` in `~/.claude/settings.json`, delete
+`~/.claude/.settings.json.zeroh-restore.json` and the `proxy` folder in ZeroH's folder
+(`~/.zeroh/proxy`, or `%LOCALAPPDATA%\ZeroH\proxy` on Windows), and start Claude Code again.
 
 ### A project where ZeroH Disclosure is disabled
 

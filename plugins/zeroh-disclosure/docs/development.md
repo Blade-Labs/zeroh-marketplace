@@ -16,7 +16,7 @@ How to run the tests, try a change in Claude Code, and update the generated rule
 ## Ground rules
 
 - The hooks, the proxy and the CLI use Node.js built-ins, plus the libraries vendored under
-  `vendor/` (validator.js, libphonenumber-js). A plugin install copies this folder without
+  `vendor/` (validator.js, libphonenumber-js, i18n-iso-countries, Saudi-ID-Validator). A plugin install copies this folder without
   `node_modules`, so do not add runtime dependencies: vendor a pinned release instead, with its
   licence, `SOURCE.json` and an import script, and list it in `NOTICE`.
 - Do not hand-write personal-data detection. `lib/pii/` only proposes candidates and keeps code
@@ -38,7 +38,8 @@ This runs `node --test test/*.test.mjs`: detectors, hook payloads, the settings 
 the proxy, PDF extraction, format response shapes, receipts and reports. The tests need no network
 access and no Claude login.
 
-The tests never touch your real home directory. When `ZEROH_HOME`, `ZEROH_CREDENTIAL_HOME`,
+The tests never touch your real home directory. `ZEROH_CREDENTIAL_HOME` and
+`ZEROH_SERVICE_MANAGER_DIR` exist for them: they redirect credential discovery and login items. When `ZEROH_HOME`, `ZEROH_CREDENTIAL_HOME`,
 `ZEROH_CLAUDE_SETTINGS` and `ZEROH_SERVICE_MANAGER_DIR` are not all set, `test/helpers.mjs` moves
 `HOME` and every ZeroH path into a fresh temporary directory, which is removed when the test file
 exits. If you set them yourself, each one must be under the system temporary directory; a guard
@@ -69,8 +70,9 @@ loads. Either:
 - or work on the source in a session without ZeroH loaded and rely on `npm test`.
 
 Restart Claude Code after each change: hooks, commands and the MCP server are loaded when a
-session starts. The first session also installs the local proxy; run `zeroh-disclosure proxy off`
-(from the copy you loaded) when you are done.
+session starts. The first session also installs the local proxy; when you are done, run
+`/zeroh-disclosure:proxy off` in that session, or
+`node /tmp/zeroh-disclosure-try/bin/zeroh-disclosure.mjs proxy off` from a terminal.
 
 ## Update the provider rules
 
@@ -119,7 +121,8 @@ The same list also checks the top-level domain of email addresses (`lib/pii/inde
 ## Update the personal-data libraries
 
 `vendor/validator` holds the validator.js modules `lib/pii` calls (`isEmail`, `isCreditCard`,
-`isIBAN`, `isIdentityCard`, `isTaxID`) and every module they require, unchanged from the npm
+`isIBAN`, `isIdentityCard`, `isTaxID`, `isIP`, `isPassportNumber`, `isBtcAddress`,
+`isEthereumAddress`) and every module they require, unchanged from the npm
 package's CommonJS build. `vendor/libphonenumber-js` holds that package's prebuilt
 `bundle/libphonenumber-max.js`, unchanged, as `libphonenumber-max.cjs`. Each folder has the
 licences and a `SOURCE.json` with the tarball URL, its npm integrity and the SHA-256 of every file.
@@ -141,8 +144,9 @@ licences and a `SOURCE.json` with the tarball URL, its npm integrity and the SHA
    `scripts/import-reference-data.mjs` (`--fetch`, `--check`).
 
 3. Update the versions in `NOTICE` and the CHANGELOG. `test/pii.test.mjs` carries test cases from
-   both projects' suites; rerun the false-positive measurement described in the README if the
-   update changes what is found.
+   both projects' suites; rerun the
+   [false-positive measurement](detection.md#false-positives-measured) if the update changes what
+   is found.
 
 ## Re-record Read response shapes
 

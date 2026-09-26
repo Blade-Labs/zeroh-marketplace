@@ -47,8 +47,9 @@ claude --plugin-dir /path/to/zeroh-disclosure
 The plugin protects its own files: while it is loaded, the model cannot edit the directory it runs
 from. So do not ask Claude to change the plugin in the folder that `--plugin-dir` loads. Load a
 copy in a separate test project instead (`cp -R plugins/zeroh-disclosure /tmp/zeroh-try`), or work
-on the source without the plugin loaded and rely on `npm test`. Run `zeroh-disclosure proxy off`
-from the copy when you are done, since the first session installs the local proxy.
+on the source without the plugin loaded and rely on `npm test`. The first session installs the
+local proxy, so when you are done run `/zeroh-disclosure:proxy off` in that session, or
+`node /tmp/zeroh-try/bin/zeroh-disclosure.mjs proxy off` from a terminal.
 
 ## Pull requests
 

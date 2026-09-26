@@ -284,8 +284,8 @@ const TYPED_NATIONAL = /^(?:\(\d{1,5}\) ?|\d+[ -])+\d+$/u;
 // ---- rules -----------------------------------------------------------------------
 
 // What the free plugin detects: the token type, risk, the vendored source that
-// decides, and the context guard each needs in code and logs. README "What is
-// detected" lists the measurements behind this list.
+// decides, and the context guard each needs in code and logs. docs/detection.md
+// lists them and the measurements behind this list.
 export const PII_RULES = [
   {
     type: 'EMAIL',
