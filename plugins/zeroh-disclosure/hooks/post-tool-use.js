@@ -3,7 +3,7 @@
 // PostToolUse: mask secrets and personal data in every tool's output before the
 // model reads it. The response keeps its shape; only strings change.
 import path from 'node:path';
-import { loadConfig } from '../lib/config.js';
+import { loadConfig, uncertainMode } from '../lib/config.js';
 import {
   displayName,
   firstFormatNotice,
@@ -29,6 +29,7 @@ import { loadKnownSecrets, scrub, scrubDeep } from '../lib/secrets.js';
 import { saveQuietly, Vault } from '../lib/vault.js';
 import { activeGrants, recordRevealedUnderGrant } from '../lib/unmask.js';
 import { recordMaskedOutput, recordMissReported } from '../lib/report.js';
+import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
 import { NAMING_REMINDER, namingReminder } from '../lib/token-pattern.js';
 
 // Output larger than this is withheld rather than scanned, so the hook finishes
@@ -40,32 +41,49 @@ const MAX_SCANNED_OUTPUT_BYTES = 1024 * 1024;
 const VAULT_WITHHELD =
   'ZeroH Disclosure could not open its vault, so this tool output was withheld. Ask the user to run `/zeroh-disclosure:doctor --fix`.';
 
-// Fail closed (hooks/run.js): an error anywhere, including outside the try
-// below, withholds the output in the tool's own shape.
+// An error in the try below passes the output with a notice by default and
+// withholds it in `block` mode; an error outside it is the loader's
+// (hooks/run.js), which does the same.
 const event = await readStdinJson();
 if (!event || event.tool_response === undefined) {
   cleanupValuesFile();
   process.exit(0);
 }
+// The configuration first, for the `uncertain` mode: what can't be checked
+// passes with a notice by default, and is withheld in `block` mode (owner
+// decision 2026-09-27).
 let root;
+try {
+  root = projectDir(event);
+  await loadConfig({ cwd: root });
+} catch {
+  // An unreadable config.env: the environment and the defaults apply.
+}
+const mode = uncertainMode(process.env);
 let vault;
 let vaultFailed = false;
 let readPath;
 let grants = [];
 let unmaskedTypes = [];
+// Known secrets for masking receipt labels, loaded on first use.
+let labelKnown = null;
 try {
   cleanupValuesFile();
   if (
     Buffer.byteLength(JSON.stringify(event.tool_response) ?? '') >
     MAX_SCANNED_OUTPUT_BYTES
   ) {
-    emitWithheld(
-      `ZeroH Disclosure withheld this ${event.tool_name} output because it is larger than ${MAX_SCANNED_OUTPUT_BYTES / 1024 / 1024} MB and could not be checked in time. Narrow it (for example with head, grep, or a line range) and try again.`,
-    );
+    if (mode === 'block') {
+      // deny-inventory: output-too-large
+      emitWithheld(
+        `ZeroH Disclosure withheld this ${event.tool_name} output because it is larger than ${MAX_SCANNED_OUTPUT_BYTES / 1024 / 1024} MB and could not be checked in time. Narrow it (for example with head, grep, or a line range) and try again.`,
+      );
+    } else {
+      await passUnscanned('too-large');
+    }
     process.exit(0);
   }
-  root = projectDir(event);
-  await loadConfig({ cwd: root });
+  root ??= projectDir(event);
   refreshRoute(event);
   grants = activeGrants(root, { sessionId: event.session_id });
   if (
@@ -110,19 +128,57 @@ try {
     revealed,
   );
   recordReveals(revealed);
-  if (!replacements.length) process.exit(0);
+  // Image blocks in any other tool's output (an MCP screenshot): their
+  // strings were scanned, the picture was not.
+  const images = imageBlocks(event.tool_response);
+  const imageLine = images ? await noteUncheckedFormat(images) : null;
+  if (!replacements.length) {
+    emitNotice(imageLine);
+    process.exit(0);
+  }
+  // Labels are masked before the vault is saved: masking can mint a token.
+  const observations = tokenObservations(replacements);
+  const auditPath = event.tool_name === 'Read' ? maskLabel(readPath) : null;
   saveQuietly(vault, 'ZeroH Disclosure (PostToolUse)');
   await recordMaskedOutput({
     cwd: root,
     sessionId: event.session_id,
     channel: channelForTool(event.tool_name),
     replacements,
-    filePath: event.tool_name === 'Read' ? readPath : null,
-    observations: tokenObservations(replacements),
+    filePath: auditPath,
+    observations,
   });
-  await emitMasked(masked, replacements);
+  await emitMasked(masked, replacements, imageLine);
 } catch {
-  emitWithheld(vaultFailed ? VAULT_WITHHELD : ERROR_WITHHELD);
+  if (mode === 'block') {
+    // deny-inventory: output-check-failed
+    emitWithheld(vaultFailed ? VAULT_WITHHELD : ERROR_WITHHELD);
+  } else {
+    // A vault that can't be opened: masking now would leave tokens that can
+    // never be turned back into values, so the output goes as it is, with
+    // the line (owner decision 2026-09-27).
+    await passUnscanned(vaultFailed ? 'vault-unavailable' : 'check-failed');
+  }
+}
+
+// The output goes to the model as the tool returned it, with the one-line
+// "not protected" notice, recorded on the turn (lib/unchecked.js).
+async function passUnscanned(reason) {
+  // An answer already written stands.
+  if (globalThis.zerohHook?.state?.emitted) return;
+  let notice = null;
+  try {
+    ({ notice } = await recordUnchecked({
+      reason,
+      tool: event.tool_name,
+      cwd: root ?? projectDir(event),
+      sessionId: event.session_id,
+      subject: 'tool output',
+    }));
+  } catch {
+    notice = uncheckedNotice(reason, { subject: 'tool output' });
+  }
+  emitNotice(notice);
 }
 
 // The late-binding values file is normally removed by the command itself; this
@@ -146,7 +202,7 @@ function emitWithheld(message) {
       updatedToolOutput: withheldOutput(
         event.tool_name,
         event.tool_response,
-        readPath,
+        maskLabel(readPath),
         message,
       ),
     },
@@ -166,7 +222,7 @@ async function handlePdf() {
       // A malformed response is treated like a PDF without a text layer.
     }
   }
-  const name = displayName(filePath, 'PDF');
+  const name = displayName(maskLabel(filePath), 'PDF');
   const known = loadKnownSecrets(root);
   const result = extraction.text
     ? scrub(extraction.text, {
@@ -184,14 +240,19 @@ async function handlePdf() {
       sessionId: event.session_id,
       passedUnmasked: { 'pdf passed, text layer sparse or absent': 1 },
     });
+    const line = await noteUncheckedFormat();
+    // The first time in a session the notice explains why; after that the
+    // plain line, once per turn.
     const notice = await once(
       'pdf-no-text',
       `ZeroH Disclosure: ${name} was sent unmasked. Scanned PDFs aren't masked in the free plugin.`,
     );
-    emitNotice(notice);
+    emitNotice(notice ?? line);
     return;
   }
 
+  const observations = tokenObservations(result.replacements);
+  const maskedPath = maskLabel(filePath);
   saveQuietly(vault, 'ZeroH Disclosure (PostToolUse)');
   const content = result.text;
   const lines = content.length === 0 ? 0 : content.split(/\r?\n/u).length;
@@ -205,8 +266,8 @@ async function handlePdf() {
     sessionId: event.session_id,
     channel: 'file read',
     replacements: result.replacements,
-    filePath,
-    observations: tokenObservations(result.replacements),
+    filePath: maskedPath,
+    observations,
   });
   const notice = await once(
     'pdf-masked-text',
@@ -216,7 +277,7 @@ async function handlePdf() {
     {
       type: 'text',
       file: {
-        filePath,
+        filePath: maskedPath,
         content,
         numLines: lines,
         startLine: 1,
@@ -230,17 +291,18 @@ async function handlePdf() {
 
 async function handleImage() {
   const filePath = readPath || event.tool_response.file?.filePath;
-  const name = displayName(filePath, 'image');
+  const name = displayName(maskLabel(filePath), 'image');
   await recordFormatOutcome({
     cwd: root,
     sessionId: event.session_id,
     passedUnmasked: { image: 1 },
   });
+  const line = await noteUncheckedFormat();
   const notice = await once(
     'image',
     `ZeroH Disclosure: ${name} was sent unmasked. Images aren't masked in the free plugin.`,
   );
-  emitNotice(notice);
+  emitNotice(notice ?? line);
 }
 
 async function handleNotebook() {
@@ -250,6 +312,7 @@ async function handleNotebook() {
   const masked = structuredClone(event.tool_response);
   const cells = masked.file?.cells;
   let imageOutputs = 0;
+  let formatLine = null;
 
   if (Array.isArray(cells)) {
     for (const cell of cells) {
@@ -263,14 +326,16 @@ async function handleNotebook() {
   }
 
   if (replacements.length) {
+    const observations = tokenObservations(replacements);
+    const maskedPath = maskLabel(readPath || masked.file?.filePath);
     saveQuietly(vault, 'ZeroH Disclosure (PostToolUse)');
     await recordMaskedOutput({
       cwd: root,
       sessionId: event.session_id,
       channel: 'file read',
       replacements,
-      filePath: readPath || masked.file?.filePath,
-      observations: tokenObservations(replacements),
+      filePath: maskedPath,
+      observations,
     });
   }
   if (imageOutputs) {
@@ -279,13 +344,14 @@ async function handleNotebook() {
       sessionId: event.session_id,
       passedUnmasked: { image: imageOutputs },
     });
+    formatLine = await noteUncheckedFormat(imageOutputs);
   }
   const filePath = readPath || masked.file?.filePath;
   const notice = imageOutputs
-    ? await once(
+    ? ((await once(
         'image',
-        `ZeroH Disclosure: ${displayName(filePath, 'notebook')} image output was sent unmasked. Images aren't masked in the free plugin.`,
-      )
+        `ZeroH Disclosure: ${displayName(maskLabel(filePath), 'notebook')} image output was sent unmasked. Images aren't masked in the free plugin.`,
+      )) ?? formatLine)
     : null;
 
   recordReveals(revealed);
@@ -426,7 +492,14 @@ function tokenObservations(replacements) {
   }));
 }
 
+// Where a masked value came from, as the receipt shows it. The path, command
+// or variable name can itself hold a sensitive value, so the label is masked
+// with the same vault before it is stored or shown (Astra finding 9).
 function sourceForReplacement(replacement) {
+  return maskLabel(rawSourceFor(replacement)) || 'tool output';
+}
+
+function rawSourceFor(replacement) {
   if (event.tool_name === 'Read') return readSource(replacement);
   if (shellOf(event.tool_name)) {
     return String(event.tool_input?.command || event.tool_name)
@@ -435,6 +508,25 @@ function sourceForReplacement(replacement) {
   }
   if (String(event.tool_name).startsWith('mcp__')) return event.tool_name;
   return String(event.tool_name || 'tool output');
+}
+
+// A path, command or label with every vault value, known secret and detected
+// value replaced by its token: the file stays recognisable by its masked name.
+// Unmask grants do not apply; receipts outlive them. Without a vault, or on
+// any error, nothing of the label is kept.
+function maskLabel(text) {
+  if (text === null || text === undefined || text === '') return text;
+  if (!vault) return '';
+  try {
+    labelKnown ??= loadKnownSecrets(root);
+    return scrub(String(text), {
+      vault,
+      known: labelKnown,
+      profile: piiProfile(),
+    }).text;
+  } catch {
+    return '';
+  }
 }
 
 function readSource(replacement) {
@@ -471,4 +563,33 @@ function readResponseText(value) {
     return Object.values(value).map(readResponseText).join('\n');
   }
   return '';
+}
+
+// A format passed without its content being read (a scan or image, which may
+// show text): counted on the turn as unknown-format (lib/unchecked.js), tool
+// name only. Returns the one-line notice for the user, or null when that was
+// already shown this turn.
+async function noteUncheckedFormat(count = 1) {
+  const { notice } = await recordUnchecked({
+    reason: 'unknown-format',
+    tool: event.tool_name,
+    cwd: root,
+    sessionId: event.session_id,
+    subject: 'tool output',
+    count,
+  });
+  return notice;
+}
+
+// Image content blocks anywhere in a tool response ({ type: 'image', data |
+// source }), as MCP servers return them.
+function imageBlocks(value, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 20) return 0;
+  if (Array.isArray(value))
+    return value.reduce((sum, item) => sum + imageBlocks(item, depth + 1), 0);
+  if (value.type === 'image' && (value.data || value.source)) return 1;
+  return Object.values(value).reduce(
+    (sum, item) => sum + imageBlocks(item, depth + 1),
+    0,
+  );
 }

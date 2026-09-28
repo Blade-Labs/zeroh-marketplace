@@ -7,6 +7,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { restoreRecordPath } from '../lib/claude-settings.js';
 import { PLUGIN, runHook, tempProject } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 
 const READ_ONLY_COMMANDS = [
   'mask-receipt.md',
@@ -109,11 +110,13 @@ test('/zeroh-disclosure:proxy off and on run the command line (F-4)', () => {
     CLAUDE_PROJECT_DIR: p.dir,
   };
   const script = path.join(PLUGIN, 'commands', 'scripts', 'proxy-status.js');
+  // As the user: the ticket UserPromptSubmit mints for the typed command
+  // (test/user-authority.test.mjs covers that path end to end).
   const run = (...args) =>
     spawnSync(process.execPath, [script, ...args], {
       cwd: p.dir,
       encoding: 'utf8',
-      env,
+      env: args.length ? asUser(['proxy', ...args], env) : env,
     });
   const off = run('off');
   assert.equal(off.status, 0, off.stderr);
@@ -206,12 +209,12 @@ test('settings passes only banner, receipts and vault to the CLI', () => {
     spawnSync(process.execPath, [script, ...args], {
       cwd: p.dir,
       encoding: 'utf8',
-      env: {
+      env: asUser(args, {
         PATH: process.env.PATH,
         HOME: p.home,
         ZEROH_HOME: p.home,
         CLAUDE_PROJECT_DIR: p.dir,
-      },
+      }),
     });
   assert.match(run().stdout, /^Banner: default/mu);
   assert.match(run().stdout, /Receipts: kept on this computer for 90 days/u);

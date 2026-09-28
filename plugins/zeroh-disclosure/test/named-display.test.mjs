@@ -93,7 +93,7 @@ test('the naming reminder goes to the model once per turn that brings tokens', (
   const clean = runHook(
     'user-prompt-submit',
     { prompt: 'Read .env please.' },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(clean.code, 0, clean.stderr);
   assert.doesNotMatch(JSON.stringify(clean.json ?? {}), REMINDER_RE);
@@ -113,13 +113,13 @@ test('the naming reminder goes to the model once per turn that brings tokens', (
   const stopped = runHook(
     'user-prompt-submit',
     { prompt: `use STRIPE_KEY=${FAKE_STRIPE}` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   const typed = stopped.stdout.match(TOKEN_RE)[0];
   const tokenized = runHook(
     'user-prompt-submit',
     { prompt: `use STRIPE_KEY=${typed}` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(tokenized.code, 0, tokenized.stderr);
   assert.match(
@@ -132,7 +132,7 @@ test('the naming reminder goes to the model once per turn that brings tokens', (
   const next = runHook(
     'user-prompt-submit',
     { prompt: 'Thanks. Now list the files.' },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.doesNotMatch(JSON.stringify(next.json ?? {}), REMINDER_RE);
   assert.match(readEnv(p).additionalContext, REMINDER_RE);

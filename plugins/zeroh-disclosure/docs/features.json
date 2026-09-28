@@ -1,0 +1,555 @@
+{
+  "version": "1.0.0-rc.2",
+  "platforms": ["claude-code", "codex", "opencode"],
+  "statuses": ["shipped", "partial", "planned", "not possible", "unknown"],
+  "sources": {
+    "codex": "Codex CLI 0.156, the 2026-09-25 Codex and OpenCode research (internal/release-1.0.md)",
+    "opencode": "opencode-ai 1.18.32, the 2026-09-25 Codex and OpenCode research (internal/release-1.0.md)"
+  },
+  "features": [
+    {
+      "id": "install.plugin",
+      "description": "One plugin from the zeroh marketplace brings the hooks, the local proxy, the MCP server and the slash commands; its first message turns on auto-update for its marketplace.",
+      "claude_code": "plugin manifest and hooks.json",
+      "evidence": [
+        ".claude-plugin/plugin.json",
+        "hooks/hooks.json",
+        "lib/first-run.js"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "one plugin bundling hooks/hooks.json; the user must trust its hooks once in the TUI. Codex also reads .claude-plugin/plugin.json and sets CLAUDE_PLUGIN_ROOT"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "one npm package exporting ./server (masking) and ./tui (banner); `opencode plugin <pkg>` updates opencode.json and tui.json"
+        }
+      }
+    },
+    {
+      "id": "mask.prompt",
+      "description": "What you type reaches the model with tokens in place of secrets and personal data.",
+      "claude_code": "local proxy (ANTHROPIC_BASE_URL) and UserPromptSubmit",
+      "evidence": [
+        "lib/proxy.js",
+        "hooks/user-prompt-submit.js",
+        "test/proxy.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "partial",
+          "note": "UserPromptSubmit can only block, not rewrite; the local proxy with a ChatGPT login masked typed prompts in a 2026-09-24 test"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`chat.message` rewrites the parts, and `experimental.chat.messages.transform` rewrites everything sent"
+        }
+      }
+    },
+    {
+      "id": "mask.context",
+      "description": "CLAUDE.md, memory and earlier tool results in each request are masked; the session start names files that hold secrets.",
+      "claude_code": "local proxy; SessionStart context scan",
+      "evidence": [
+        "lib/context-scan.js",
+        "lib/proxy.js",
+        "test/proxy.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`experimental.chat.messages.transform` rewrites everything sent"
+        }
+      }
+    },
+    {
+      "id": "mask.tool-output",
+      "description": "Command output, MCP results and web fetches reach the model as tokens.",
+      "claude_code": "PostToolUse `updatedToolOutput`",
+      "evidence": ["hooks/post-tool-use.js", "test/hooks.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "partial",
+          "note": "no replace field; only `decision: \"block\"` with the masked text in `reason`, so the tool's side effects stay"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.after` rewrites `output` (stored masked)"
+        }
+      }
+    },
+    {
+      "id": "mask.file-read",
+      "description": "Files Claude reads are masked, including a PDF's text layer and notebook outputs; images and scans pass with a notice.",
+      "claude_code": "PostToolUse on Read",
+      "evidence": [
+        "hooks/post-tool-use.js",
+        "lib/pdf-text.js",
+        "test/format-hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "partial",
+          "note": "no replace field; only `decision: \"block\"` with the masked text in `reason`"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.after` rewrites `output` (stored masked)"
+        }
+      }
+    },
+    {
+      "id": "restore.allowed-host",
+      "description": "A token in a command becomes the real value on this machine, only for hosts allowed for it, bound through a private file and never written into the command text.",
+      "claude_code": "PreToolUse `updatedInput` with Bash and PowerShell late binding",
+      "evidence": [
+        "lib/late-bind.js",
+        "hooks/pre-tool-use.js",
+        "test/late-bind.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "PreToolUse `updatedInput` (Bash, apply_patch, MCP)"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` rewrites the args"
+        }
+      }
+    },
+    {
+      "id": "stop.disallowed-host",
+      "description": "A secret heading to a host that isn't allowed for it is stopped, with the one command that allows it.",
+      "claude_code": "PreToolUse deny",
+      "evidence": ["lib/secrets.js", "test/rc2-destinations.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "PreToolUse deny (Bash, apply_patch, MCP)"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` throws to block"
+        }
+      }
+    },
+    {
+      "id": "allow.user-command",
+      "description": "Only the user allows a secret to reach a new host or MCP server (`/zeroh-disclosure:allow`), in a signed allow list.",
+      "claude_code": "slash command and HMAC-signed allow list",
+      "evidence": ["lib/allow-rules.js", "test/allow-rules.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "display.real-values",
+      "description": "Your screen shows real values in Claude's answers; the model and the transcript keep the tokens.",
+      "claude_code": "MessageDisplay",
+      "evidence": ["hooks/message-display.js", "test/named-display.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "none found in the research"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "unverified: a TUI plugin may render it"
+        }
+      }
+    },
+    {
+      "id": "banner.session-start",
+      "description": "The session banner: product, version, what is protected and any warning.",
+      "claude_code": "SessionStart `systemMessage` (ANSI colour)",
+      "evidence": ["lib/banner.js", "test/banner.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "partial",
+          "note": "SessionStart `systemMessage` is shown at the first turn, not at launch, as plain text without colour (verified in source)"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "TUI plugin `home_logo` slot shows the 5-line banner in truecolor (verified live); server `showToast` gives multi-line alerts without colour"
+        }
+      }
+    },
+    {
+      "id": "statusline",
+      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt; added with the first message unless the user has their own.",
+      "claude_code": "`statusLine` command (a minimal `node -e` resolver); hooks keep status.json and a heartbeat",
+      "evidence": [
+        "lib/statusline.js",
+        "lib/statusline-settings.js",
+        "lib/first-run.js",
+        "test/statusline.test.mjs",
+        "test/rc2-astra3-lifecycle.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "statusline.custom",
+      "description": "Change how the status line looks (fields, order, labels, emoji, compact wording, only when not 🟢) by asking Claude, which may edit only the style file; the state can't be hidden or faked while ZeroH isn't 🟢. Its state as versioned JSON data for a status line of your own.",
+      "claude_code": "`statusline-style.json` under ZEROH_HOME, validated on every draw; `zeroh-disclosure statusline --json`",
+      "evidence": [
+        "lib/statusline.js",
+        "docs/statusline.md",
+        "test/statusline-style.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "unmask.dialog",
+      "description": "Personal data (never keys) is shown to Claude for 15 minutes, 1 hour or the session, only after the user accepts a dialog.",
+      "claude_code": "MCP elicitation (`request_unmask`)",
+      "evidence": ["lib/unmask.js", "test/mcp-unmask.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "unverified"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "unverified"
+        }
+      }
+    },
+    {
+      "id": "receipt.signed",
+      "description": "Every turn gets a receipt signed on this machine (ECDSA P-256), with an HTML view and the session's token map.",
+      "claude_code": "Stop hook",
+      "evidence": ["lib/receipt.js", "test/receipt.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "report.local",
+      "description": "`/zeroh-disclosure:report`: the receipt slip for a period, as text or HTML, from local files only.",
+      "claude_code": "slash command and CLI",
+      "evidence": ["lib/report.js", "test/report.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "report-miss",
+      "description": "Report a value ZeroH did not mask, in a private dialog rather than in chat; it is masked from then on.",
+      "claude_code": "MCP `report_missed_secret` and slash command",
+      "evidence": ["lib/report-miss.js", "test/report-miss.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "mgmt.user-authority",
+      "description": "Changes to ZeroH's protection (proxy, allow, settings, uninstall) run only for the user's own typed command, never for the model.",
+      "claude_code": "UserPromptSubmit ticket; the CLI refuses without it",
+      "evidence": ["lib/user-authority.js", "test/user-authority.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "guard.settings",
+      "description": "The model can't change ZeroH's settings, keys, vault or hooks, or the Claude Code settings that would switch it off.",
+      "claude_code": "PreToolUse settings guard",
+      "evidence": [
+        "lib/settings-guard.js",
+        "test/settings-guard.test.mjs",
+        "lib/shell-programs.js",
+        "test/rc2-protected-paths.test.mjs",
+        "test/rc2-astra3-shell.test.mjs",
+        "test/rc2-astra4.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "pass.uncertain-notice",
+      "description": "What ZeroH can't check runs as it would without ZeroH, with one \"not protected\" or \"ran with the token\" line, counted by reason in the receipt.",
+      "claude_code": "lib/unchecked.js in every hook",
+      "evidence": [
+        "lib/unchecked.js",
+        "test/rc2-pass-default.test.mjs",
+        "test/rc2-last-stops.test.mjs",
+        "lib/shell-destinations.js",
+        "test/rc2-astra3-shell.test.mjs",
+        "test/rc2-astra3-followup.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "settings.uncertain-block",
+      "description": "`/zeroh-disclosure:settings uncertain block` stops the uncertain cases instead of passing them.",
+      "claude_code": "configuration read by every hook",
+      "evidence": ["lib/config.js", "test/rc2-last-stops.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.keys-gitleaks",
+      "description": "221 provider key formats (gitleaks v8.30.1), private keys, secret-named values, and values from .env and credential files, also when encoded.",
+      "claude_code": "lib/detector.js with the vendored engine",
+      "evidence": ["lib/detector.js", "test/detectors.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.pii-33",
+      "description": "33 kinds of personal data, each validated (checksums, libphonenumber, national ID rules).",
+      "claude_code": "lib/detector.js with the vendored engine",
+      "evidence": ["lib/detector.js", "test/detection-correctness.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "proxy.manage",
+      "description": "`/zeroh-disclosure:proxy off|on` and `/zeroh-disclosure:doctor --fix`; your own Claude Code setting goes back.",
+      "claude_code": "slash commands, CLI and login item",
+      "evidence": ["lib/proxy-manager.js", "test/proxy-lifecycle.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "vault.retention",
+      "description": "Detected values are kept 7 days by default (`session`, `7d` or `30d`); `vault clear` removes them now.",
+      "claude_code": "encrypted vault under ZEROH_HOME",
+      "evidence": ["lib/vault.js", "test/vault-lifecycle.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "uninstall.clean",
+      "description": "`/zeroh-disclosure:uninstall --yes` removes the plugin, the proxy and its settings entry, the status line, the login item and ZeroH's folder.",
+      "claude_code": "slash command and CLI",
+      "evidence": ["lib/plugin-removal.js", "test/uninstall.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    }
+  ]
+}

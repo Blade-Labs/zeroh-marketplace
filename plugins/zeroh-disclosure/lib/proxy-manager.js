@@ -252,14 +252,10 @@ function freePort() {
 
 // --- the daemon's code ------------------------------------------------------
 
-// Vendored libraries lib/ loads at run time (lib/pii), copied with their
-// licences next to the daemon's lib/.
-const RUNTIME_VENDOR = [
-  'validator',
-  'libphonenumber-js',
-  'i18n-iso-countries',
-  'saudi-id-validator',
-];
+// Vendored code lib/ loads at run time: the detection engine (lib/detector.js)
+// with the upstream libraries it vendors, copied with their licences next to
+// the daemon's lib/.
+const RUNTIME_VENDOR = ['sensitive-data-detectors'];
 
 function runtimeSources(pluginRoot) {
   const files = [];
@@ -366,7 +362,7 @@ function daemonEnvironment(env) {
 }
 
 // What proxy.json keeps for a start at login: the paths ZeroH needs, the
-// phone region settings (lib/pii/phone.js: a login item has no shell locale),
+// phone region settings (lib/detector.js phoneRegion: a login item has no shell locale),
 // and the network environment (lib/network.js) the daemon uses to reach its
 // upstream.
 // proxy.json is private (0600, and ZEROH_HOME's ACL on Windows), so a network
@@ -673,8 +669,8 @@ async function ensureDefaultProxyLocked({
         if (!config.loginItemRefused) {
           warning =
             error.code === 'ENOLOGINITEM'
-              ? "this system has nothing that starts programs at login (no systemd user session and no desktop session), so ZeroH's local proxy can't be kept running and what you type can't be masked; typed secrets are stopped instead. Files and command output are still masked."
-              : `your system did not let ZeroH register the login item that keeps its local proxy running after a restart (${error.code || 'refused'}), so what you type can't be masked; typed secrets are stopped instead. Files and command output are still masked.`;
+              ? "this system has nothing that starts programs at login (no systemd user session and no desktop session), so ZeroH's local proxy can't be kept running and what you type can't be masked; a typed secret is sent with a 'not protected' line (stopped with uncertain block). Files and command output are still masked."
+              : `your system did not let ZeroH register the login item that keeps its local proxy running after a restart (${error.code || 'refused'}), so what you type can't be masked; a typed secret is sent with a 'not protected' line (stopped with uncertain block). Files and command output are still masked.`;
           writeProxyDiagnostic({
             env,
             event: 'login-item-failed',

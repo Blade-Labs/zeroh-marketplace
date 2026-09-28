@@ -59,6 +59,42 @@ the turn's `revealed_under_grant` list with the grant id. This list is authentic
 under your local allow-list key (`revealed_under_grant_hmac`), and the signed receipt requires it
 through `unmask_receipt_extension`, so it cannot be dropped or edited without failing verification.
 
+## Operations not protected
+
+With the default `ZEROH_UNCERTAIN=pass`, an operation ZeroH cannot protect goes on as it is. The
+user is told in one line on screen, at most once per reason per turn, for example
+`ZeroH Disclosure: this command was not protected (dynamic destination); STRIPE_KEY was used
+without a destination check.` The line names a value's name or type, never the value. The turn
+ledger counts every such operation in `audit.unchecked`: an object keyed by reason, each holding
+a count per tool name, for example `{"unknown-format": {"Read": 1}, "watchdog-timeout": {"Bash":
+1}}`, and lists the reasons already shown this turn in `audit.unchecked_noticed`. Neither holds a
+value, command, path or host; a tool name that is not a plain name is counted as `other`. The
+reasons are:
+
+| Reason                  | Shown as                                     | What went on unprotected                                                     |
+| ----------------------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `dynamic-destination`   | dynamic destination                          | a restored value sent to a destination known only at run time                |
+| `script-or-interpreter` | script or interpreter                        | a restored value given to a script or interpreter ZeroH cannot follow        |
+| `unknown-launcher`      | unknown launcher                             | a command started through a launcher ZeroH does not know                     |
+| `unparseable`           | couldn't parse it                            | a command ZeroH could not parse                                              |
+| `watchdog-timeout`      | timed out                                    | a prompt, tool call or tool output whose check ran out of time               |
+| `unknown-format`        | unknown format                               | output ZeroH cannot read: an image, a scanned PDF, an image in MCP output    |
+| `proxy-not-running`     | proxy not running                            | model traffic sent while the local masking proxy was not running             |
+| `raw-secret-in-command` | a known secret written into the command      | the model wrote a known secret into a command: ZeroH missed it earlier       |
+| `sensitive-file-masked` | private key or credential file read (masked) | a private key or credential file was read and passed on masked               |
+| `too-large`             | too large to scan                            | a typed prompt over 256 KB, sent unscanned                                   |
+| `vault-unavailable`     | ZeroH couldn't open its vault                | a prompt sent through the proxy while ZeroH could not open or save its vault |
+
+The first such line of a session adds how to tighten: "To block these instead, run
+`/zeroh-disclosure:settings uncertain block`." For `raw-secret-in-command` it says instead to run
+`/zeroh-disclosure:report-miss` and rotate the key. Each hint is shown once per session (a marker
+file `unchecked-hint-<kind>` in the session folder).
+
+The Stop line says "N operations not protected", and the session receipt, `/zeroh-disclosure:report`
+and both HTML pages list them by reason under "not protected". With `ZEROH_UNCERTAIN=block` the
+same cases are stopped instead, the same line (worded as "was stopped because it could not be
+protected") is the reason given, and nothing is added here.
+
 ## Receipt bundle
 
 At the end of each turn, the `Stop` hook also rewrites `session.bundle.json`: the session's signed

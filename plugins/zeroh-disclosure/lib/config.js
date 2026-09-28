@@ -45,8 +45,31 @@ const PROJECT_TIGHTENING = Object.freeze({ ZEROH_MASK_PII: ['on'] });
 // default, stands unless the repository's is shorter.
 const PROJECT_SHORTEN_ONLY = new Set(['ZEROH_RECEIPT_RETENTION']);
 
+// Settings where a repository may only choose the stricter value, and where
+// its stricter value wins over a looser one from the user's environment or
+// config.env: the strictest value first.
+const PROJECT_STRICTER_ONLY = Object.freeze({
+  ZEROH_UNCERTAIN: ['block', 'pass'],
+});
+
 // Never read from any file.
 const ENVIRONMENT_ONLY = new Set(['ZEROH_HOME']);
+
+// What ZeroH does when it cannot prove a case either way (a destination it
+// cannot read, a command it cannot parse): 'pass' (the default) never stops
+// ordinary work, 'block' denies the uncertain case. ZEROH_UNCERTAIN, from the
+// environment or config.env; a repository's .zeroh.env may only make it
+// 'block'. Never throws: anything unexpected is 'pass'.
+export function uncertainMode(config = process.env) {
+  try {
+    const value = String(config?.ZEROH_UNCERTAIN ?? '')
+      .trim()
+      .toLowerCase();
+    return value === 'block' ? 'block' : 'pass';
+  } catch {
+    return 'pass';
+  }
+}
 
 let loaded = null;
 
@@ -72,9 +95,29 @@ export async function loadConfig({ cwd = process.cwd() } = {}) {
   ];
   const values = {};
   const shorten = {};
+  const stricter = {};
+  // A repository's .zeroh.env that can't be read (a folder, no permission)
+  // is skipped: the user's own settings and the defaults apply, and the
+  // hooks say so (owner decision 2026-09-27; `uncertain block` denies). The
+  // user's own config.env still has to be readable.
+  const unreadable = [];
   for (const { file, project } of sources) {
-    const parsed = await readEnvFile(file);
+    let parsed;
+    try {
+      parsed = await readEnvFile(file);
+    } catch (error) {
+      if (!project) throw error;
+      unreadable.push(path.basename(file));
+      continue;
+    }
     for (const [key, value] of Object.entries(parsed)) {
+      if (project && Object.hasOwn(PROJECT_STRICTER_ONLY, key)) {
+        const normalized = String(value).trim().toLowerCase();
+        if (normalized === PROJECT_STRICTER_ONLY[key][0])
+          stricter[key] = normalized;
+        else ignored.add(key);
+        continue;
+      }
       if (project && PROJECT_SHORTEN_ONLY.has(key)) {
         if (validRetention(value)) shorten[key] = validRetention(value);
         else ignored.add(key);
@@ -100,14 +143,25 @@ export async function loadConfig({ cwd = process.cwd() } = {}) {
       validRetention(process.env[key]) ?? DEFAULT_RECEIPT_RETENTION;
     process.env[key] = shorterRetention(current, value);
   }
-  loaded = { ignored: [...ignored] };
+  for (const [key, value] of Object.entries(stricter)) process.env[key] = value;
+  loaded = { ignored: [...ignored], unreadable };
   return loaded;
 }
 
 // One user-facing line naming what a repository tried to set, or null.
 export function configWarning(result = loaded) {
-  if (!result?.ignored?.length) return null;
-  return `ZeroH Disclosure ignored ${result.ignored.join(', ')} from .zeroh.env: a repository may only set ${PROJECT_SETTINGS.join(', ')} or tighten a protection. Put other settings in your environment or ${userConfigPath()}.`;
+  const lines = [];
+  if (result?.unreadable?.length) {
+    lines.push(
+      "ZeroH Disclosure: this project's .zeroh.env can't be read, so ZeroH uses the defaults and your own settings. Fix or remove the file.",
+    );
+  }
+  if (result?.ignored?.length) {
+    lines.push(
+      `ZeroH Disclosure ignored ${result.ignored.join(', ')} from .zeroh.env: a repository may only set ${PROJECT_SETTINGS.join(', ')} or tighten a protection. Put other settings in your environment or ${userConfigPath()}.`,
+    );
+  }
+  return lines.length ? lines.join('\n') : null;
 }
 
 async function readEnvFile(p) {

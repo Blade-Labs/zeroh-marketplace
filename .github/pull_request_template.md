@@ -15,6 +15,9 @@
 - [ ] `npm test` passes in `plugins/zeroh-disclosure`.
 - [ ] Tests, fixtures and examples use fake values only (`ZEROHFAKE` in secret-shaped values,
       `example.com` hosts).
+- [ ] This change doesn't block or deny anything Claude Code allows by default (see the
+      [product principles](https://github.com/Blade-Labs/zeroh-marketplace/blob/main/plugins/zeroh-disclosure/docs/product-principles.md)),
+      or the new denial applies only in `uncertain block` mode.
 - [ ] User-facing changes update the plugin's `README.md` or `docs/`, and `CHANGELOG.md`.
 - [ ] I agree to the
       [contribution terms](https://github.com/Blade-Labs/zeroh-marketplace/blob/main/CONTRIBUTING.md#contribution-terms):

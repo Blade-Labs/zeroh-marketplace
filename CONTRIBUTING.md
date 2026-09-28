@@ -54,6 +54,11 @@ local proxy, so when you are done run `/zeroh-disclosure:proxy off` in that sess
 ## Pull requests
 
 - Keep a pull request to one change, with tests for new behaviour.
+- Follow the plugin's [product principles](plugins/zeroh-disclosure/docs/product-principles.md)
+  (AI agents: read [for-ai-agents.md](plugins/zeroh-disclosure/docs/for-ai-agents.md) first):
+  ZeroH never takes away what Claude Code can do. A change must not block or deny anything Claude
+  Code allows by default, unless it is a secret heading to a host known not to be allowed, the
+  model changing ZeroH's own protection, or behaviour that applies only in `uncertain block` mode.
 - The hooks, the proxy and the CLI use Node.js built-ins only; do not add runtime dependencies.
 - Update the plugin's `README.md` or `docs/` when you change what users see, and add a line to
   `CHANGELOG.md`.

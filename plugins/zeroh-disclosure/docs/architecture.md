@@ -6,6 +6,7 @@ the source files, see [Where things live](development.md#where-things-live).
 
 ## Contents
 
+- [Threat model](#threat-model)
 - [Components](#components)
 - [Hook lifecycle](#hook-lifecycle)
 - [Local proxy](#local-proxy)
@@ -18,8 +19,99 @@ the source files, see [Where things live](development.md#where-things-live).
 - [Literal restore](#literal-restore)
 - [Exit-status wrapper](#exit-status-wrapper)
 - [Settings guard](#settings-guard)
+- [Status line](#status-line)
 - [Evidence contracts](#evidence-contracts)
 - [Project root](#project-root)
+
+## Threat model
+
+ZeroH runs inside Claude Code as the same operating-system user as the model's shell. Anything
+that user can do, a command the model writes can also do, so most of ZeroH's checks read text and
+are best effort. This section says which parts are a boundary and which are not.
+[Product principles](product-principles.md) set the defaults.
+
+```mermaid
+flowchart TB
+    User([You, typing in Claude Code])
+    Model([The model])
+
+    subgraph Boundary["Boundaries"]
+        UPS["UserPromptSubmit<br/>sees the raw typed prompt"]
+        Auth["User authority<br/>pending request + one-time ticket"]
+        CLI["zeroh-disclosure CLI<br/>requireUserAuthority()"]
+        Proxy["Local proxy<br/>masks every request to the API"]
+    end
+
+    subgraph BestEffort["Best effort (text checks)"]
+        Guard["Settings guard<br/>shared tokenizer"]
+        Dest["Destination check<br/>shared tokenizer"]
+        Scan["Detectors<br/>prompt and tool output"]
+        Watchdog["Hook watchdog<br/>deadline = timeout - 2 s"]
+    end
+
+    User -->|/zeroh-disclosure:proxy off| UPS --> Auth --> CLI
+    Model -->|tool call| Guard
+    Model -->|tool call with a token| Dest
+    Guard -.->|write / delete / execute on protected paths: stop| Model
+    Dest -.->|host known not allowed: stop| Model
+    Dest -->|allowed, or uncertain in pass mode| Shell[Command runs with the real value]
+    Scan --> Proxy
+    Watchdog -.->|timeout: pass with a notice, or block| Model
+```
+
+**Boundaries:**
+
+- **User authority for management actions.** Turning the proxy off or on, `doctor --fix`,
+  uninstall, allow rules, unmask caps, clearing the vault, keeping receipts, the banner and the
+  `uncertain` setting all change what ZeroH protects. A slash command's `!` block only records a
+  pending request (0600, 60 s). UserPromptSubmit performs the action only when the raw typed prompt
+  matches that request. The CLI refuses these subcommands without a one-time ticket minted on that
+  path, or a human confirmation in a terminal outside Claude Code: no Claude Code environment or
+  ancestor process, plus a one-time code shown and typed back on the controlling terminal.
+- **The local proxy.** Every request to the API passes through it, so what it masks never
+  reaches the model, whatever a hook missed.
+- **Opt-in strict mode** (planned for 1.0) will add Claude Code's sandbox as an operating-system
+  boundary.
+
+**Best effort:**
+
+- **The settings guard and the destination check** read the model's commands with one shared Bash
+  tokenizer (checked against real bash) and a conservative PowerShell parser. A command can still
+  build a path or a host at run time.
+- **Unknown scripts and interpreters** that receive a secret (`node x.js`, `python -c`, a pipe
+  into a shell, `source x.sh`, sed's `e`, awk's `system()`) cannot be followed; their destination
+  is unknown. Neither can a Git command that talks to a remote without naming it (the remote and
+  its URL come from the repository's configuration), nor a `gh` command that names no host (gh's
+  configuration picks it).
+- **A nested `claude -p "/zeroh-disclosure:proxy off"`** imitates a typed prompt, and code running
+  as the same user can forge the hook input or read a ticket from a process environment for the
+  milliseconds it exists. Per-turn tamper checks (1.0) are the mitigation.
+- **Hook time limits.** The watchdog answers 2 s before Claude Code's timeout, so a slow scan
+  never falls through silently.
+
+### Pass mode and block mode
+
+When ZeroH can't decide, `uncertain` decides what happens. The default is `pass`, because ZeroH
+adds masking where there was none and must never break work that plain Claude Code allows:
+
+| Uncertain case                                                          | `pass` (default)                                 | `block`             |
+| ----------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
+| A secret sent to a dynamic destination, a script or an unknown launcher | the command runs with the real value, as in rc.1 | denied              |
+| A secret given to `source`/`.`, a Git remote operation or a Git alias   | the command runs with the real value             | denied              |
+| A command ZeroH can't parse                                             | runs                                             | denied              |
+| A secret typed while the proxy isn't running                            | sent as typed                                    | prompt stopped      |
+| Reading a credential store (SSH keys, kubeconfig, AWS credentials)      | read, and what the detector finds is masked      | refused             |
+| A raw known secret the model wrote into a command                       | same destination rules as a restored token       | denied              |
+| A hook that runs out of time                                            | passes unchecked                                 | stopped or withheld |
+| A project `.zeroh.env` that can't be read                               | the defaults apply                               | denied              |
+| Tool output over 1 MB, or whose check fails                             | passed unscanned                                 | withheld            |
+| A raw secret in a WebFetch URL                                          | same destination rules as a command              | denied              |
+| A token that can't be put back (vault, expiry, Monitor, late binding)   | runs with the token                              | denied              |
+
+In pass mode, every such case shows one line (`ZeroH Disclosure: this command was not protected
+(<reason>).`) and is counted by reason in the receipt and `/zeroh-disclosure:report`. Two things
+stop in both modes: a secret heading to a host ZeroH knows isn't allowed, and the model changing
+ZeroH's own protection.
 
 ## Components
 
@@ -80,27 +172,30 @@ flowchart LR
     UP & POST & PROXY --> GRANTS
 ```
 
-The hooks and default local proxy use Node built-ins and the libraries vendored under `vendor/`
-(validator.js, libphonenumber-js, i18n-iso-countries and Saudi-ID-Validator, which decide what
-counts as personal data); the proxy's runtime copy under `ZEROH_HOME` takes those vendored folders
-with it. [What ZeroH Disclosure detects](detection.md) lists the rules.
+The hooks and default local proxy use Node built-ins and the detection engine vendored under
+`vendor/sensitive-data-detectors/`: a synced, MIT-licensed copy of Blade Labs'
+`@bladelabs/sensitive-data-detectors`, which itself vendors validator.js, libphonenumber-js,
+i18n-iso-countries and Saudi-ID-Validator (they decide what counts as personal data).
+`lib/detector.js` adds the plugin's parts on top. The proxy's runtime copy under `ZEROH_HOME` takes
+that vendored folder with it. [What ZeroH Disclosure detects](detection.md) lists the rules.
 
 ## Hook lifecycle
 
 Every hook runs through `hooks/run.js <hook>`, a loader that reads the event and installs the
 fail-closed answers before it loads the hook. So a hook that cannot even load (a syntax error, a
 missing module) still stops the prompt, denies the tool call or withholds the tool output, like one
-that fails while it runs (`hooks/fail-closed.js`).
+that fails while it runs (`hooks/fail-closed.js`). That is `uncertain block`; by default (pass)
+the loader lets the event through with a "not protected" line.
 
-| Hook               | Responsibility                                                                                                                                                                                                                                                                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SessionStart`     | Removes stale run files, opens the local session, loads known values into the vault, checks the signed allow list, scans `CLAUDE.md`, imports, and memory, and gives Claude token-handling instructions.                                                                                                                                  |
-| `UserPromptSubmit` | Applies the disclosure policy and creates the turn ledger. When the daemon confirms that this session's requests pass through the proxy, the proxy is the masking boundary and the prompt goes on; otherwise a sensitive prompt is blocked and a masked copy is offered for resubmission. Any error before the prompt is cleared exits 2. |
-| `PreToolUse`       | Applies the settings and sensitive-file guards before loading configuration, denies background shells and Monitor without the proxy, checks tool input policy, restores known tokens, enforces destinations, late-binds Bash or PowerShell values, and adds the exit-status wrapper. Any error denies the call.                           |
-| `PostToolUse`      | Deletes any values file for the tool call (best effort), handles PDF, image, and notebook responses, and recursively masks strings in other tool output. Any error, and output over 1 MB, replaces the complete output with a notice in the tool's own shape.                                                                             |
-| `MessageDisplay`   | Replaces known tokens in display deltas with vault values unless `ZEROH_DISPLAY_REAL_VALUES=0`. It does not change the stored assistant message; a vault error leaves tokens visible.                                                                                                                                                     |
-| `Stop`             | Finalizes ledgers (which never hold the typed prompt, only masked text), writes signed receipts, writes `receipt.html`, and builds the session receipt bundle.                                                                                                                                                                            |
-| `SessionEnd`       | Applies vault retention with the policy `SessionStart` stored: under `session` retention it removes the values the ending session used; under `7d` or `30d` it removes values past the window.                                                                                                                                            |
+| Hook               | Responsibility                                                                                                                                                                                                                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart`     | Removes stale run files, opens the local session, loads known values into the vault, checks the signed allow list, scans `CLAUDE.md`, imports, and memory, and gives Claude token-handling instructions.                                                                                                                     |
+| `UserPromptSubmit` | Applies the disclosure policy and creates the turn ledger. When the daemon confirms that this session's requests pass through the proxy, the proxy is the masking boundary and the prompt goes on; otherwise a sensitive prompt is sent with a notice (pass) or blocked with a masked copy offered for resubmission (block). |
+| `PreToolUse`       | Applies the settings and sensitive-file guards before loading configuration, passes background shells and Monitor without the proxy with a notice, checks tool input policy, restores known tokens, enforces destinations, late-binds Bash or PowerShell values, and adds the exit-status wrapper.                           |
+| `PostToolUse`      | Deletes any values file for the tool call (best effort), handles PDF, image, and notebook responses, and recursively masks strings in other tool output. An error, and output over 1 MB, pass the output with a notice (pass) or replace it with a notice in the tool's own shape (block).                                   |
+| `MessageDisplay`   | Replaces known tokens in display deltas with vault values unless `ZEROH_DISPLAY_REAL_VALUES=0`. It does not change the stored assistant message; a vault error leaves tokens visible.                                                                                                                                        |
+| `Stop`             | Finalizes ledgers (which never hold the typed prompt, only masked text), writes signed receipts, writes `receipt.html`, and builds the session receipt bundle.                                                                                                                                                               |
+| `SessionEnd`       | Applies vault retention with the policy `SessionStart` stored: under `session` retention it removes the values the ending session used; under `7d` or `30d` it removes values past the window.                                                                                                                               |
 
 ### Naming a token
 
@@ -136,7 +231,8 @@ session that does not use the proxy yet writes `env.ANTHROPIC_BASE_URL` as
 Claude Code applies a changed settings file to the running session, so that prompt already goes
 through the proxy (a write at `SessionStart` lands before Claude Code watches the file and is
 missed). A session whose `ANTHROPIC_BASE_URL` comes from elsewhere (the shell, a higher-precedence
-settings file) is never routed, and its typed secrets are stopped.
+settings file) is never routed, and its typed secrets are sent with a notice (stopped in block
+mode).
 
 The proxy's state is one file, `<ZEROH_HOME>/proxy/proxy.json`: the port, the control
 token, and one install per settings file (its key, upstream and the user's previous
@@ -236,10 +332,11 @@ grant kinds. Other findings follow the normal mask path. A later tool result tha
 unmasked value adds a `revealed_under_grant` count and grant ID to the current turn receipt. The
 local receipt extension is HMAC-authenticated with the allow-list key, updated under a file lock,
 required by a marker in the compact signed receipt, verified locally, and carried into the
-receipt bundle; an output is withheld if its reveal cannot be recorded. Previous conversation content
+receipt bundle; an output whose reveal cannot be recorded passes with a "check failed" line
+(withheld in block mode). Previous conversation content
 is not rewritten. `UserPromptSubmit` emits the active countdown as a one-line `systemMessage`.
-The main Claude Code status line remains user-owned; the optional `zeroh-disclosure statusline`
-command prints the same text.
+The status line (`/zeroh-disclosure:settings statusline on`, rc.2) shows active grants as
+`unmask EMAIL 12m`; see [Status line](#status-line).
 
 ## Vault and tokens
 
@@ -264,6 +361,16 @@ restored. MCP input (other than ZeroH's own tools, which always keep tokens) is 
 values the user allowed for that MCP server with a signed `mcp:<server>` rule; hosts or loopback
 URLs the input mentions never count, and other tokens pass through with a note to the model. The
 hosts an allowed call names must still be allowed for the value.
+
+Programs that are mostly local are read by subcommand and option (`lib/shell-programs.js`): git
+and gh network subcommands go to the host on the line or to a dynamic destination; `openssl
+s_client`/`s_time`/`ocsp`/`cmp` to their `-connect`, `-host`, `-proxy`, `-url` or `-server`
+host; `openssl s_server` answers anyone and an openssl subcommand ZeroH doesn't know may connect
+anywhere (dynamic). A git `-c` that names a program (`core.sshCommand`) is a script whatever the
+remote, and `gh extension exec` runs a local program. A local program's options that reach another machine or run
+a program (tar's `host:path` archive and `-I`, `rg --pre`, `sort --compress-program`, `zip -TT`,
+`less +…`, a UNC path) make the command uncertain; in PowerShell a UNC path's host is checked as
+a destination.
 
 ## PostToolUse format decisions
 
@@ -325,7 +432,8 @@ run; a file that cannot be deleted (a read-only run directory) does not stop the
 
 The scanner tracks nested substitutions and their local quote state. Quoted heredocs become
 unquoted only after backslashes, dollar signs, and backticks in the body are escaped so their text
-keeps the same meaning. An unterminated quote, substitution, or heredoc is denied.
+keeps the same meaning. An unterminated quote, substitution, or heredoc is not bound: the command
+runs with the token (denied in block mode).
 
 ## PowerShell late binding
 
@@ -344,8 +452,9 @@ PowerShell uses the same lifecycle with a values file of `NAME=<base64 of the UT
 | Escaped token              | Replace it with the braced variable form.                                                          |
 | Line or block comment      | Leave the token text alone; it is not bound.                                                       |
 
-PowerShell typographic quote characters are denied because their parsing is not portable enough to
-prove a safe rewrite. Unterminated strings, here-strings, and block comments are also denied.
+PowerShell typographic quote characters are not bound because their parsing is not portable enough
+to prove a safe rewrite; neither are unterminated strings, here-strings, and block comments. Such a
+command runs with the token (denied in block mode).
 
 The final command reads the file with `[IO.File]::ReadAllLines` (no execution policy applies and
 Windows PowerShell 5.1 cannot misread its encoding), removes it without failing if it cannot, sets
@@ -357,8 +466,9 @@ on macOS and Linux.
 ## Literal restore
 
 Bash and PowerShell never receive a literal restored value in `updatedInput`. When the scanner
-cannot prove a rewrite safe, `PreToolUse` denies the call, identifies the token and reason, and asks
-Claude to use a plain argument, double quotes, or a variable.
+cannot prove a rewrite safe, the command runs with the token text ("ran with the token, not your
+key"), and Claude is told the token, the reason, and to use a plain argument, double quotes, or a
+variable; block mode denies the call instead.
 
 The one remaining literal-restore case is a non-shell tool whose input must carry the value: Edit,
 Write, MultiEdit, NotebookEdit, and MCP calls. Claude Code can save those `updatedInput`
@@ -387,8 +497,8 @@ with status 0 (`lib/exit-status.js`):
   an early `exit` into status 0 and a trailing line reports `$LASTEXITCODE` (else `$?`), the status
   Claude Code would have used, then resets `$LASTEXITCODE`.
 
-Background commands keep their status: their output bypasses `PostToolUse` and is denied without
-the proxy. Timeouts, interrupts and `exec` still end in `PostToolUseFailure`, as does a hook
+Background commands keep their status: their output bypasses `PostToolUse`, so without the proxy
+they run with a "not protected" line (denied in block mode). Timeouts, interrupts and `exec` still end in `PostToolUseFailure`, as does a hook
 process that fails before its error handlers are installed (a module that cannot load); with the
 proxy on, the proxy masks that output.
 
@@ -396,35 +506,107 @@ proxy on, the proxy masks that output.
 
 `settings-guard.js` protects:
 
-- the full user `ZEROH_HOME` directory, except Read and Grep access to the project's receipts
-  under `<ZEROH_HOME>/projects/<project>/sessions` (nothing lives in the project);
+- the full user `ZEROH_HOME` directory (the vault, keys and signed allow list), except Read and
+  Grep access to the project's receipts under `<ZEROH_HOME>/projects/<project>/sessions`;
 - a `<project>/.zeroh` folder left by an earlier build;
-- `.zeroh.env` and `.zeroh.policy` (Read stays allowed; earlier builds read `.zeroh.policy`);
+- `.zeroh.env` and `.zeroh.policy` (Read stays allowed);
 - Claude Code settings files (user, `CLAUDE_CONFIG_DIR`, project, local and managed) against
   changes that disable hooks, disable or remove the plugin, change `ZEROH_*` or
-  `ANTHROPIC_BASE_URL`, or add an `Elicitation` hook. File tools are judged by parsing the JSON the
-  write would leave, so escapes and key order do not matter; unparseable results are denied;
-- the plugin's own directory, installed plugins and proxy restore records; and
-- `claude plugin disable|uninstall|remove` and `claude config set|add|remove`.
+  `ANTHROPIC_BASE_URL` or the environment hooks run in, change any `statusLine`, or add an
+  `Elicitation` hook. File tools are judged by parsing the JSON the
+  write would leave;
+- the plugin's own directory, installed plugins and proxy restore records.
 
-The guard resolves existing path prefixes to catch symlinks. Windows path separators are
-normalised. Comparisons are case-insensitive on Windows and macOS and case-sensitive on Linux.
+The guard resolves existing path prefixes to catch symlinks, normalises Windows separators, and
+compares case-insensitively on Windows and macOS. The one ZeroH file the model may write,
+`statusline-style.json`, is exempt only as a plain file: a symbolic link in its place (even one
+whose target doesn't exist yet) or a file with other hard links is protected like the rest.
 
-It checks file targets for Read, Edit, Write, MultiEdit, NotebookEdit, and Grep. It scans Bash and
-PowerShell command strings and all MCP string leaves for protected paths, `ZEROH_HOME`, key,
-allow, cap and grant filenames, and direct management-CLI invocation. A shell command that names a
-Claude settings file or plugin path is allowed only when it is a single read-only command (`cat`,
-`grep`, `jq` and similar, without redirection or substitution). It also rejects model writes
-that mention `Elicitation` or `ElicitationResult` hooks, including JSON and shell escapes, when
-their target is a Claude settings file or a plugin hook file.
-A protected ZeroH path match is denied with:
+Shell commands are read with the shared tokenizer in `shell-scan.js` (`analyzeBash`,
+`parsePowerShell`): quote concatenation, escapes, `$'…'`, heredocs, substitutions and launchers
+(env, timeout, sudo, nohup, xargs and others) are resolved before any check, so `--p"re"` is
+`--pre`. `shell-programs.js` then reads each program's own arguments once, for the guard and the
+destination check alike: options as getopt reads them (`-sKcfg` is `-s -K cfg`, `-c'code'` and
+`--eval=code` carry their code), an interpreter's inline code (`-c`, `-e`, `--eval`, `-p`, a
+heredoc or here-string on stdin), a sed script's commands (`w`, `W`, `s///w` write a file; `e`
+and `s///e` run one), an awk program's output redirections, pipes and `system()` (from an awk
+lexer: continuations, regex literals, parentheses), inline code's read, write and exec calls, and
+git's subcommand after its global options. Program-specific grammars decide what an option takes:
+Perl's `-l[octal]` and `-0[octal]` go on with the cluster, GNU long options may be abbreviated. For a command that names a protected path:
 
-```text
-ZeroH Disclosure settings can only be changed by the user. Do not edit or read them; ask the user.
-```
+- **Both modes:** a command that clearly writes, deletes or executes against it is denied (rm,
+  mv, `sed -i`, tee, `>` redirection, chmod, `rg --pre` in any spelling, `find -exec`, a shell
+  given the file as its script, a sed `w`/`e` or an awk redirection, pipe or `system()` whose
+  target resolves to it, inline interpreter code whose write, delete or command call names it, and
+  the same under launchers and in `bash -c`). Reading ZeroH's own state (vault, keys) is denied
+  too.
+- **Pass (default):** reads run, including inline code whose calls only read the file
+  (`readCode` reads Python, JavaScript, Perl, Ruby, PHP and Lua calls, with strings and comments
+  set aside). A command that names a protected path but whose effect can't be read (a sed or awk
+  program ZeroH can't see or parse, a redirection to an expression, code that computes the file,
+  the mode or the call) runs with the "not protected (script or interpreter)" line; a command that
+  can't be parsed runs and is recorded as `unparseable`.
+- **Block:** only `cat`, `head`, `tail`, `wc`, `ls`, `stat` and `jq`, each with an option
+  allowlist, and no launcher, inline code or writing redirect.
 
-Static checks cannot stop a command from constructing a protected path at run time. The guard is
-a direct-access control and audit signal, not a shell sandbox.
+The management CLI (`zeroh-disclosure proxy off` and the rest) is refused by the CLI itself without
+user authority (see [Threat model](#threat-model)); the guard's own check of those commands is only
+an early, friendlier message.
+
+## Status line
+
+`lib/statusline.js` renders one line for Claude Code's `statusLine` command: 🟢 protected, 🟡
+protected in part or 🔴 not protecting, each with a reason and a fix; the session's `masked` and
+`sent` counts, unmask grants and an OSC 8 link (closed with BEL) to `receipt.html`. It answers on
+every Claude Code update, so it loads Node built-ins only (its copies of the path helpers are
+tested against the originals), makes no network call and never asks the proxy or the vault. It
+reads:
+
+- `<ZEROH_HOME>/projects/<project>/sessions/<id>/status.json`, kept through
+  `lib/session-status.js` (atomic write under a short lock, never throws, counts and states only;
+  the schema only grows and carries `writer_version`). SessionStart writes `phase: 'starting'`
+  first and the proxy state at the end; UserPromptSubmit the turn and whether the proxy masks it;
+  `recordUnchecked` the passes of the turn; Stop the masked count. The hook loader
+  (`hooks/run.js`) records every run per hook (`hooks.<name>.ok_at` / `failed_at`: a failure is
+  cleared only by the same hook succeeding) and touches `hooks.alive`;
+- the transcript's time (`transcript_path`) against `hooks.alive`: 30 seconds apart means the
+  hooks stopped; no status 20 seconds into the session (`cost.total_duration_ms`) means they never
+  ran;
+- `<ZEROH_HOME>/proxy/daemon.pid`, written by the proxy daemon, checked with `kill(pid, 0)`;
+- the project's grant store (shown without checking its signature: a forged grant could only
+  show an unmask that isn't there);
+- the `proxy off` record, the uninstall tombstone (`<ZEROH_HOME>/uninstalled`, a regular file
+  owned by the user; before rc.2 it lived in the shared temporary folder, where anyone could plant
+  it) and `enabledPlugins` in the user, project, local and managed settings.
+
+**The entry** (`lib/statusline-settings.js`) is
+`{"type":"command","command":"node -e \"…\"","padding":0,"refreshInterval":10}`.
+`${CLAUDE_PLUGIN_ROOT}` is not expanded in `statusLine` and the plugin's cache folder changes with
+each version, so the command is a minimal resolver: it runs `lib/statusline.js` only from a root
+Claude Code lists as an `installPath` of `zeroh-disclosure@…` in `installed_plugins.json` or one
+under `<CLAUDE_CODE_PLUGIN_CACHE_DIR or <config>/plugins/cache>/<marketplace>/zeroh-disclosure/`,
+preferring the root SessionStart recorded for this config dir in `<ZEROH_HOME>/plugin-root.json`;
+any other root only with `ZEROH_STATUSLINE_DEV=1`. With none it prints
+`🛡️ ZeroH · 🔴 not installed · remove it with /statusline` (nothing as a segment). The script has
+no `$`, backquote, double quote or bare backslash, so Bash, Git Bash and both PowerShells pass it to
+node unchanged. `segment` as its argument prints ZeroH's part only.
+
+**Who writes it** (`lib/first-run.js`, owner decision D-26): the first prompt ZeroH sees for a
+settings file, when that file has no `statusLine` and ZeroH has no recorded choice for it; and the
+user's `/zeroh-disclosure:settings statusline on`. It is written at the first prompt, like the proxy
+entry, because Claude Code applies a settings change to a running session only once it watches
+the file, which it doesn't yet during SessionStart. `<ZEROH_HOME>/statusline.json` records the
+choice per settings file (`on`, `off` when the user removed it with `statusline off` or
+`/statusline`, `theirs` for a status line of their own) and every file written, so a removal is
+never undone and uninstall removes the entry everywhere. A choice is recorded only after the
+settings file is written, so a write that fails is tried again at the next prompt. An entry is
+ZeroH's only when its whole command is one ZeroH wrote (the resolver, or an older rc.2 form); a
+command of the user's own that runs ZeroH's segment inside it (`zeroh=$(… segment); printf …`) is
+theirs, and is never replaced or removed. An older form of ZeroH's entry is
+rewritten to the current one. SessionStart says when a project or managed settings file shadows
+ZeroH's entry with its own. The settings guard treats any model change to a `statusLine`, and to
+the `env` keys hooks and the status line run under (`PATH`, `NODE_OPTIONS`, `HOME`,
+`CLAUDE_CONFIG_DIR`, …), as weakening ZeroH.
 
 ## Evidence contracts
 

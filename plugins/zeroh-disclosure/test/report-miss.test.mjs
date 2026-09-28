@@ -21,7 +21,10 @@ import { Vault } from '../lib/vault.js';
 
 const CATALOG = JSON.parse(
   readFileSync(
-    new URL('../lib/rules/gitleaks.generated.json', import.meta.url),
+    new URL(
+      '../vendor/sensitive-data-detectors/src/rules/gitleaks.generated.json',
+      import.meta.url,
+    ),
     'utf8',
   ),
 );

@@ -20,12 +20,21 @@ counts rather than the whole list unless they ask for it.
 
 - **What the user types**: a local proxy on their machine masks each request on its way to the
   model (typed text, `CLAUDE.md`, memory, tool results). When the proxy can't be used, a prompt
-  holding a secret is stopped instead, and a masked copy is offered to paste.
+  holding a secret is sent as typed and the user sees a "not protected (proxy not running)" line
+  with the fix. With `/zeroh-disclosure:settings uncertain block` it is stopped instead and a
+  masked copy is offered to paste.
 - **Files Claude reads, command output and tool results**: values reach the model as tokens such
   as `[API_KEY-7a3f9e]`; the same value always gets the same token.
 - **Private key and credential stores** (SSH keys, `.p12`/`.pfx`/`.jks`/`.kdbx`/`.ppk`,
   Terraform state, `.netrc`, `.pgpass`, `.git-credentials`, kubeconfig, AWS credentials, Docker
-  config, and ZeroH's own vault and allow-list keys): reading or editing them is always refused.
+  config): they can be read, and what the detector finds in them is masked, with a one-line
+  notice (`uncertain block` refuses them). ZeroH's own vault and allow-list keys are always
+  refused.
+- **What ZeroH can't check** (a destination it can't work out, a command it can't parse, output
+  too large to scan) runs as it would without ZeroH, with a one-line "not protected" notice and a
+  count in the receipt. When a value can't be put back (vault closed, value expired, `Monitor`),
+  the command runs with the token. Only a secret going to a host that isn't allowed for it, and
+  the model changing ZeroH, are stopped by default.
 
 ## What it does not cover (Free)
 
@@ -57,6 +66,24 @@ counts rather than the whole list unless they ask for it.
   (`%LOCALAPPDATA%\ZeroH` on Windows) for 90 days by default; the user changes that with
   `/zeroh-disclosure:settings receipts keep <forever|1y|90d|30d>`, and a repository may only
   shorten it.
+- **Status line**: with the first message after the install ZeroH adds one line under the prompt,
+  unless the user has their own: 🟢 `protected` (the proxy masks typing), 🟡 protected in part
+  (it names the fix) or 🔴 not protecting (it names why), with the session's masked and sent
+  counts, active unmasks and a `receipt ↗` link that opens the receipt.
+  `/zeroh-disclosure:settings statusline off` (or deleting it with `/statusline`) removes it for
+  good; `statusline on` turns it on again or shows how to add it to the user's own.
+- **Changing how the status line looks**: when the user asks ("make it smaller", "no emoji",
+  "rename ZeroH to 🔒", "only show it when something is wrong"), edit
+  `<ZEROH_HOME>/statusline-style.json` (`~/.zeroh/statusline-style.json`, or
+  `%LOCALAPPDATA%\ZeroH\statusline-style.json` on Windows) with the Write or Edit tool; it is the
+  one ZeroH file you may change. Keys (`"version": 1` required): `fields` (order and choice of
+  `shield`, `name`, `state`, `fix`, `masked`, `sent`, `notProtected`, `unmask`, `receipt`),
+  `separator` (≤ 5 characters), `labels` (≤ 24 characters each), `emoji`, `wording`
+  (`"long"`/`"compact"`), `colour`, `onlyWhenNotProtected`. Labels can't contain state words or
+  🟢/🟡/🔴; while ZeroH isn't 🟢 its state and fix always show. The line updates within 10 seconds.
+  For a status line script of the user's own, use `zeroh-disclosure statusline --json` (schema in
+  the plugin's docs/statusline.md); never change `statusLine` in Claude Code's settings yourself:
+  write the script and tell the user the one line to add.
 - **The local proxy** runs as a per-user login item, needs no administrator rights, and is turned
   off with `/zeroh-disclosure:proxy off`.
 

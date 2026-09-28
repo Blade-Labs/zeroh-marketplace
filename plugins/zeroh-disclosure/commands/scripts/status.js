@@ -11,7 +11,7 @@ import { scanSessionContext } from '../../lib/context-scan.js';
 import { retentionLine } from '../../lib/receipt-retention.js';
 import { projectDir, proxyState } from '../../lib/hook-io.js';
 import { loadKnownSecrets } from '../../lib/secrets.js';
-import { loadConfig } from '../../lib/config.js';
+import { loadConfig, uncertainMode } from '../../lib/config.js';
 import { commandSessionId } from './_helpers.js';
 
 const root = projectDir();
@@ -31,9 +31,11 @@ process.stdout.write(
     proxy,
     unmaskStatus: unmask.status,
     retention: retentionLine(),
+    uncertain: uncertainMode(),
     warnings: warningLines({
       contextFindings,
       proxy,
+      uncertain: uncertainMode(),
     }),
   })}\n`,
 );

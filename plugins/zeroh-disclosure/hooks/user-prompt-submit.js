@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
 // UserPromptSubmit: check what the user typed. Through the proxy the prompt is
-// masked on its way out; without it, a prompt holding a secret is stopped and
-// a masked copy goes to the clipboard.
+// masked on its way out; without it, a prompt holding a secret is sent as
+// typed with a notice (rc.2 default), or, in `uncertain block` mode, stopped
+// with a masked copy on the clipboard.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { loadConfig } from '../lib/config.js';
-import { Vault, vaultProblem } from '../lib/vault.js';
+import { loadConfig, uncertainMode } from '../lib/config.js';
+import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
+import { addSent, updateSessionStatus } from '../lib/session-status.js';
+import { Vault, vaultProblem, zerohHome } from '../lib/vault.js';
+import { applyFirstRunDefaults } from '../lib/first-run.js';
 import { exactValueHits, loadKnownSecrets, scrub } from '../lib/secrets.js';
 import {
   emit,
   markPromptCleared,
+  markSideEffect,
   projectDir,
   proxyActive,
   proxyConfirmed,
@@ -45,6 +50,10 @@ import {
 import { recordMaskedOutput } from '../lib/report.js';
 import { checkSessionProxy, routeSession } from '../lib/proxy-manager.js';
 import { stopMessage } from '../lib/stop-message.js';
+import {
+  handleManagementPrompt,
+  isManagementPrompt,
+} from '../lib/user-authority.js';
 
 // A prompt larger than this is stopped rather than scanned, so the hook finishes
 // well inside its timeout (Claude Code sends the prompt when a hook times out).
@@ -61,14 +70,81 @@ const userPrompt = event?.prompt ?? event?.user_prompt ?? '';
 if (typeof userPrompt !== 'string' || userPrompt.length === 0) {
   process.exit(0);
 }
+// The `uncertain` mode (lib/config.js); `pass` unless configured to block.
+async function passesUncertain() {
+  try {
+    await loadConfig({ cwd: projectDir(event) });
+    return uncertainMode() === 'pass';
+  } catch {
+    return true;
+  }
+}
+
+// Sends the prompt as it is, with the one-line "not protected" notice
+// (product principles: pass what we can't check, and say so).
+async function passUnchecked(reason, suffix = '') {
+  let notice = null;
+  try {
+    ({ notice } = await recordUnchecked({
+      reason,
+      tool: 'UserPromptSubmit',
+      cwd: projectDir(event),
+      sessionId: event?.session_id,
+      subject: 'prompt',
+    }));
+  } catch {
+    // recordUnchecked never throws; the notice below still shows.
+  }
+  return `${notice ?? uncheckedNotice(reason, { subject: 'prompt' })}${suffix}`;
+}
+
 if (Buffer.byteLength(userPrompt) > MAX_CHECKED_PROMPT_BYTES) {
+  // Owner decision (2026-09-27): sent unscanned by default; block mode stops it.
+  if (await passesUncertain()) {
+    markPromptCleared();
+    emit({ systemMessage: await passUnchecked('too-large') });
+    process.exit(0);
+  }
+  // deny-inventory: prompt-too-large
   stopPrompt(
     `🛡 ZeroH stopped this prompt: it is larger than ${MAX_CHECKED_PROMPT_BYTES / 1024} KB and could not be checked in time. Put the text in a file and ask Claude to read it: what it reads is masked.`,
   );
 }
+// A management slash command the user typed (proxy off/on, doctor --fix,
+// uninstall --yes, allow, settings, unmask caps): its `!` block only recorded
+// the request, and the user's own typed prompt is what applies it (Astra R3,
+// lib/user-authority.js). The result is shown and the prompt stops here:
+// there is nothing for the model to do, and a turn after `proxy off` or
+// `uninstall` would go through a proxy that was just taken away.
+// Any failure here leaves an ordinary prompt alone; only ZeroH's own
+// management command is then stopped, with nothing changed.
+{
+  let managed = null;
+  try {
+    managed = handleManagementPrompt({
+      prompt: userPrompt,
+      sessionId: event?.session_id,
+      cwd: projectDir(event),
+      markSideEffect,
+    });
+  } catch {
+    if (isManagementPrompt(userPrompt))
+      managed = {
+        message:
+          'Nothing changed: ZeroH could not check this request. Type the command again; if it keeps happening, run /zeroh-disclosure:doctor.',
+      };
+  }
+  // deny-inventory: management-request
+  if (managed) stopPrompt(managed.message);
+}
 // One project root for sessions, vault and configuration (see projectDir).
 const cwd = projectDir(event);
 await loadConfig({ cwd });
+// What happens to a typed secret the proxy can't mask (the `uncertain` mode).
+const TYPED_SECRETS =
+  uncertainMode() === 'block'
+    ? 'typed secrets are stopped instead'
+    : 'a typed secret is sent with a "not protected" line';
 const sessionId = event?.session_id;
 const root = projectDir(event);
 refreshRoute(event);
@@ -91,6 +167,7 @@ if (!proxyOn) {
     // this session's base URL is a ZeroH proxy that does not answer, restart
     // it within a short budget; failing that, stop the prompt.
     const guard = await checkSessionProxy({ sessionId, root });
+    // deny-inventory: dead-proxy
     if (guard.block) stopPrompt(guard.message);
     // Restarted within the budget (RB-1: a SIGTERM mid-session): ask the
     // daemon again, so this prompt is masked rather than stopped. The route
@@ -100,12 +177,10 @@ if (!proxyOn) {
     if (!proxyOn) stopReason = 'unreachable';
   } else if (routing.state === 'not-written') {
     stopReason = 'not-set-up';
-    routingNotice =
-      "ZeroH Disclosure couldn't put this session behind its local proxy, so what you type can't be masked; typed secrets are stopped instead. `/zeroh-disclosure:doctor` shows why.";
+    routingNotice = `ZeroH Disclosure couldn't put this session behind its local proxy, so what you type can't be masked; ${TYPED_SECRETS}. \`/zeroh-disclosure:doctor\` shows why.`;
   } else if (routing.state === 'not-applied') {
     stopReason = 'not-applied';
-    routingNotice =
-      "ZeroH Disclosure: Claude Code didn't switch this session to the local proxy, so what you type can't be masked here; typed secrets are stopped instead. A new Claude Code session uses it.";
+    routingNotice = `ZeroH Disclosure: Claude Code didn't switch this session to the local proxy, so what you type can't be masked here; ${TYPED_SECRETS}. A new Claude Code session uses it.`;
   } else if (routing.state === 'no-login-item') {
     stopReason = 'no-login-item';
   } else if (routing.state === 'overridden') {
@@ -128,6 +203,20 @@ if (proxyUnconfirmed) {
   proxyOn = false;
   stopReason = 'not-ready';
 }
+// Without the proxy nothing can mask the prompt. In the default `uncertain`
+// mode (pass; owner rule 2026-09-27) a prompt holding a secret is sent as
+// typed and the user is told in one line; `uncertain block` stops it as
+// before (lib/stop-message.js).
+const passUnmasked = !proxyOn && uncertainMode() === 'pass';
+// What to do about a prompt sent unmasked, by why the proxy was not there.
+const UNMASKED_FIX = {
+  off: 'You turned the local proxy off; /zeroh-disclosure:proxy on turns it back on.',
+  provider:
+    'Claude Code talks to Bedrock, Vertex or Foundry directly, so there is no proxy to mask it.',
+  'not-ready':
+    'This session was just switched to the proxy; from your next prompt it is masked.',
+  default: 'Fix it with /zeroh-disclosure:doctor.',
+};
 // Every prompt — clean, tokenized re-submit, or PII-bearing — gets a turn and
 // a receipt. The receipt is the deliverable: it records that the policy was
 // applied and what it observed, signed locally. Masking is one
@@ -149,6 +238,13 @@ try {
 const grantStatus = promptNotices(session.state);
 
 const turn = await bumpTurn(session);
+// The status line (lib/statusline.js): this turn, and whether the proxy masks
+// what the user types in this session.
+updateSessionStatus({ cwd, sessionId }, (status) => {
+  status.turn = turn;
+  status.proxy = proxyOn ? 'on' : (stopReason ?? 'off');
+  return status;
+});
 const tokens = extractTokens(userPrompt);
 const entropyWarnings = detectEntropyWarnings(userPrompt);
 const receiptWarnings = entropyWarnings.map(({ name, entropy, length }) => ({
@@ -185,6 +281,22 @@ function enforcedDecision(policyDecision, findings) {
   if (!findings.length && !extra.length && !fileHits.length)
     return policyDecision;
   const categories = [...new Set([...findings.map((f) => f.type), ...extra])];
+  if (passUnmasked)
+    return {
+      ...policyDecision,
+      action: 'allow',
+      enforced: 'sent_unmasked',
+      policy_action: policyDecision.action,
+      reason:
+        'The local proxy was not in the route, so the prompt was sent as typed (uncertain cases: pass).',
+      // Masked only in the ledger copy; what was sent was not masked.
+      mask_categories: categories,
+      extra_categories: extra,
+      ...(fileHits.length
+        ? { mentioned_files_with_findings: fileHits.length }
+        : {}),
+      blocked: false,
+    };
   if (proxyOn)
     return {
       ...policyDecision,
@@ -238,18 +350,30 @@ try {
   if (!notWritable(error)) throw error;
 }
 
+let vaultPassNotice = null;
 const mentionsFile = /(?:^|\s)@(?:[\w.~/-]|\\ )+/u.test(userPrompt);
 if (
   !vault &&
+  !passUnmasked &&
   ((result.replacements ?? []).length ||
     knownHits.length ||
     tokens.length ||
     mentionsFile)
 ) {
-  const problem = vaultProblem(vaultFailure);
-  stopPrompt(
-    `🛡 ZeroH stopped this prompt: masking is paused because ZeroH can't open its vault (${problem.reason}).\n${problem.fix}`,
-  );
+  // Owner decision (2026-09-27): through the proxy the prompt is sent with a
+  // notice by default. Without the proxy it stays stopped (nothing else would
+  // mask it); block mode stops it either way.
+  if (proxyOn && (await passesUncertain())) {
+    // The proxy sends it unmasked: tokens it can't restore would break the
+    // user's work (lib/proxy.js).
+    vaultPassNotice = await passUnchecked('vault-unavailable');
+  } else {
+    const problem = vaultProblem(vaultFailure);
+    // deny-inventory: vault-unavailable-prompt
+    stopPrompt(
+      `🛡 ZeroH stopped this prompt: masking is paused because ZeroH can't open its vault (${problem.reason}).\n${problem.fix}`,
+    );
+  }
 }
 const promptTokens = new Map();
 if (vault) {
@@ -288,7 +412,12 @@ if (vault) {
   try {
     vault.save();
   } catch (error) {
-    if (needsVault) {
+    if (needsVault && passUnmasked) {
+      // Sent unmasked anyway (A1): nothing in the vault is needed.
+    } else if (needsVault && proxyOn && (await passesUncertain())) {
+      vaultPassNotice = await passUnchecked('vault-unavailable');
+    } else if (needsVault) {
+      // deny-inventory: vault-unsaveable-prompt
       stopPrompt(
         notWritable(error)
           ? `🛡 ZeroH stopped this prompt: it holds a value that must be masked, and ZeroH can't save its vault because its folder is read-only (${error.code}). Remove the value and send it again.`
@@ -321,12 +450,62 @@ if (proxyOn) {
     additionalContext: entropyWarnings.length
       ? entropyWarningLine(entropyWarnings[0])
       : null,
-    systemMessage: grantStatus,
+    systemMessage:
+      [vaultPassNotice, grantStatus].filter(Boolean).join('\n') || null,
   });
   process.exit(0);
 }
 
-if (result.findings.length > 0 || knownHits.length > 0 || fileHits.length > 0) {
+const holdsFindings =
+  result.findings.length > 0 || knownHits.length > 0 || fileHits.length > 0;
+if (holdsFindings && passUnmasked) {
+  // Sent as typed: recorded and told, never stopped.
+  markPromptCleared();
+  await writeTurn({
+    dir: session.dir,
+    turn,
+    payload: ledgerFromDisclosureResult({
+      turn,
+      phase: 'sent_unmasked_no_proxy',
+      result,
+      referencedTokens: tokens,
+    }),
+  });
+  await markDisclosureResultCommitted({ session, result });
+  // Real values that reached the model: the status line's "sent" count.
+  updateSessionStatus({ cwd, sessionId }, (status) =>
+    addSent(
+      status,
+      result.findings.length +
+        knownHits.length +
+        fileHits.reduce((sum, hit) => sum + hit.count, 0),
+    ),
+  );
+  const { notice } = await recordUnchecked({
+    reason: 'proxy-not-running',
+    tool: 'prompt',
+    cwd,
+    sessionId,
+    subject: 'prompt',
+    valueName:
+      knownHits[0]?.name && /^[A-Z][A-Z0-9_]*$/u.test(knownHits[0].name)
+        ? knownHits[0].name
+        : (result.findings[0]?.type ?? knownHits[0]?.type ?? null),
+  });
+  emitPromptNotice({
+    systemMessage: [
+      grantStatus,
+      notice
+        ? `${notice} ${UNMASKED_FIX[stopReason] ?? UNMASKED_FIX.default}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  });
+  process.exit(0);
+}
+
+if (holdsFindings) {
   await writeTurn({
     dir: session.dir,
     turn,
@@ -348,6 +527,7 @@ if (result.findings.length > 0 || knownHits.length > 0 || fileHits.length > 0) {
   } catch {
     // The prompt is blocked either way; without a saved vault the suggested
     // rewrite's tokens could not be restored, so it is not offered.
+    // deny-inventory: vault-unsaveable-prompt
     stopPrompt(
       '🛡 ZeroH stopped this prompt: it contains sensitive values, and ZeroH could not save its vault. Remove the values and send it again.',
     );
@@ -433,6 +613,7 @@ async function emitBlock({ result, masked, knownHits, fileHits }) {
     })),
     ...knownHits.map((hit) => ({ type: hit.type, value: hit.value })),
   ];
+  // deny-inventory: typed-secret-no-proxy
   stopPrompt(
     stopMessage({
       values,
@@ -449,12 +630,21 @@ async function emitBlock({ result, masked, knownHits, fileHits }) {
 }
 
 function promptNotices(state) {
-  const lines = [];
+  // The first prompt ZeroH sees for these Claude Code settings turns on its
+  // status line and auto-update, each with one line (lib/first-run.js). Like
+  // the proxy entry, it is written now rather than at SessionStart: Claude
+  // Code applies a settings change to the running session only once it
+  // watches the file.
+  const lines = [...applyFirstRunDefaults({ home: zerohHome() }).lines];
   // An unreadable vault is told once per session, in plain words (LV-B2).
   if (vaultFailure && !state.vaultNoticeShown) {
     const problem = vaultProblem(vaultFailure);
     lines.push(
-      `⚠ ZeroH Disclosure can't open its vault for this project: ${problem.reason}. Tool output is withheld and tool calls are stopped until that is fixed. ${problem.fix}`,
+      `⚠ ZeroH Disclosure can't open its vault for this project: ${problem.reason}. ${
+        uncertainMode() === 'block'
+          ? 'Tool output is withheld and tool calls are stopped until that is fixed.'
+          : 'Until that is fixed nothing can be masked: tool output goes to Claude as it is, with a "not protected" line.'
+      } ${problem.fix}`,
     );
     state.vaultNoticeShown = true;
   }

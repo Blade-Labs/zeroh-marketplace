@@ -21,8 +21,12 @@ import {
 import {
   formatStopReceiptLine,
   formatStopTokenLine,
+  promptSentUnmasked,
+  promptStopped,
+  turnMaskedCount,
   writeSessionReceiptHtml,
 } from '../lib/report.js';
+import { updateSessionStatus } from '../lib/session-status.js';
 
 const event = await readStdinJson();
 try {
@@ -48,7 +52,8 @@ for (const t of turns) {
   if (!ledger) continue;
 
   if (ledger.phase === 'finalized') continue;
-  const blocked = String(ledger.phase).startsWith('blocked_');
+  const blocked = promptStopped(ledger);
+  const sentUnmasked = promptSentUnmasked(ledger);
 
   if (ledger.receipt?.receipt_id) {
     const { local_private, ...ledgerWithoutOriginal } = ledger;
@@ -59,7 +64,7 @@ for (const t of turns) {
       finalized_at: new Date().toISOString(),
     };
     await writeJson(ledgerPath, finalized);
-    finalizedTurns.push({ turn: t, ledger: finalized, blocked });
+    finalizedTurns.push({ turn: t, ledger: finalized, blocked, sentUnmasked });
     continue;
   }
 
@@ -87,7 +92,7 @@ for (const t of turns) {
   };
   await writeJson(ledgerPath, finalized);
   await markDisclosureResultCommitted({ session, result });
-  finalizedTurns.push({ turn: t, ledger: finalized, blocked });
+  finalizedTurns.push({ turn: t, ledger: finalized, blocked, sentUnmasked });
 }
 
 // Every turn still gets a signed receipt, receipt.html and the session
@@ -104,16 +109,33 @@ if (finalizedTurns.length > 0) {
       entry.turn,
       entry.ledger,
       receiptView.path,
-      { blocked: entry.blocked },
+      { blocked: entry.blocked, sentUnmasked: entry.sentUnmasked },
     );
     if (!line) continue;
     outboundLines.push(line);
-    const seen = formatStopTokenLine(entry.ledger, { blocked: entry.blocked });
+    const seen = formatStopTokenLine(entry.ledger, {
+      blocked: entry.blocked,
+      sentUnmasked: entry.sentUnmasked,
+    });
     if (seen) outboundLines.push(seen);
   }
 }
 
 await buildSessionReceiptBundle({ session });
+
+// The status line's "masked" count: each turn is added once, when it is
+// finalised.
+updateSessionStatus({ cwd, sessionId }, (status) => {
+  let masked = Number(status.masked) || 0;
+  for (const entry of finalizedTurns) {
+    masked += turnMaskedCount(entry.ledger, {
+      blocked: entry.blocked,
+      sentUnmasked: entry.sentUnmasked,
+    });
+  }
+  status.masked = masked;
+  return status;
+});
 
 if (outboundLines.length === 0) process.exit(0);
 

@@ -74,10 +74,13 @@ export async function prepareDisclosure({
     sanitized_text = sanitizedTextOverride;
   } else if (
     decision.action === 'mask_and_allow' ||
-    (decision.enforced === 'stopped' && decision.mask_categories?.length)
+    (['stopped', 'sent_unmasked'].includes(decision.enforced) &&
+      decision.mask_categories?.length)
   ) {
     // A stopped prompt keeps the masked copy the user is offered to send
-    // instead; nothing in it was sent, so no category counts as masked.
+    // instead, and a prompt sent unmasked (no proxy, uncertain: pass) keeps
+    // a masked copy for the ledger; neither masked what was sent, so no
+    // category counts as masked.
     const masked = await protectionEngine.transform({
       text,
       findings,

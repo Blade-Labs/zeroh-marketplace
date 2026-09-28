@@ -24,32 +24,30 @@ Why you might want it:
 ## Install
 
 You need Claude Code and [Node.js 20 or later](#requirements-and-platforms) on your `PATH`
-(`node --version`). Then run:
+(`node --version`). Paste this into Claude Code:
+
+```text
+Install ZeroH Disclosure for me by following https://github.com/Blade-Labs/zeroh-marketplace
+```
+
+Or run the two commands yourself:
 
 ```bash
 claude plugin marketplace add Blade-Labs/zeroh-marketplace
 claude plugin install zeroh-disclosure@zeroh
 ```
 
-Or paste the prompt from the website into Claude Code:
+Then restart Claude Code. The first session shows the ZeroH Disclosure banner and sets up the
+[local proxy](#the-local-proxy). With your first message ZeroH also turns on its
+[status line](#status-line), unless you have one of your own, and auto-update for the zeroh
+marketplace, unless you have set it either way; one line says what it changed.
+`/zeroh-disclosure:status` shows what is protected at any time.
 
-```text
-Install the Disclosure plugin for me.
-Run `claude plugin marketplace add Blade-Labs/zeroh-marketplace`,
-then `claude plugin install zeroh-disclosure@zeroh`,
-and turn on auto-update for the zeroh marketplace by setting `"autoUpdate": true`
-on it in my Claude Code user settings. Then tell me to restart Claude Code and open
-https://witty-river-07cbf8503.1.azurestaticapps.net/try/ to test it step by step.
-```
-
-Start Claude Code (restart it if it was running). The first session shows the ZeroH Disclosure
-banner and sets up the [local proxy](#the-local-proxy). `/zeroh-disclosure:status` shows what is
-protected at any time.
-
-**Updates.** Claude Code updates plugins on its own only from Anthropic's marketplaces. The website
-prompt turns auto-update on for this one; otherwise run `/plugin`, open **Marketplaces**, choose
-**zeroh** and select **Enable auto-update**, or update by hand with
-`claude plugin update zeroh-disclosure@zeroh` and restart Claude Code.
+**Updates.** Claude Code updates plugins on its own only from Anthropic's marketplaces, so ZeroH
+turns auto-update on for its own marketplace once (`"autoUpdate": true` on it in your user
+settings). To turn it off, run `/plugin`, open **Marketplaces** and choose **zeroh**; ZeroH never
+turns it back on. To update by hand: `claude plugin update zeroh-disclosure@zeroh`, then restart
+Claude Code.
 
 ## Try it
 
@@ -66,6 +64,66 @@ prompt turns auto-update on for this one; otherwise run `/plugin`, open **Market
 The website has a [step-by-step test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/)
 that also covers personal data, unmasking and receipts. No Stripe account? See
 [Try it without a Stripe account](docs/how-to.md#try-it-without-a-stripe-account).
+
+## Status line
+
+ZeroH always shows whether you're protected, in one line under Claude Code's prompt:
+
+```text
+🛡️ ZeroH · 🟢 protected · 4 masked · 0 sent · unmask EMAIL 12m · receipt ↗
+```
+
+| State          | What it means                                                                                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🟢 `protected` | The hooks are working and the local proxy masks what you type in this session.                                                                                                                                                               |
+| 🟡 …           | Protected in part, and the line names the fix: `files only` (what you type isn't masked in this session), `proxy starts with your first prompt`, `proxy on from your next prompt`, `proxy down`, `starting`, or `N not protected this turn`. |
+| 🔴 …           | Not protecting, and the line says why: `hooks failing`, `hooks stopped`, `hooks never ran`, `vault can't be opened`, `plugin disabled`, `not installed` or `uninstalled`.                                                                    |
+
+`masked` counts the values the model saw as tokens this session, and `sent` the real values that
+reached it anyway (a secret typed while the proxy was off, which you were told about).
+`unmask EMAIL 12m` shows while you let Claude see a kind of personal data. **`receipt ↗` is a
+link**: Cmd-click (macOS) or Ctrl-click opens this session's receipt in your browser. Terminals
+without link support show plain text; in macOS Terminal the link is left out.
+
+**How it gets there.** With your first message after the install, ZeroH adds this entry to your
+Claude Code user settings when you have no `statusLine` yet, and says so in one line:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node -e \"const f=require('fs'),p=require('path'),e=process.env,h=require('os').homedir();const j=(x)=>{try{return JSON.parse(f.readFileSync(x,'utf8'))}catch{return null}};const c=p.resolve(e.CLAUDE_CONFIG_DIR||p.join(h,'.claude'));const k=p.resolve(e.CLAUDE_CODE_PLUGIN_CACHE_DIR||p.join(c,'plugins','cache'));const z=e.ZEROH_HOME||(process.platform==='win32'?p.join(e.LOCALAPPDATA||p.join(h,'AppData','Local'),'ZeroH'):p.join(h,'.zeroh'));const l=[];for(const[n,v]of Object.entries(j(p.join(c,'plugins','installed_plugins.json'))?.plugins||{}))if(n.startsWith('zeroh-disclosure@'))for(const i of[].concat(v))if(typeof i?.installPath==='string')l.push(p.resolve(i.installPath));const u=(x)=>{const s=p.relative(k,x);return !s.startsWith('..')&&!p.isAbsolute(s)&&s.split(p.sep)[1]==='zeroh-disclosure'};const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));const a=process.argv.slice(1);const w=(m)=>process.stdout.write(a.includes('segment')?'':'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m);d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \\u00b7 remove it with /statusline')\"",
+    "padding": 0,
+    "refreshInterval": 10
+  }
+}
+```
+
+The command finds the installed plugin itself, so it keeps working when the plugin updates, and it
+runs the same in Bash, Git Bash, PowerShell 7 and Windows PowerShell 5.1 (Claude Code uses Git
+Bash on Windows when it is installed, PowerShell otherwise). It runs only a plugin copy Claude Code
+lists as installed or keeps in its plugin cache. If the plugin is removed without uninstalling it,
+the line says `🛡️ ZeroH · 🔴 not installed · remove it with /statusline`.
+
+- **Make it yours.** Ask Claude ("make ZeroH's status line compact, no emoji", "only show it when
+  something is wrong"): it edits `statusline-style.json` in ZeroH's folder, the one ZeroH file it
+  may change. Fields, order, separator, labels, emoji, wording and colour are yours; the state and
+  its fix always show while ZeroH isn't 🟢. `zeroh-disclosure statusline --json` gives the same
+  state as data for a status line script of your own. [The status line](docs/statusline.md) has
+  the keys, examples and the JSON schema.
+- It never shows a value, makes no network call and answers in a few milliseconds.
+- **Your own status line stays.** ZeroH never replaces it, and says once how to add ZeroH's part.
+  This command prints only ZeroH's segment, without a line end; pipe it the JSON your script gets
+  on stdin:
+
+  ```bash
+  node -e "const f=require('fs'),p=require('path'),e=process.env,h=require('os').homedir();const j=(x)=>{try{return JSON.parse(f.readFileSync(x,'utf8'))}catch{return null}};const c=p.resolve(e.CLAUDE_CONFIG_DIR||p.join(h,'.claude'));const k=p.resolve(e.CLAUDE_CODE_PLUGIN_CACHE_DIR||p.join(c,'plugins','cache'));const z=e.ZEROH_HOME||(process.platform==='win32'?p.join(e.LOCALAPPDATA||p.join(h,'AppData','Local'),'ZeroH'):p.join(h,'.zeroh'));const l=[];for(const[n,v]of Object.entries(j(p.join(c,'plugins','installed_plugins.json'))?.plugins||{}))if(n.startsWith('zeroh-disclosure@'))for(const i of[].concat(v))if(typeof i?.installPath==='string')l.push(p.resolve(i.installPath));const u=(x)=>{const s=p.relative(k,x);return !s.startsWith('..')&&!p.isAbsolute(s)&&s.split(p.sep)[1]==='zeroh-disclosure'};const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));const a=process.argv.slice(1);const w=(m)=>process.stdout.write(a.includes('segment')?'':'\u{1F6E1}\u{FE0F} ZeroH \u00b7 \u{1F534} '+m);d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \u00b7 remove it with /statusline')" segment
+  ```
+
+- `/zeroh-disclosure:settings statusline off` removes it, and so does deleting it with
+  `/statusline`: ZeroH never adds it back. `/zeroh-disclosure:settings statusline on` turns it on
+  again. Uninstall removes it from every settings file it was written to. Claude cannot add,
+  change or remove any status line: the settings guard stops the edit.
 
 ## What it does not do
 
@@ -132,7 +190,9 @@ sequenceDiagram
 2. **Restore locally.** When the model uses a token in a command, ZeroH checks every host the
    command names. If the value [may go there](#where-values-may-go), the real value is bound into
    the command through a short-lived private file; it is never written into the command text that
-   the model or the transcript sees. Otherwise the call is denied.
+   the model or the transcript sees. A host that isn't allowed for it stops the call, with the
+   one line that allows it. When ZeroH can't put the value back, the call runs with the token and
+   ZeroH says so.
 3. **Show.** Your screen shows real values in Claude's answers; the model and the saved
    conversation keep the tokens. When Claude talks about a token itself, it writes
    `⟦API_KEY-3f9a1c⟧`, which your screen leaves as it is.
@@ -161,7 +221,8 @@ files. [Architecture](docs/architecture.md) has the details.
 - **Text PDFs and notebooks** reach the model as masked text.
 
 [What ZeroH Disclosure detects](docs/detection.md) lists every kind, what decides it and what is
-not detected. `node "<plugin>/bin/zeroh-disclosure.mjs" catalog` prints the installed rule set, and
+not detected. The pattern rules are Blade Labs' MIT-licensed detection engine, shipped in
+[`vendor/sensitive-data-detectors`](vendor/sensitive-data-detectors). `node "<plugin>/bin/zeroh-disclosure.mjs" catalog` prints the installed rule set, and
 you can ask Claude "what does ZeroH Disclosure detect?".
 
 ## Where values may go
@@ -228,13 +289,17 @@ Everything is a slash command inside Claude Code:
 | `/zeroh-disclosure:allow [NAME HOST]` (`--remove`)          | Let a secret reach a host or MCP server; alone, show where each value may go  |
 | `/zeroh-disclosure:proxy [off\|on]`                         | Proxy status, or turn the proxy off or back on                                |
 | `/zeroh-disclosure:doctor [--fix\|--report]`                | Check and repair the proxy, its settings entry and the vaults                 |
-| `/zeroh-disclosure:settings [banner\|receipts keep\|vault]` | Banner mode, how long receipts are kept, vault status or `vault clear --yes`  |
+| `/zeroh-disclosure:settings [banner\|receipts keep\|vault]` | Banner, receipts kept, uncertain cases, status line, vault or `vault clear`   |
 | `/zeroh-disclosure:mask-config`                             | Configuration, policy and protection engine                                   |
 | `/zeroh-disclosure:uninstall [--yes]`                       | What uninstall removes; with `--yes`, remove ZeroH and the plugin completely  |
 
-`allow`, `proxy`, `doctor`, `settings` and `uninstall` change what ZeroH protects, so only you can
-run them: Claude can't invoke them (they are marked `disable-model-invocation`, and ZeroH denies
-any attempt through Claude's Skill tool). The read-only commands, `unmask` (but not `unmask caps`)
+`allow`, `proxy`, `doctor --fix`, `settings` changes, `unmask caps` and `uninstall --yes` change
+what ZeroH protects, so only you can run them. You type the command and ZeroH applies it on the
+same turn: the result appears at once, under Claude Code's "operation blocked by hook" label,
+starting with `✓ Done by ZeroH Disclosure`, and nothing is sent to Claude. Claude can't invoke
+these commands (they are marked `disable-model-invocation`, and ZeroH denies any attempt through
+Claude's Skill tool), and if it runs ZeroH's command-line tool itself, under any name or launcher,
+the tool changes nothing and answers `Nothing changed: … only you can do it`. The read-only commands, `unmask` (but not `unmask caps`)
 and `report-miss` stay available to Claude; `unmask` and `report-miss` still need your answer in a dialog. Commands act
 on the project Claude Code opened.
 
@@ -251,6 +316,11 @@ node "<plugin>/bin/zeroh-disclosure.mjs" doctor --fix
 node "<plugin>/bin/zeroh-disclosure.mjs"            # lists every command
 ```
 
+A command that changes what ZeroH protects runs from your own terminal only outside Claude Code: it
+shows the exact action and a four-character code, and you type the code to confirm. Run from a
+Claude Code session, including Claude Code's own `!` shell, it changes nothing; use the slash
+command there.
+
 [How to use ZeroH Disclosure](docs/how-to.md#run-the-cli) covers the rest, including
 `unmask caps`, `verify`, `tokens` and `report --html`.
 
@@ -261,13 +331,14 @@ Set these as environment variables before starting Claude Code, or as `KEY=value
 
 | Variable                    | Default     | What it does                                                                                 |
 | --------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
-| `ZEROH_PROXY`               | `on`        | `off` skips the local proxy for that session; typed secrets are then stopped                 |
+| `ZEROH_PROXY`               | `on`        | `off` skips the local proxy for that session; typed secrets are then sent with a notice      |
 | `ZEROH_MASK_PII`            | `on`        | `off` masks only secrets, not personal data, in tool output                                  |
 | `ZEROH_PHONE_REGION`        | your locale | Region for phone numbers typed without a country code (`GB`, `QA`, …); `none` turns them off |
 | `ZEROH_DISPLAY_REAL_VALUES` | `1`         | `0` keeps tokens on your screen too                                                          |
 | `ZEROH_VAULT_RETENTION`     | `7d`        | `session`, `7d` or `30d`: how long unused detected values stay in the vault                  |
 | `ZEROH_RECEIPT_RETENTION`   | `90d`       | `forever`, `1y`, `90d` or `30d`: how long receipts are kept                                  |
 | `ZEROH_BANNER`              | saved mode  | `full`, `compact` or `off`; overrides `/zeroh-disclosure:settings banner`                    |
+| `ZEROH_UNCERTAIN`           | `pass`      | `pass` never stops ordinary work; `block` denies what ZeroH can't prove                      |
 | `ZEROH_HOME`                | see below   | Where the vault, keys, grants, receipts and proxy live (environment only)                    |
 | `ZEROH_PROXY_PORT`          | a free port | Port for the local proxy                                                                     |
 | `ZEROH_CLAUDE_SETTINGS`     | see below   | The Claude Code settings file that the proxy setting is written to                           |
@@ -280,12 +351,14 @@ Set these as environment variables before starting Claude Code, or as `KEY=value
   `$CLAUDE_CONFIG_DIR/settings.json`.
 - **A repository cannot weaken ZeroH.** A project's `.zeroh.env` may set only `ZEROH_BANNER`,
   `ZEROH_DISPLAY_REAL_VALUES` and `ZEROH_VAULT_RETENTION`, a shorter `ZEROH_RECEIPT_RETENTION`,
-  or `ZEROH_MASK_PII=on`. Anything else in it is ignored, and the session start names the keys it
+  `ZEROH_MASK_PII=on` or `ZEROH_UNCERTAIN=block` (which wins over your `pass`). Anything else in it is ignored, and the session start names the keys it
   ignored. The model cannot write `.zeroh.env`.
 - **Some protections have no setting.** A raw secret the model writes into a Bash, PowerShell or
-  Monitor command or an MCP call is denied; in a Write, an Edit, a WebFetch or a subagent prompt
-  it is replaced by a token. Private keys, keystores and credential stores are never read into the
-  conversation.
+  Monitor command, an MCP call or a WebFetch URL follows the same destination rules as a restored
+  one: an allowed host runs, a host that isn't allowed is stopped. In a Write, an Edit or a
+  subagent prompt it is replaced by a token. Private keys, keystores and credential stores can be
+  read, with what the detector finds in them masked; only ZeroH's own keys are refused. (With
+  `uncertain block`, raw secrets in commands and credential-file reads are denied.)
 
 ## Receipts
 
@@ -336,9 +409,10 @@ that masks every request on its way to the model. It is on by default.
   needed.
 - **It forwards only** to the `ANTHROPIC_BASE_URL` you had before, or to `api.anthropic.com`. It
   never stores request or response bodies and leaves responses unchanged.
-- **It never blocks Claude Code.** If it can't be used, what you type is stopped when it holds a
-  secret, and ZeroH copies a masked version to your clipboard, when it can, for you to paste
-  instead. Files and command output are still masked by the hooks.
+- **It never blocks Claude Code.** If it can't be used, what you type is sent as typed, and a
+  prompt holding a secret gets a "not protected (proxy not running)" line with the fix. Files and
+  command output are still masked by the hooks. With `uncertain block`, such a prompt is stopped
+  instead, and ZeroH copies a masked version to your clipboard, when it can, for you to paste.
 - **Turn it off** with `/zeroh-disclosure:proxy off`, which restores your setting and stays off
   until `/zeroh-disclosure:proxy on`. `ZEROH_PROXY=off claude` skips it for one session.
 
@@ -362,9 +436,16 @@ What ZeroH guarantees:
   Code settings that route through the proxy or turn the plugin off.
 - Keys are never unmasked. Personal data is shown only for a time you accept in Claude Code's own
   dialog.
-- When ZeroH cannot open its vault, or a hook fails while it loads or runs, the output is
-  withheld, the tool call is denied or the prompt is stopped, rather than raw content passing
-  through.
+- **ZeroH never takes away what Claude Code can do**
+  ([product principles](docs/product-principles.md)). By default only two things are stopped: a
+  secret heading to a host that isn't allowed for it, and the model changing ZeroH's own
+  protection. When ZeroH can't check something (a destination it can't work out, a command it
+  can't parse, a prompt typed while the proxy isn't running, a check that runs out of time or
+  fails, output too large to scan), it lets it run and tells you in one line, for example
+  `ZeroH Disclosure: this command was not protected (couldn't parse it).`, and the receipt counts
+  it by reason. When it can't put a value back (the vault can't be opened, the value expired, a
+  `Monitor` command), the command runs with the token and the line says "ran with the token, not
+  your key". To stop these cases instead, run `/zeroh-disclosure:settings uncertain block`.
 - Nothing is sent to Blade Labs: there is no account, no telemetry and no upload path.
 
 The limits:
@@ -382,21 +463,26 @@ The limits:
   dump or as base64 of a shifted string is not recognised when it comes back.
 - **Without the proxy** (`ZEROH_PROXY=off`, `proxy off`, Bedrock, Vertex, Foundry, a shell that
   sets `ANTHROPIC_BASE_URL`, or a machine that refuses login items), a prompt in which you type a
-  secret or personal data is stopped instead of masked. Background commands and the `Monitor` tool
-  are denied, because their output would reach the model unmasked.
+  secret or personal data is sent as typed, with a "not protected (proxy not running)" line, and
+  background commands and the `Monitor` tool run with the same line, because nothing can mask
+  them. With `uncertain block` the prompt is stopped and those commands are denied.
+- **Credential files** (SSH keys, kubeconfig, AWS credentials, `.netrc` and similar) can be read;
+  what the detector recognises in them is masked, and the read is recorded. With
+  `uncertain block` they are refused. ZeroH's own keys are always refused.
 - **Failing tools.** Claude Code passes the output of a failed tool call to the model through a
   path hooks cannot rewrite. ZeroH makes foreground Bash and PowerShell commands finish with
   status 0 so their output is masked, but a command that times out, is interrupted or uses `exec`,
   and errors from MCP tools and WebFetch, reach the model unmasked when the proxy is off. With the
   proxy on, the proxy masks them.
 - **The first prompt of the first session** switches the session to the proxy; a secret typed in
-  that prompt is stopped rather than sent. A session that starts behind the proxy is masked from
-  its first prompt, `claude -p` included.
+  that prompt is sent with a "not protected" line (stopped with `uncertain block`). A session that
+  starts behind the proxy is masked from its first prompt, `claude -p` included.
 - **Shared multi-user machines.** The proxy listens on a `127.0.0.1` port. If another local user
   takes that port while the ZeroH proxy is down, that program could receive your requests until
   the next Claude Code session start moves the proxy to another port. Use ZeroH on a single-user
   machine, or turn the proxy off on a shared one.
-- **Output over 1 MB and prompts over 256 KB** are withheld or stopped rather than scanned.
+- **Output over 1 MB** and **prompts over 256 KB** are sent unscanned, with a "not protected (too
+  large to scan)" line; `uncertain block` withholds or stops them.
 - **Values the model has already seen cannot be recalled.** Report a miss with
   `/zeroh-disclosure:report-miss` and rotate the value.
 
@@ -425,7 +511,8 @@ start says so once and ZeroH steps aside. Either way Claude Code keeps working.
   ([Run with PowerShell](docs/how-to.md#run-with-powershell)).
 - The proxy's login item needs a desktop or a systemd user session. Over SSH, in WSL or in a
   container, and on a managed Mac or locked-down Windows that refuses login items, the proxy is
-  not set up and typed secrets are stopped rather than masked; ZeroH says so once.
+  not set up and typed secrets are sent with a "not protected" line rather than masked; ZeroH says
+  so once.
 - `pdftotext` on your `PATH` improves PDF text extraction but is optional; there is a built-in
   extractor.
 
@@ -446,9 +533,10 @@ scanned-PDF redaction, custom detectors, and ProofPack reports for auditors.
 ```
 
 It removes the plugin from Claude Code, ZeroH's entry in your Claude Code settings (your own
-setting goes back), the proxy and its login item, and ZeroH's folder with the vault, keys and
-receipts. Exit the session you ran it in: nothing protects it any more. If Claude Code can't
-start, run `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall` in a terminal (it asks first).
+setting goes back), ZeroH's status line if you turned it on, the proxy and its login item, and
+ZeroH's folder with the vault, keys and receipts. Exit the session you ran it in: nothing protects it any more. If Claude Code can't
+start, run `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall --yes` in a terminal outside Claude
+Code (it shows what it removes and asks you to type a code).
 [Uninstall and clean up](docs/how-to.md#uninstall-and-clean-up) has the details.
 
 ## Documentation
@@ -458,7 +546,13 @@ start, run `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall` in a terminal (i
 - [What ZeroH Disclosure detects](docs/detection.md): every kind, what decides it, and what is not
   detected.
 - [Troubleshooting](docs/troubleshooting.md): symptoms, causes and fixes.
-- [Architecture](docs/architecture.md): hooks, the proxy, late binding and the settings guard.
+- [Product principles](docs/product-principles.md): what ZeroH stops, what it passes, and why.
+- [The status line](docs/statusline.md): its states, changing how it looks, and its data for a
+  status line of your own.
+- [Features](docs/features.md): every feature, how it works in Claude Code, and its status on Codex
+  and OpenCode ([features.json](docs/features.json) for tools).
+- [Architecture](docs/architecture.md): hooks, the proxy, late binding and the settings guard, and the
+  threat model.
 - [Receipt format](docs/receipt-format.md): what a receipt claims and how it is verified.
 - [Development](docs/development.md): the tests, trying a change and updating the vendored rules.
 - [Changelog](CHANGELOG.md)
@@ -478,7 +572,9 @@ test file, trying a change in Claude Code, and updating the provider rules and v
 ## Contributing, security and licence
 
 Contributions are welcome: see
-[CONTRIBUTING.md](https://github.com/Blade-Labs/zeroh-marketplace/blob/main/CONTRIBUTING.md). Use
+[CONTRIBUTING.md](https://github.com/Blade-Labs/zeroh-marketplace/blob/main/CONTRIBUTING.md).
+Changes follow the [product principles](docs/product-principles.md); AI agents working on the
+plugin start with [For AI agents](docs/for-ai-agents.md). Use
 fake values (`ZEROHFAKE` in the value, `example.com` hosts) in issues, tests and pull requests.
 There is no agreement to sign: by opening a pull request you accept the contribution terms in
 CONTRIBUTING.md, which let Blade Labs also offer the code under other terms.
@@ -490,6 +586,8 @@ not open a public issue.
 
 ZeroH Disclosure is licensed under the GNU Affero General Public License, version 3 only
 (`AGPL-3.0-only`); see [LICENSE](LICENSE). Copyright © 2026 Blade Labs Holdings Private Limited.
-It includes rules generated from [gitleaks](https://github.com/gitleaks/gitleaks) and vendored
-copies of validator.js, libphonenumber-js, i18n-iso-countries and Saudi-ID-Validator (all MIT),
-and IANA's top-level domain list; [NOTICE](NOTICE) credits each.
+It includes Blade Labs' detection engine,
+[`vendor/sensitive-data-detectors`](vendor/sensitive-data-detectors) (MIT), with rules generated
+from [gitleaks](https://github.com/gitleaks/gitleaks), vendored copies of validator.js,
+libphonenumber-js, i18n-iso-countries and Saudi-ID-Validator (all MIT) and IANA's top-level domain
+list; [NOTICE](NOTICE) credits each.

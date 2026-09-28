@@ -29,6 +29,7 @@ import {
 } from './report-slip.js';
 import { displayPath, writePrivateJson } from './private-fs.js';
 import { retentionNote } from './receipt-retention.js';
+import { scrub } from './secrets.js';
 import {
   ensurePrivateDirSync,
   envSessionId,
@@ -44,6 +45,11 @@ import {
   zerohHome as defaultZerohHome,
 } from './vault.js';
 import { verifyReceiptArtifact } from './verify-receipt.js';
+import {
+  TOKEN_REASONS,
+  UNCHECKED_LABELS,
+  uncheckedCounts,
+} from './unchecked.js';
 
 // The terminal slip and the HTML pages live in their own modules; callers keep
 // importing them from here.
@@ -217,18 +223,79 @@ export async function writeSessionReceiptHtml({ session, env = process.env }) {
 // What a turn has to report at Stop, or an empty list when it has nothing: no
 // value masked, no prompt stopped, no destination blocked, no value shown under
 // a grant, no file passed unchecked and no missed value reported.
-export function stopTurnEvents(ledger, { blocked = null } = {}) {
-  const events = [];
-  const stopped = blocked ?? String(ledger?.phase).startsWith('blocked_');
+// What happened to the turn's prompt, from its phase until Stop finalises
+// the turn, and always from the signed receipt: `decision_action` is a
+// public claim (`mask_and_allow` when the proxy masked it, `allow` when it
+// went as typed, `block` when it was stopped); the full decision
+// (`decision_details.enforced`) is a selective claim, used when present.
+function promptDecision(ledger) {
+  const claims = ledger?.receipt?.public_claims ?? {};
+  return {
+    action: claims.decision_action ?? null,
+    enforced: claims.decision_details?.enforced ?? null,
+  };
+}
+
+// True when the turn's prompt went to the model as typed (no proxy in the
+// route, uncertain: pass). Its replacements are only the ledger's masked
+// copy: nothing in them was masked for the model (Astra rc.2 F6).
+export function promptSentUnmasked(ledger) {
+  const { action, enforced } = promptDecision(ledger);
+  return (
+    ledger?.phase === 'sent_unmasked_no_proxy' ||
+    enforced === 'sent_unmasked' ||
+    (action === 'allow' && (ledger?.replacements ?? []).length > 0)
+  );
+}
+
+// True when the turn's prompt was stopped: nothing was sent, and its
+// replacements are only the masked copy offered for resubmission.
+export function promptStopped(ledger) {
+  const { action, enforced } = promptDecision(ledger);
+  return (
+    String(ledger?.phase).startsWith('blocked_') ||
+    enforced === 'stopped' ||
+    action === 'block'
+  );
+}
+
+// The prompt's replacements that were masked in what reached the model:
+// none for a prompt that was stopped or sent as typed.
+function promptMaskedReplacements(ledger) {
+  return promptStopped(ledger) || promptSentUnmasked(ledger)
+    ? []
+    : uniqueReplacements(ledger?.replacements ?? []);
+}
+
+// The values a turn masked: distinct tokens of its prompt (unless the prompt
+// was stopped or sent unmasked) and of the tool output it masked.
+export function turnMaskedCount(
+  ledger,
+  { blocked = null, sentUnmasked = null } = {},
+) {
+  const stopped = blocked ?? promptStopped(ledger);
+  sentUnmasked ??= promptSentUnmasked(ledger);
   // A stopped prompt never reached the model, so its values count as stopped,
   // not masked.
-  const masked = new Set([
-    ...(stopped ? [] : uniqueReplacements(ledger?.replacements ?? []))
+  return new Set([
+    ...(stopped || sentUnmasked
+      ? []
+      : uniqueReplacements(ledger?.replacements ?? [])
+    )
       .map((entry) => entry.token)
       .filter(Boolean),
     ...(ledger?.audit?.masked?.tokens ?? []),
     ...tokenObservationsFromLedger(ledger).map((entry) => entry.token),
   ]).size;
+}
+
+export function stopTurnEvents(
+  ledger,
+  { blocked = null, sentUnmasked = null } = {},
+) {
+  const events = [];
+  const stopped = blocked ?? promptStopped(ledger);
+  const masked = turnMaskedCount(ledger, { blocked: stopped, sentUnmasked });
   if (masked > 0) events.push(`${masked} ${plural(masked, 'value')} masked`);
   if (stopped) events.push('prompt stopped');
   const destinations = sumCounts(ledger?.audit?.destinations?.blocked);
@@ -247,6 +314,25 @@ export function stopTurnEvents(ledger, { blocked = null } = {}) {
   if (unchecked > 0) {
     events.push(`${unchecked} ${plural(unchecked, 'file')} passed unchecked`);
   }
+  // Operations passed unprotected in the default uncertain mode (pass), and
+  // those that ran with the token instead of the value (nothing leaked).
+  const byReason = uncheckedCounts(ledger?.audit);
+  let passed = 0;
+  let tokenRan = 0;
+  for (const [reason, count] of Object.entries(byReason)) {
+    if (TOKEN_REASONS.has(reason)) tokenRan += count;
+    else passed += count;
+  }
+  if (passed > 0) {
+    events.push(
+      `${passed} ${plural(passed, 'operation')} not protected (see the receipt)`,
+    );
+  }
+  if (tokenRan > 0) {
+    events.push(
+      `${tokenRan} ${plural(tokenRan, 'operation')} ran with the token, not your key`,
+    );
+  }
   const misses = Number(ledger?.audit?.misses_reported) || 0;
   if (misses > 0) {
     events.push(`${misses} missed ${plural(misses, 'value')} reported`);
@@ -259,9 +345,9 @@ export function formatStopReceiptLine(
   turn,
   ledger,
   receiptPath = null,
-  { blocked = null } = {},
+  { blocked = null, sentUnmasked = null } = {},
 ) {
-  const events = stopTurnEvents(ledger, { blocked });
+  const events = stopTurnEvents(ledger, { blocked, sentUnmasked });
   if (!events.length) return null;
   const claims = ledger?.receipt?.public_claims ?? {};
   const parts = [
@@ -302,13 +388,19 @@ function seenFrom(entry) {
   return entry.source;
 }
 
-export function formatStopTokenLine(ledger, { blocked = null } = {}) {
-  if (blocked ?? String(ledger?.phase).startsWith('blocked_')) return null;
+export function formatStopTokenLine(
+  ledger,
+  { blocked = null, sentUnmasked = null } = {},
+) {
+  if (blocked ?? promptStopped(ledger)) return null;
+  // A prompt sent as typed: the model saw the value, not a token.
+  const typedMasked = !(sentUnmasked ?? promptSentUnmasked(ledger));
   const seen = new Map();
   for (const entry of tokenObservationsFromLedger(ledger)) {
+    if (!typedMasked && entry.channel === 'typed prompt') continue;
     if (!seen.has(entry.token)) seen.set(entry.token, seenFrom(entry));
   }
-  for (const replacement of ledger?.replacements ?? []) {
+  for (const replacement of typedMasked ? (ledger?.replacements ?? []) : []) {
     const token = replacement?.replacement;
     if (token && !seen.has(token)) seen.set(token, 'typed');
   }
@@ -421,6 +513,7 @@ export async function buildLocalReport({
   }
   aggregate.totals.sessions = aggregate.sessionIds.size;
   aggregate.totals.files_passed_unchecked = sumCounts(aggregate.formats);
+  aggregate.totals.passed_unchecked = sumCounts(aggregate.unchecked);
   const report = {
     schema: 'zeroh-disclosure-local-report/v1',
     kind: 'local_summary',
@@ -455,6 +548,7 @@ export async function buildLocalReport({
       ...entry,
       notice: formatNotice(entry.format),
     })),
+    passed_unchecked: uncheckedRows(aggregate.unchecked),
   };
   return report;
 }
@@ -556,7 +650,7 @@ async function aggregateProject({ root, period, aggregate }) {
 }
 
 function addTurnToAggregate(ledger, aggregate, dayEntry) {
-  const promptReplacements = uniqueReplacements(ledger.replacements ?? []);
+  const promptReplacements = promptMaskedReplacements(ledger);
   for (const replacement of promptReplacements) {
     add(aggregate.maskedByType, replacement.type, replacement.count);
     add(aggregate.maskedByChannel, 'typed prompt', replacement.count);
@@ -582,16 +676,33 @@ function addTurnToAggregate(ledger, aggregate, dayEntry) {
   aggregate.totals.values_sent += sent;
   dayEntry.masked += masked;
   dayEntry.sent += sent;
-  if (String(ledger.phase).startsWith('blocked_')) {
+  if (promptStopped(ledger)) {
     aggregate.totals.prompts_stopped += 1;
     dayEntry.prompts_stopped += 1;
   }
-  mergeCounts(aggregate.files, ledger.audit?.files);
+  mergeCounts(
+    aggregate.files,
+    Object.fromEntries(
+      Object.entries(ledger.audit?.files ?? {}).map(([file, count]) => [
+        maskStoredLabel(file),
+        count,
+      ]),
+    ),
+  );
   mergeCounts(
     aggregate.destinationsBlocked,
     ledger.audit?.destinations?.blocked,
   );
   mergeCounts(aggregate.formats, ledger.format_disclosure?.passed_unmasked);
+  mergeCounts(aggregate.unchecked, uncheckedCounts(ledger.audit));
+}
+
+// Passed-unchecked counts as rows: reason, count and a value-free label.
+export function uncheckedRows(counts) {
+  return rows(counts ?? {}, 'reason').map((entry) => ({
+    ...entry,
+    label: UNCHECKED_LABELS[entry.reason] ?? entry.reason,
+  }));
 }
 
 async function summarizeTurn({ turn, ledger, file }, vault = null) {
@@ -599,7 +710,9 @@ async function summarizeTurn({ turn, ledger, file }, vault = null) {
     ok: false,
     checks: [],
   }));
-  const prompt = uniqueReplacements(ledger.replacements ?? []);
+  // A prompt stopped or sent as typed was not masked for the model; only
+  // its ledger copy is.
+  const prompt = promptMaskedReplacements(ledger);
   const maskedByChannel = {};
   if (prompt.length)
     maskedByChannel['typed prompt'] = countReplacementTypes(prompt);
@@ -622,6 +735,7 @@ async function summarizeTurn({ turn, ledger, file }, vault = null) {
   const valuesSent = revealedUnderGrantCount(ledger);
   const tokenMap = tokenObservationsFromLedger(ledger).map((entry) => ({
     ...entry,
+    source: maskStoredLabel(entry.source, vault),
     preview: previewForToken(vault, entry.token, entry.type),
   }));
   return {
@@ -650,6 +764,7 @@ async function summarizeTurn({ turn, ledger, file }, vault = null) {
       ...(ledger.format_disclosure?.passed_unmasked ?? {}),
     },
     formats_withheld: { ...(ledger.format_disclosure?.withheld ?? {}) },
+    passed_unchecked: uncheckedCounts(ledger.audit),
     verified: !!verification.ok,
     failed_checks:
       verification.failed ?? (verification.ok ? [] : ['receipt_readable']),
@@ -706,6 +821,7 @@ function emptyAggregate() {
       sessions: 0,
       turns: 0,
       files_passed_unchecked: 0,
+      passed_unchecked: 0,
     },
     maskedByType: {},
     maskedByChannel: {},
@@ -713,6 +829,7 @@ function emptyAggregate() {
     files: {},
     destinationsBlocked: {},
     formats: {},
+    unchecked: {},
     sessionIds: new Set(),
     latestReceipt: null,
   };
@@ -791,6 +908,26 @@ function mergeTokenObservations(target, incoming) {
 
 function tokenObservationsFromLedger(ledger) {
   return normalizeTokenObservations(ledger?.audit?.masked?.token_map ?? []);
+}
+
+// Receipts written before 1.0.0-rc.2 stored sources and file keys as the
+// hook saw them, so a sensitive file name or command could sit there in plain
+// text (Astra finding 9). Everything read back is masked again before it is
+// shown: with the project's vault when there is one (its tokens), otherwise
+// with a stand-in that names only the kind. Nothing is minted or saved.
+const LABEL_ONLY_VAULT = Object.freeze({
+  tokenFor: (type) => `[${type}]`,
+});
+
+function maskStoredLabel(text, vault = null) {
+  const value = String(text ?? '');
+  if (!value) return value;
+  try {
+    return scrub(value, { vault: vault ?? LABEL_ONLY_VAULT, profile: 'tool' })
+      .text;
+  } catch {
+    return '(label withheld)';
+  }
 }
 
 function previewForToken(vault, token, type) {

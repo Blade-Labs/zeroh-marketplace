@@ -7,6 +7,7 @@
 import { terminalCommand } from './fix-command.js';
 import { displayPath } from './private-fs.js';
 import { decodeCompactReceipt } from './selective-disclosure.js';
+import { UNCHECKED_LABELS } from './unchecked.js';
 import {
   countLabel,
   formatNotice,
@@ -89,6 +90,18 @@ export function formatReceiptSummary(result) {
     mergedCounts(result.summaries.map((item) => item.formats_passed_unmasked)),
   );
   if (unchecked.length) lines.push('', ...unchecked);
+  const passed = passedUncheckedLines(
+    Object.entries(
+      mergedCounts(result.summaries.map((item) => item.passed_unchecked)),
+    )
+      .filter(([, count]) => count > 0)
+      .map(([reason, count]) => ({
+        reason,
+        count,
+        label: UNCHECKED_LABELS[reason] ?? reason,
+      })),
+  );
+  if (passed.length) lines.push('', ...passed);
   lines.push(
     '',
     result.receipt_html
@@ -285,6 +298,20 @@ export function uncheckedTerminalLines(counts) {
   ];
 }
 
+// What was not protected in the default uncertain mode (pass), by
+// reason: `rows` is report.passed_unchecked ({ reason, count, label }).
+export function passedUncheckedLines(rows = []) {
+  if (!rows.length) return [];
+  return [
+    'not protected (uncertain=pass):',
+    ...rows.flatMap((entry) =>
+      wrapText(`${entry.label} ×${entry.count}`, RECEIPT_WIDTH - 2).map(
+        (line) => `  ${line}`,
+      ),
+    ),
+  ];
+}
+
 export function periodLabel(period, generatedAt) {
   const key = String(period?.label ?? '').toLowerCase();
   if (key === 'all') return 'all time';
@@ -363,6 +390,8 @@ export function formatLocalReport(report, written = {}) {
     ),
   );
   if (unchecked.length) lines.push('', ...unchecked);
+  const passed = passedUncheckedLines(report.passed_unchecked ?? []);
+  if (passed.length) lines.push('', ...passed);
   if (report.retention_note) lines.push('', report.retention_note);
   lines.push('');
   if (written.html) lines.push(`report.html: ${displayPath(written.html)}`);

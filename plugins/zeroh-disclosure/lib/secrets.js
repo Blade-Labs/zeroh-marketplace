@@ -15,8 +15,10 @@ import {
   detectSensitiveData,
   looksLikeCodeValue,
   nameType,
+  TOP_LEVEL_DOMAINS,
 } from './detector.js';
 import { isLoopbackHost } from './loopback.js';
+import { shellDestinations } from './shell-destinations.js';
 import { NAMED_TOKEN_RE, TOKEN_RE } from './token-pattern.js';
 export { loadAllowRules } from './allow-rules.js';
 
@@ -813,14 +815,7 @@ export function builtInDestinations(value) {
   }
   return null;
 }
-const ROOT_ZONE_TLDS = new Set(
-  JSON.parse(
-    readFileSync(
-      new URL('./rules/tlds.generated.json', import.meta.url),
-      'utf8',
-    ),
-  ).tlds,
-);
+const ROOT_ZONE_TLDS = new Set(TOP_LEVEL_DOMAINS);
 
 function addHost(hosts, candidate) {
   const host = String(candidate)
@@ -916,38 +911,67 @@ const CODE_RECEIVERS = new Set([
   'user',
   'window',
 ]);
-// Commands whose bare operands are hosts.
-const NETWORK_COMMAND_RE =
-  /(?:^|[\s"'(`])(?:curl|wget|ssh|mosh|nc|ncat|netcat|telnet|ping|ping6|dig|nslookup|host|ftp|sftp|http|https|xh|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)(?=\s)/i;
-// Command options whose operand is a local file (`curl -o out.zip`).
-const FILE_OPTION_RE =
-  /(?:^|\s)(?:-[oOTKE]|--output|--upload-file|--config|--cacert|--cert|--key|--data-binary|-d|--data|-F|--form|--input-file)[\s=]*["']?[^\s"']*$/;
-
-function commandSegmentBefore(text, index) {
-  const before = text.slice(Math.max(0, index - 400), index);
-  const parts = before.split(/[;|&\n]|\\n/u);
-  return parts[parts.length - 1];
-}
-
-// True when a dotted word is a file or code, not a destination.
-function fileOrCodeWord(text, start, end, host) {
+// True when a dotted word outside a network command is a file or code, not a
+// destination: a path segment, an address, a call, a file on disk (relative
+// to `cwd`), a member access (`user.name`, `app.run`) or a source file
+// (`app.py`). A word with a port (`user.name:8080`) is a host. Operands of a
+// network command never come here: lib/shell-destinations.js reads them, and
+// they are hosts whatever they look like (Astra finding 2, re-review R2).
+function fileOrCodeWord(text, start, end, host, cwd) {
   const prev = text[start - 1];
   if ((prev === '/' && text[start - 2] !== '/') || prev === '\\') return true;
   if (prev === '@' || prev === '<' || prev === '>') return true;
   if (text[end] === '(') return true;
   const labels = host.split('.');
-  if (labels.length === 2 && CODE_RECEIVERS.has(labels[0])) return true;
   const tld = labels[labels.length - 1];
-  if (!FILE_EXTENSION_TLDS.has(tld)) return false;
-  const segment = commandSegmentBefore(text, start);
-  if (NETWORK_COMMAND_RE.test(segment) && !FILE_OPTION_RE.test(segment))
-    return false;
-  return true;
+  const port = /^:\d{1,5}(?![\w.])/u.test(text.slice(end));
+  if (port && !FILE_EXTENSION_TLDS.has(tld)) return false;
+  if (existsOnDisk(text.slice(start, end), cwd)) return true;
+  if (labels.length === 2 && CODE_RECEIVERS.has(labels[0])) return true;
+  return FILE_EXTENSION_TLDS.has(tld);
 }
 
-export function hostsIn(text) {
+function existsOnDisk(word, cwd) {
+  try {
+    return existsSync(path.resolve(cwd || process.cwd(), word));
+  } catch {
+    return false;
+  }
+}
+
+// The commands inside `text`: the `command` fields of a tool input in JSON,
+// or the text itself.
+function commandsIn(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const input = JSON.parse(trimmed);
+      return typeof input?.command === 'string' ? [input.command] : [];
+    } catch {
+      // Not JSON: read it as a command.
+    }
+  }
+  return [text];
+}
+
+// The destination operands of the network commands in `command` (Bash, or
+// PowerShell when Bash cannot read it), loopback excluded.
+export function networkHostsIn(command, { shell = null } = {}) {
+  const hosts = new Set();
+  let found = shellDestinations(command, { shell: shell || 'bash' });
+  if (!found.ok && !shell) {
+    const powershell = shellDestinations(command, { shell: 'powershell' });
+    if (powershell.ok) found = powershell;
+  }
+  for (const host of found.destinations) addHost(hosts, host);
+  return [...hosts];
+}
+
+export function hostsIn(text, { cwd = process.cwd() } = {}) {
   text = String(text);
   const hosts = new Set();
+  for (const command of commandsIn(text))
+    for (const host of networkHostsIn(command)) hosts.add(host);
   for (const m of text.matchAll(
     /\b(?:https?|wss?|ftp):\/\/(?:[^\s@/'"]*@)?([A-Za-z0-9.-]+|\[[0-9a-f:.]+\])/gi,
   )) {
@@ -964,7 +988,7 @@ export function hostsIn(text) {
     const explicit = userAt || /:\d{1,5}$/u.test(match[0]);
     const startsWithDot = text[start - 1] === '.';
     if (startsWithDot) continue;
-    if (!userAt && fileOrCodeWord(text, start, end, host)) continue;
+    if (!userAt && fileOrCodeWord(text, start, end, host, cwd)) continue;
     if (explicit || hasRootZoneTld(host)) addHost(hosts, host);
   }
   for (const match of text.matchAll(
@@ -1055,9 +1079,18 @@ export function mcpServerAllowed({ token, entry }, rules, server) {
 }
 
 // A restored secret may only travel to hosts allowed for it. With no host in
-// the text there is nothing to check (a local script, a file edit).
-export function checkDestinations(restored, text, vault, rules) {
-  const hosts = hostsIn(text);
+// the text there is nothing to check here (a local script, a file edit);
+// what could not be read is the caller's (shellDestinations' uncertain).
+// `hosts` replaces the hosts found in `text` (the PreToolUse hook passes the
+// ones it read from the command with the shell it runs in).
+export function checkDestinations(
+  restored,
+  text,
+  vault,
+  rules,
+  { hosts: given = null, cwd } = {},
+) {
+  const hosts = given ?? hostsIn(text, { cwd });
   if (!hosts.length) return { ok: true, violations: [] };
   const violations = [];
   const seen = new Set();
@@ -1088,6 +1121,22 @@ export function checkDestinations(restored, text, vault, rules) {
 
 const KEY_FILE_RE =
   /(?:^|\/)(?:id_(?:rsa|dsa|ecdsa|ed25519)(?!\.pub)|[^/]+\.(?:p12|pfx|jks|keystore|kdbx|ppk|tfstate|tfstate\.backup)|allow\.key|vault\.key|\.git-credentials|\.netrc|\.pgpass|kubeconfig|\.kube\/config|\.aws\/credentials|\.docker\/config\.json)$/i;
+
+// ZeroH's own keys: reading one would undo the masking itself, so these stay
+// closed in every mode. (Everything else under ZEROH_HOME, session signing
+// keys included, is closed by the settings guard.)
+const ZEROH_KEY_FILE_RE = /(?:^|[\\/])(?:allow|vault)\.key$/iu;
+
+export function isZeroHSecretPath(p) {
+  return ZEROH_KEY_FILE_RE.test(String(p ?? ''));
+}
+
+// True when a shell command names one of ZeroH's own keys.
+export function commandNamesZeroHSecret(command) {
+  return String(command)
+    .split(/[\s'"=<>|;&()]+/u)
+    .some((word) => word && isZeroHSecretPath(word));
+}
 
 export function isSensitivePath(p, root = process.cwd()) {
   const s = String(p);

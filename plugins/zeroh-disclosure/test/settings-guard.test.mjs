@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Isolated temporary homes for every test (see helpers.mjs).
-import './helpers.mjs';
+import { runHook, tempProject } from './helpers.mjs';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -543,7 +550,6 @@ test('shell writes to Claude settings are denied unless provably read-only', () 
     ['Bash', 'mv x ~/.claude/settings.json'],
     ['Bash', "sed -i 's/true/false/' .claude/settings.json"],
     ['Bash', "python3 -c \"open('.claude/settings.json','w')\""],
-    ['Bash', 'cat "$(echo .claude/settings.json)"'],
     ['Bash', 'echo x > "$CLAUDE_CONFIG_DIR/settings.json"'],
     ['PowerShell', "Set-Content .claude\\settings.json '{}'"],
     ['PowerShell', 'Copy-Item x.json $env:CLAUDE_CONFIG_DIR\\settings.json'],
@@ -555,11 +561,23 @@ test('shell writes to Claude settings are denied unless provably read-only', () 
     'cat .claude/settings.json',
     'jq .permissions .claude/settings.json',
     'grep -n hooks .claude/settings.local.json',
+    // rc.2 pass mode: a read through a substitution is still a read.
+    'cat "$(echo .claude/settings.json)"',
     'npm test',
     'git status',
   ]) {
     assert.equal(denied('Bash', command), false, command);
   }
+  // rc.2 block mode (opt-in): only plain reads with listed options.
+  const blocked = (command) =>
+    deniesClaudeControlChange('Bash', { command }, root, {
+      ...options,
+      mode: 'block',
+    });
+  assert.equal(blocked('cat "$(echo .claude/settings.json)"'), true);
+  assert.equal(blocked('grep -n hooks .claude/settings.local.json'), true);
+  assert.equal(blocked('cat .claude/settings.json'), false);
+  assert.equal(blocked('jq .permissions .claude/settings.json'), false);
 });
 
 test('the Claude CLI cannot disable, uninstall or reconfigure plugins', () => {
@@ -765,4 +783,207 @@ test('model-invocable ZeroH commands and other skills pass the user-only check',
       JSON.stringify(input),
     );
   }
+});
+
+// Astra finding 1: `rg --pre CMD` runs CMD on every file it searches, so an
+// "inspection" command could delete or rewrite Claude settings and hook files.
+test('inspection commands that can run another program are not read-only (Astra 1)', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'zeroh-guard-rg-pre-'));
+  const home = path.join(directory, 'home');
+  const plugin = path.join(directory, 'installed-plugin');
+  mkdirSync(path.join(home, '.claude'), { recursive: true });
+  mkdirSync(path.join(plugin, 'hooks'), { recursive: true });
+  const settings = path.join(home, '.claude', 'settings.json');
+  const hooks = path.join(plugin, 'hooks', 'hooks.json');
+  const options = { env: { HOME: home }, pluginDir: plugin };
+  const writeFixtures = () => {
+    writeFileSync(settings, '{"env":{"ZEROHFAKE":"1"}}\n');
+    writeFileSync(hooks, '{"hooks":{}}\n');
+  };
+  writeFixtures();
+  const denied = [
+    `rg --pre rm ZEROHFAKE ${settings}`,
+    `rg --pre=rm ZEROHFAKE ${settings}`,
+    `rg -i --pre "rm" ZEROHFAKE ${hooks}`,
+    `rg --hostname-bin=/tmp/zerohfake-script ZEROHFAKE ${settings}`,
+    `rg --pre rm Elicitation ${settings}`,
+    `cat \`rm ${settings}\` ${settings}`,
+    `less +!rm ${settings}`,
+  ];
+  for (const tool of ['Bash', 'Monitor', 'PowerShell']) {
+    for (const command of denied) {
+      assert.equal(
+        deniesZeroHSettings(tool, { command }, directory, options),
+        true,
+        `${tool}: ${command}`,
+      );
+    }
+  }
+  // PowerShell's subexpression runs Remove-Item; to Bash the same text is a
+  // syntax error that runs nothing (rc.2: it passes there, as unparseable).
+  const psDelete = `Get-Content (Remove-Item ${settings})`;
+  assert.equal(
+    deniesZeroHSettings(
+      'PowerShell',
+      { command: psDelete },
+      directory,
+      options,
+    ),
+    true,
+  );
+  assert.equal(
+    deniesZeroHSettings('Bash', { command: psDelete }, directory, options),
+    false,
+  );
+  assert.equal(
+    deniesElicitationHookEdits(
+      'Bash',
+      { command: `rg --pre rm Elicitation ${directory}/.claude/settings.json` },
+      directory,
+    ),
+    true,
+  );
+  // Plain reads of the same files stay allowed.
+  for (const command of [
+    `rg ZEROHFAKE ${settings}`,
+    `rg --pre-glob '*.pdf' ZEROHFAKE ${settings}`,
+    `cat ${settings}`,
+    `Get-Content ${settings}`,
+  ]) {
+    assert.equal(
+      deniesZeroHSettings('Bash', { command }, directory, options),
+      false,
+      command,
+    );
+  }
+  // The fixture shows what the denied command would have done.
+  const rg = spawnSync('rg', ['--version'], { encoding: 'utf8' });
+  if (rg.status === 0) {
+    spawnSync('rg', ['--pre', 'rm', 'ZEROHFAKE', settings], { cwd: directory });
+    assert.equal(existsSync(settings), false, 'rg --pre rm removes the file');
+    writeFixtures();
+  }
+  assert.equal(existsSync(settings), true);
+});
+
+// Astra finding 3: the CLI on PATH (or by path) must not let the model turn
+// protection off, repair or uninstall from its own shell.
+test('protection-changing CLI subcommands are denied from any shell tool (Astra 3)', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'zeroh-guard-cli-'));
+  const options = { env: { HOME: path.join(directory, 'home') } };
+  const denied = [
+    'zeroh-disclosure proxy off',
+    'zeroh-disclosure proxy on',
+    'zeroh-disclosure doctor --fix',
+    'zeroh-disclosure doctor',
+    'zeroh-disclosure uninstall --yes',
+    'zeroh-disclosure uninstall --yes --force',
+    'zeroh-disclosure vault clear',
+    'zeroh-disclosure banner off',
+    'zeroh-disclosure tokens',
+    'zeroh-disclosure --cwd /tmp/x proxy off',
+    'npx zeroh-disclosure proxy off',
+    'npx -y zeroh-disclosure uninstall --yes',
+    'pnpm exec zeroh-disclosure proxy off',
+    '/usr/local/bin/zeroh-disclosure proxy off',
+    'node /opt/zerohfake/bin/zeroh-disclosure.mjs proxy off',
+    'node "C:\\zerohfake\\bin\\zeroh-disclosure.mjs" doctor --fix',
+    'ZEROHFAKE=1 zeroh-disclosure proxy off',
+    'true && zeroh-disclosure proxy off',
+    'echo ok; zeroh-disclosure uninstall --yes',
+    'zeroh-disclosure.cmd proxy off',
+    '& zeroh-disclosure proxy off',
+    'x=$(zeroh-disclosure proxy off)',
+    '$(which zeroh-disclosure) proxy off',
+    '`command -v zeroh-disclosure` doctor --fix',
+    'bash -c "zeroh-disclosure proxy off"',
+    'iex "zeroh-disclosure uninstall --yes"',
+    '"zeroh-disclosure" proxy off',
+  ];
+  const allowed = [
+    'echo zeroh-disclosure',
+    'zeroh-disclosure catalog',
+    'zeroh-disclosure --help',
+    'zeroh-disclosure verify receipt.json',
+    'git log --grep zeroh-disclosure',
+    'npm test',
+    // A path that ends in the plugin's folder is an argument, not the CLI.
+    'rg ZEROHFAKE apps/zeroh-marketplace/plugins/zeroh-disclosure lib',
+    'git diff -- apps/zeroh-marketplace/plugins/zeroh-disclosure hooks',
+    'cd apps/zeroh-marketplace/plugins/zeroh-disclosure && npm test',
+  ];
+  for (const tool of ['Bash', 'Monitor', 'PowerShell']) {
+    for (const command of denied) {
+      assert.equal(
+        deniesZeroHSettings(tool, { command }, directory, options),
+        true,
+        `${tool}: ${command}`,
+      );
+    }
+    for (const command of allowed) {
+      assert.equal(
+        deniesZeroHSettings(tool, { command }, directory, options),
+        false,
+        `${tool}: ${command}`,
+      );
+    }
+  }
+});
+
+// Astra re-review R6: a quoted argument is text unless an interpreter runs
+// it. Searching for or printing a management command is allowed; handing it
+// to `bash -c`, `eval`, `Invoke-Expression` or `pwsh -Command` is not.
+test('quoted CLI text is a command only where an interpreter runs it (Astra R6)', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'zeroh-guard-quoted-'));
+  const options = { env: { HOME: path.join(directory, 'home') } };
+  const allowed = [
+    "rg 'zeroh-disclosure proxy off' README.md",
+    'echo "zeroh-disclosure proxy off"',
+    'grep -n "zeroh-disclosure uninstall --yes" docs/troubleshooting.md',
+    'Select-String -Pattern "zeroh-disclosure doctor --fix" README.md',
+    'git commit -m "document zeroh-disclosure proxy off"',
+    'printf \'%s\\n\' "run zeroh-disclosure proxy off in a terminal"',
+  ];
+  const denied = [
+    'bash -c "zeroh-disclosure proxy off"',
+    "sh -c 'zeroh-disclosure uninstall --yes'",
+    'bash -lc "zeroh-disclosure proxy off"',
+    'sudo bash -c "zeroh-disclosure proxy off"',
+    'eval "zeroh-disclosure proxy off"',
+    'iex "zeroh-disclosure uninstall --yes"',
+    'Invoke-Expression "zeroh-disclosure proxy off"',
+    'pwsh -Command "zeroh-disclosure proxy off"',
+    'powershell.exe -c "zeroh-disclosure doctor --fix"',
+    'cmd /c "zeroh-disclosure proxy off"',
+  ];
+  for (const tool of ['Bash', 'Monitor', 'PowerShell']) {
+    for (const command of allowed)
+      assert.equal(
+        deniesZeroHSettings(tool, { command }, directory, options),
+        false,
+        `${tool}: ${command}`,
+      );
+    for (const command of denied)
+      assert.equal(
+        deniesZeroHSettings(tool, { command }, directory, options),
+        true,
+        `${tool}: ${command}`,
+      );
+  }
+  // The same decisions through the real PreToolUse hook.
+  const project = tempProject();
+  const decision = (command) =>
+    runHook(
+      'pre-tool-use',
+      { tool_name: 'Bash', tool_input: { command } },
+      {
+        project,
+      },
+    ).json?.hookSpecificOutput?.permissionDecision ?? null;
+  assert.notEqual(
+    decision("rg 'zeroh-disclosure proxy off' README.md"),
+    'deny',
+  );
+  assert.notEqual(decision('echo "zeroh-disclosure proxy off"'), 'deny');
+  assert.equal(decision('bash -c "zeroh-disclosure proxy off"'), 'deny');
 });

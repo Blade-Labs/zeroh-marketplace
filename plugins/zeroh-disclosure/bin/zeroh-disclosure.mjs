@@ -1,11 +1,23 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
 // The zeroh-disclosure command line: allow rules, unmask grants, receipts and
-// reports, the vault, the proxy, and doctor. Run it from your own terminal.
-import { readdirSync, rmSync, statSync } from 'node:fs';
+// reports, the vault, the proxy, and doctor. Every subcommand that changes
+// what ZeroH protects asks lib/user-authority.js first (Astra R3): it runs
+// for the user's own typed slash command, or after the user confirms it in a
+// terminal outside Claude Code; from anywhere else it changes nothing.
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
+import { writePrivateFile } from '../lib/private-fs.js';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../lib/config.js';
+import { requireUserAuthority } from '../lib/user-authority.js';
 import { cleanupStaleRunFiles } from '../lib/late-bind.js';
 import {
   envSessionId,
@@ -33,7 +45,6 @@ import {
   activeGrants,
   capSummary,
   formatGrantTimeLeft,
-  formatStatusline,
   isPersonalDataType,
   isSecretType,
   normaliseKind,
@@ -71,12 +82,25 @@ import {
   readProxyReport,
 } from '../lib/proxy-report.js';
 
+const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
 // --cwd wins; otherwise the project root the hooks use (projectRootFromEnv:
 // CLAUDE_PROJECT_DIR, else the project this directory belongs to).
 const cwd = path.resolve(args.cwd || projectRootFromEnv(process.cwd()));
 await loadConfig({ cwd });
+
+// True when the user asked for this very command (see lib/user-authority.js);
+// otherwise prints why nothing changed. `details`: lines the terminal
+// confirmation shows above the code.
+async function authorized(details = []) {
+  const result = await requireUserAuthority({
+    argv: process.argv.slice(2),
+    details,
+  });
+  if (!result.ok) console.log(result.message);
+  return result.ok;
+}
 
 try {
   if (command === 'allow') await cmdAllow(args, cwd);
@@ -94,6 +118,7 @@ try {
   else if (command === 'uninstall') await cmdUninstall(args);
   else if (command === 'catalog') cmdCatalog(args);
   else if (command === 'receipts') await cmdReceipts(args);
+  else if (command === 'uncertain') await cmdUncertain(args);
   else help(command ? 1 : 0);
 } catch (e) {
   console.error(`zeroh-disclosure: ${e.message}`);
@@ -121,6 +146,7 @@ async function cmdReceipts(args) {
       `receipts keep needs one of ${Object.keys(RECEIPT_RETENTION).join(', ')}`,
     );
   }
+  if (!(await authorized())) return;
   const file = path.join(zerohHome(), 'config.env');
   const { readFileSync: read, existsSync: exists } = await import('node:fs');
   const lines = exists(file)
@@ -139,6 +165,48 @@ async function cmdReceipts(args) {
     retentionLine({ ZEROH_RECEIPT_RETENTION: value }),
     `Saved in ${file}. A repository's .zeroh.env may only shorten it. Older receipts go at the next Claude Code start.`,
   ]);
+}
+
+// What ZeroH does with a case it cannot prove either way (a destination it
+// cannot read, a command it cannot parse): `uncertain` shows it, `uncertain
+// pass|block` writes ZEROH_UNCERTAIN to the user's own config.env.
+async function cmdUncertain(args) {
+  const { uncertainMode } = await import('../lib/config.js');
+  const describe = (mode) =>
+    mode === 'block'
+      ? 'Uncertain cases: block (ZeroH denies what it cannot prove safe, such as a restored secret sent to a destination it cannot read).'
+      : 'Uncertain cases: pass (the default: ordinary work is never stopped, and a secret is restored as before when its destination cannot be proven).';
+  const value = args._[1];
+  if (!value) {
+    const mode = uncertainMode();
+    print({ uncertain: mode }, args.json, [describe(mode)]);
+    return;
+  }
+  const mode = String(value).toLowerCase();
+  if (mode !== 'pass' && mode !== 'block')
+    throw new Error('uncertain needs pass or block');
+  if (!(await authorized())) return;
+  const file = writeUserSetting('ZEROH_UNCERTAIN', mode);
+  print({ uncertain: mode, file }, args.json, [
+    describe(mode),
+    `Saved in ${file}. A repository's .zeroh.env may only make it block. It applies from your next prompt.`,
+  ]);
+}
+
+// Sets `key` in the user's own <ZEROH_HOME>/config.env, keeping every other
+// line. Returns the file.
+function writeUserSetting(key, value) {
+  const file = path.join(zerohHome(), 'config.env');
+  const pattern = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`, 'u');
+  const lines = existsSync(file)
+    ? readFileSync(file, 'utf8')
+        .split(/\r?\n/u)
+        .filter((line) => !pattern.test(line))
+    : [];
+  while (lines.length && lines.at(-1) === '') lines.pop();
+  lines.push(`${key}=${value}`, '');
+  writePrivateFile(file, lines.join('\n'));
+  return file;
 }
 
 // What the free plugin detects, from the live rule set (T-35).
@@ -249,6 +317,7 @@ async function cmdAllow(args, cwd) {
     );
   }
   const rules = updateAllowRule(loaded.rules, name, host, { remove });
+  if (!(await authorized())) return;
   writeAllowRules(cwd, rules);
   const action = remove ? 'removed' : 'allowed';
   print({ action, name, host, rules }, args.json, [
@@ -276,6 +345,7 @@ async function cmdUnmask(args, cwd) {
     if (!kind || !cap) {
       throw new Error('unmask caps requires <KIND> <15m|1h|session|0>');
     }
+    if (!(await authorized())) return;
     const caps = writeCap(kind, cap);
     print(
       { action: 'cap_updated', kind: kind.toUpperCase(), cap, caps },
@@ -354,21 +424,101 @@ function unmaskRequest(args, rawKind) {
   ]);
 }
 
+// `statusline` prints ZeroH's status line (lib/statusline.js; Claude Code
+// runs it, see lib/statusline-settings.js). `statusline on|off` turns
+// Claude Code's statusLine entry on or off (lib/statusline-settings.js), for
+// the user only.
 async function cmdStatusline(args, cwd) {
-  let stdinSessionId = null;
-  if (!process.stdin.isTTY) {
-    try {
-      stdinSessionId = JSON.parse(await readStdin()).session_id ?? null;
-    } catch {
-      stdinSessionId = null;
-    }
+  const action = args._[1];
+  if (action === 'on' || action === 'off') {
+    await cmdStatuslineSetting(args, action);
+    return;
   }
-  const grants = activeGrants(cwd, {
-    sessionId: args.session || envSessionId() || stdinSessionId,
+  if (action === 'style') {
+    const { readStyle, styleFilePath } = await import('../lib/statusline.js');
+    const file = styleFilePath();
+    const current = readStyle();
+    print({ file, style: current }, args.json, [
+      `Status line style: ${file}${existsSync(file) ? '' : ' (not created yet: the default applies)'}`,
+      'Ask Claude to change it ("make ZeroH\'s status line compact, no emoji"), or edit it yourself. For example:',
+      '',
+      JSON.stringify(
+        {
+          version: 1,
+          fields: ['name', 'state', 'masked', 'receipt'],
+          separator: ' | ',
+          emoji: false,
+          wording: 'compact',
+        },
+        null,
+        2,
+      ),
+      '',
+      'While ZeroH is not 🟢 the state and its fix always show. All keys: docs/statusline.md in the plugin.',
+    ]);
+    return;
+  }
+  if (action && action !== 'segment') {
+    throw new Error(
+      'statusline takes on, off, style or segment, or nothing to print the status line',
+    );
+  }
+  const { statuslineMain } = await import('../lib/statusline.js');
+  const argv = [];
+  if (args.segment || action === 'segment') argv.push('segment');
+  if (args.json) argv.push('--json');
+  if (typeof args.session === 'string') argv.push('--session', args.session);
+  if (args.cwd) argv.push('--cwd', cwd);
+  await statuslineMain(argv);
+}
+
+async function cmdStatuslineSetting(args, action) {
+  const { resolveClaudeSettingsPath } =
+    await import('../lib/claude-settings.js');
+  const settingsPath = resolveClaudeSettingsPath();
+  if (!(await authorized())) return;
+  const { turnStatuslineOff, turnStatuslineOn } =
+    await import('../lib/statusline-settings.js');
+  const home = zerohHome();
+  if (action === 'off') {
+    const { result } = turnStatuslineOff({ settingsPath, home });
+    print({ statusline: result, settings: settingsPath }, args.json, [
+      {
+        off: `Status line off: ZeroH's statusLine entry was removed from ${settingsPath}.`,
+        theirs:
+          "Your status line is your own, so ZeroH left it as it is. If your script adds ZeroH's segment, remove that line to hide it.",
+        none: 'The ZeroH status line was not on.',
+      }[result],
+    ]);
+    return;
+  }
+  const { result, command, segment } = turnStatuslineOn({
+    settingsPath,
+    home,
+    pluginRoot: PLUGIN_ROOT,
   });
-  const status = formatStatusline(grants);
-  if (args.json) print({ status, grants }, true, []);
-  else if (status) console.log(status);
+  const lines = {
+    on: [
+      `Status line on: Claude Code shows "🛡 ZeroH · 🟢 protected · …" under the prompt (${settingsPath}).`,
+      "If it doesn't appear within a few seconds, restart Claude Code. /zeroh-disclosure:settings statusline off removes it.",
+    ],
+    already: [
+      'The ZeroH status line is already on. /zeroh-disclosure:settings statusline off removes it.',
+    ],
+    theirs: [
+      `You already have a status line in ${settingsPath}, so ZeroH left it as it is.`,
+      "To show ZeroH in it, add ZeroH's segment to your status line script. It reads the same JSON your script gets on stdin, for example:",
+      '  input=$(cat)',
+      `  zeroh=$(printf '%s' "$input" | ${segment})`,
+      '  echo "<your line> · $zeroh"',
+      'The README section "Status line" has the same command to copy.',
+    ],
+  }[result];
+  print(
+    { statusline: result, settings: settingsPath, command },
+    args.json,
+    lines,
+  );
 }
 
 async function cmdVault(args, cwd) {
@@ -399,23 +549,12 @@ async function cmdVault(args, cwd) {
     return;
   }
   if (action === 'clear') {
-    // Run from a slash command there is no terminal to ask in (T-37): an
-    // answer piped in still counts; none asks for --yes.
-    if (!args.yes && !process.stdin.isTTY) {
-      const answer = (await readStdin()).trim().toLowerCase();
-      if (!answer) {
-        throw new Error(
-          'vault clear removes every stored value of this project: add --yes to confirm (/zeroh-disclosure:settings vault clear --yes)',
-        );
-      }
-      if (answer !== 'yes') {
-        console.log('Vault clear cancelled.');
-        return;
-      }
-    } else if (!args.yes && !(await confirmVaultClear(cwd))) {
-      console.log('Vault clear cancelled.');
-      return;
+    if (!args.yes) {
+      throw new Error(
+        'vault clear removes every stored value of this project: add --yes to confirm (/zeroh-disclosure:settings vault clear --yes)',
+      );
     }
+    if (!(await authorized([`  project: ${cwd}`]))) return;
     const result = clearProject(cwd);
     print({ project: cwd, ...result }, args.json, [
       result.cleared
@@ -460,22 +599,6 @@ function clearProject(root) {
   }
   const commitmentKeys = pruneCommitmentKeys(root);
   return { cleared, values, runFiles, commitmentKeys };
-}
-
-async function confirmVaultClear(root) {
-  const { createInterface } = await import('node:readline/promises');
-  const readline = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  try {
-    const answer = await readline.question(
-      `Clear every stored value for ${root}? Type "yes" to continue: `,
-    );
-    return answer.trim().toLowerCase() === 'yes';
-  } finally {
-    readline.close();
-  }
 }
 
 function formatAge(ageMs) {
@@ -585,6 +708,9 @@ async function cmdReport(args, cwd) {
 
 async function cmdProxy(args) {
   const action = args._[1];
+  if (action !== 'on' && action !== 'off')
+    throw new Error('proxy requires "off" or "on"');
+  if (!(await authorized())) return;
   if (action === 'on') {
     const { proxyOn } = await import('../lib/proxy-manager.js');
     const result = proxyOn();
@@ -595,7 +721,6 @@ async function cmdProxy(args) {
     ]);
     return;
   }
-  if (action !== 'off') throw new Error('proxy requires "off" or "on"');
   const { stopDefaultProxy } = await import('../lib/proxy-manager.js');
   const result = await stopDefaultProxy({ remember: true });
   const remaining = result.remaining || [];
@@ -646,12 +771,12 @@ async function cmdUninstall(args) {
     'This removes ZeroH Disclosure from this machine, in this order:',
     '  - the plugin from Claude Code (claude plugin uninstall), so no new session sets ZeroH up again',
     "  - the local proxy's entry in your Claude Code settings (your own setting goes back), the proxy and its login item",
+    "  - ZeroH's status line in your Claude Code settings, if you turned it on (your own status line stays)",
     `  - ${home} (vault, keys, receipts and reports)`,
     ...projects.map((dir) => `  - ${dir} (left by an earlier test build)`),
   ];
-  // From a slash command there is no terminal to ask in (T-38): show what
-  // it removes and how to confirm.
-  if (!args.yes && !process.stdin.isTTY) {
+  // Without --yes it only shows what it removes and how to confirm (T-38).
+  if (!args.yes) {
     print({ plan, removed: [] }, args.json, [
       ...plan,
       '',
@@ -660,13 +785,7 @@ async function cmdUninstall(args) {
     ]);
     return;
   }
-  if (
-    !args.yes &&
-    !(await confirm(`${plan.join('\n')}\nType "yes" to continue: `))
-  ) {
-    console.log('Uninstall cancelled; nothing was removed.');
-    return;
-  }
+  if (!(await authorized(plan))) return;
   // The plugin first, so no new session sets ZeroH up again; then the
   // tombstone, so a session still running does nothing more (T-38).
   const { removePlugin, uninstallCommandFor } =
@@ -676,15 +795,41 @@ async function cmdUninstall(args) {
   try {
     markUninstalled();
   } catch {
-    // A temporary folder that can't be written: sessions still running may
-    // set ZeroH up again until they exit (said below).
+    // A ZeroH folder that can't be written: sessions still running may set
+    // ZeroH up again until they exit (said below).
   }
   const { removeProxyEverywhere } = await import('../lib/proxy-manager.js');
   const proxy = await removeProxyEverywhere();
+  // Only ZeroH's own statusLine entry, from every settings file it was
+  // written to; a status line of the user's stays.
+  let statusline = [];
+  try {
+    const { resolveClaudeSettingsPath } =
+      await import('../lib/claude-settings.js');
+    const { removeEverywhere } = await import('../lib/statusline-settings.js');
+    statusline = removeEverywhere({
+      home,
+      settingsPaths: [resolveClaudeSettingsPath()],
+    });
+  } catch (error) {
+    console.error(
+      `zeroh-disclosure: could not remove the status line entry (${error.message})`,
+    );
+  }
+  const { UNINSTALL_MARKER } = await import('../lib/uninstall-marker.js');
   const removed = [];
   for (const dir of [home, ...projects]) {
     try {
-      rmSync(dir, { recursive: true, force: true });
+      if (dir === home) {
+        // Everything but the tombstone, which running sessions still read.
+        for (const name of readdirSync(dir)) {
+          if (name !== UNINSTALL_MARKER) {
+            rmSync(path.join(dir, name), { recursive: true, force: true });
+          }
+        }
+      } else {
+        rmSync(dir, { recursive: true, force: true });
+      }
       removed.push(dir);
     } catch (error) {
       console.error(
@@ -708,8 +853,9 @@ async function cmdUninstall(args) {
         ),
       ];
   const running = Boolean(process.env.CLAUDE_CODE_SESSION_ID) || live.length;
-  print({ ...proxy, plugin, removed }, args.json, [
+  print({ ...proxy, plugin, removed, statusline }, args.json, [
     ...pluginLines,
+    ...statusline.map((file) => `Removed ZeroH's status line from ${file}.`),
     proxy.restored.length
       ? `Took the ZeroH entry out of ${proxy.restored.length} Claude Code settings file(s).`
       : 'No Claude Code settings file had a ZeroH entry.',
@@ -806,24 +952,15 @@ function notAZerohHome(dir) {
     'projects.json',
     'projects',
     'session-keys',
+    'statusline.json',
+    'first-run.json',
+    'plugin-root.json',
+    'uninstalled',
   ];
   if (names.length && !names.some((name) => markers.includes(name))) {
     return 'holds none of the files ZeroH Disclosure keeps';
   }
   return null;
-}
-
-async function confirm(question) {
-  const { createInterface } = await import('node:readline/promises');
-  const readline = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  try {
-    return (await readline.question(question)).trim().toLowerCase() === 'yes';
-  } finally {
-    readline.close();
-  }
 }
 
 function proxySettingsLine(result) {
@@ -841,6 +978,9 @@ function proxySettingsLine(result) {
 
 async function cmdBanner(args) {
   const mode = args._[1];
+  if (!['full', 'compact', 'off'].includes(String(mode || '').toLowerCase()))
+    throw new Error('banner mode must be full, compact, or off');
+  if (!(await authorized())) return;
   const file = writeBannerMode(mode);
   print({ mode, file }, args.json, [
     `Banner mode: ${mode}.`,
@@ -962,6 +1102,7 @@ async function cmdDoctor(args, cwd) {
     return;
   }
   const fix = Boolean(args.fix);
+  if (fix && !(await authorized())) return;
   const { diagnoseProxy } = await import('../lib/proxy-manager.js');
   let proxy;
   try {
@@ -1066,7 +1207,11 @@ function parseArgs(argv) {
       else out.json = true;
       continue;
     }
-    if (['list', 'fix', 'report', 'keep-backups', 'force'].includes(key)) {
+    if (
+      ['list', 'fix', 'report', 'keep-backups', 'force', 'segment'].includes(
+        key,
+      )
+    ) {
       out[key] = true;
       continue;
     }
@@ -1077,13 +1222,6 @@ function parseArgs(argv) {
     out[key] = argv[++i];
   }
   return out;
-}
-
-async function readStdin() {
-  if (process.stdin.isTTY) return '';
-  let raw = '';
-  for await (const chunk of process.stdin) raw += chunk;
-  return raw.trim();
 }
 
 function print(obj, asJson, lines) {
@@ -1107,7 +1245,8 @@ function help(exit) {
   zeroh-disclosure reports list
   zeroh-disclosure reports show <id>
   zeroh-disclosure reports delete <id>
-  zeroh-disclosure statusline
+  zeroh-disclosure statusline [segment] [--json]
+  zeroh-disclosure statusline on|off|style
   zeroh-disclosure vault status
   zeroh-disclosure vault clear [--yes]
   zeroh-disclosure verify --receipt <turn-json>
@@ -1121,6 +1260,13 @@ function help(exit) {
   zeroh-disclosure uninstall [--yes] [--force]
   zeroh-disclosure catalog [--json]
   zeroh-disclosure receipts [keep forever|1y|90d|30d]
+  zeroh-disclosure uncertain [pass|block]
+
+Commands that change what ZeroH protects (allow, unmask caps, vault clear,
+doctor --fix, banner, proxy, uninstall --yes, receipts keep, uncertain,
+statusline on|off) run
+for your own typed /zeroh-disclosure: command in Claude Code, or in your own
+terminal outside Claude Code after you type the code they show.
 
 Every command acts on the project in --cwd <dir>, else CLAUDE_PROJECT_DIR, else
 the current directory.

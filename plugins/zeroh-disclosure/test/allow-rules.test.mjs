@@ -22,6 +22,7 @@ import {
   tempProject,
   stateDirOf,
 } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 
 function runAllow(project, ...args) {
   return execFileSync(
@@ -30,11 +31,11 @@ function runAllow(project, ...args) {
     {
       cwd: project.dir,
       encoding: 'utf8',
-      env: {
+      env: asUser(['allow', ...args], {
         ...process.env,
         HOME: project.home,
         ZEROH_HOME: project.home,
-      },
+      }),
     },
   );
 }

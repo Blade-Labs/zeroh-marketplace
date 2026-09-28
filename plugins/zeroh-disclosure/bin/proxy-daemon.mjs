@@ -37,7 +37,12 @@ import {
   takeEntryOut,
 } from '../lib/claude-settings.js';
 import { sameSecret } from '../lib/crypto.js';
-import { appendPrivateLog } from '../lib/private-fs.js';
+import {
+  appendPrivateLog,
+  readJsonOr,
+  removeQuietly,
+  writePrivateJson,
+} from '../lib/private-fs.js';
 import {
   networkEnvironment,
   networkFingerprint,
@@ -375,6 +380,7 @@ function stop(reason, { restore = false, unregister = false } = {}) {
       // The login item then points at a missing runtime and starts nothing.
     }
   }
+  removePidFile();
   // Open requests finish; idle connections close.
   server.close(() => process.exit(0));
   server.closeIdleConnections?.();
@@ -427,6 +433,20 @@ try {
   throw error;
 }
 loadedAt = statSync(configPath).mtimeMs;
+// The status line checks this pid is alive (lib/statusline.js proxyAlive).
+const pidFile = path.join(paths.directory, 'daemon.pid');
+try {
+  writePrivateJson(pidFile, { pid: process.pid, port: Number(config.port) });
+} catch {
+  // The status line then can't tell a crash apart; nothing else needs it.
+}
+function removePidFile() {
+  try {
+    if (readJsonOr(pidFile)?.pid === process.pid) removeQuietly(pidFile);
+  } catch {
+    // Stopped before it was written.
+  }
+}
 
 // Leaves within seconds once its home is deleted or taken over.
 refreshLiveInstalls();

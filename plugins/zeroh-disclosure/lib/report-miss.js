@@ -6,8 +6,13 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { detectSensitiveData, shannonEntropy, TOKEN_RE } from './detector.js';
-import { PERSONAL_DATA_KINDS } from './pii/index.js';
+import {
+  detectSensitiveData,
+  GITLEAKS_CATALOG,
+  PERSONAL_DATA_KINDS,
+  shannonEntropy,
+  TOKEN_RE,
+} from './detector.js';
 import * as store from './report-store.js';
 import { Vault } from './vault.js';
 
@@ -28,12 +33,7 @@ const TYPES = new Set([
   'TOKEN',
 ]);
 
-const CATALOG = JSON.parse(
-  readFileSync(
-    fileURLToPath(new URL('./rules/gitleaks.generated.json', import.meta.url)),
-    'utf8',
-  ),
-);
+const CATALOG = GITLEAKS_CATALOG;
 const PLUGIN_VERSION = JSON.parse(
   readFileSync(
     fileURLToPath(new URL('../.claude-plugin/plugin.json', import.meta.url)),

@@ -295,7 +295,7 @@ test('a prompt stopped for a password is signed as blocked with what was found',
   const r = runHook(
     'user-prompt-submit',
     { session_id: 'rc-stop', prompt: typed },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(r.code, 2, r.stderr);
   const { ledger, claims } = turnReceipt(p, 'rc-stop');

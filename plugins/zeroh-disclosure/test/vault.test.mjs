@@ -11,6 +11,7 @@ import { Vault, vaultRetention } from '../lib/vault.js';
 import { restore } from '../lib/secrets.js';
 import { reportMiss } from '../lib/report-miss.js';
 import { tempProject } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 
 const VAULT_URL = pathToFileURL(
   new URL('../lib/vault.js', import.meta.url).pathname,
@@ -627,8 +628,9 @@ test('vault status reports aggregates without values and clear requires consent'
   assert.deepEqual(parsedStatus.counts_by_type, { SECRET: 1 });
   assert.ok(parsedStatus.oldest_last_use_age_ms >= 0);
 
+  // Without --yes nothing is cleared (a piped answer no longer counts).
   const cancelled = runCli(project, env, ['vault', 'clear'], 'no\n');
-  assert.equal(cancelled.status, 0, cancelled.stderr);
+  assert.match(cancelled.stderr, /add --yes to confirm/u);
   assert.equal(new Vault(project.dir, { env }).size, 1);
 
   const cleared = runCli(project, env, ['vault', 'clear', '--yes']);
@@ -640,7 +642,7 @@ test('vault status reports aggregates without values and clear requires consent'
 function runCli(project, env, args, input) {
   return spawnSync(process.execPath, [CLI, ...args], {
     cwd: project.dir,
-    env,
+    env: asUser(args, env),
     input,
     encoding: 'utf8',
   });

@@ -11,6 +11,7 @@ import { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { encodeProjectPath } from '../lib/session.js';
+import { asUser } from './as-user.mjs';
 
 export const PLUGIN = fileURLToPath(new URL('..', import.meta.url));
 // Fake values only. Shaped like real ones so the detector sees them.
@@ -280,7 +281,7 @@ process.on('exit', () => {
   }
 });
 
-export function tempProject({ env = true } = {}) {
+export function tempProject({ env = true, firstRun = false } = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'zeroh-proj-'));
   const home = mkdtempSync(path.join(os.tmpdir(), 'zeroh-home-'));
   projectHomes.push(home);
@@ -298,9 +299,19 @@ export function tempProject({ env = true } = {}) {
   }
   const settings = path.join(dir, '.claude', 'settings.local.json');
   const serviceManager = path.join(home, 'service-manager');
-  process.env.ZEROH_CLAUDE_SETTINGS = settings;
-  process.env.ZEROH_CREDENTIAL_HOME = home;
-  process.env.ZEROH_SERVICE_MANAGER_DIR = serviceManager;
+  // The first-prompt setup (lib/first-run.js) is recorded as decided (the
+  // status line off), so hook tests see only their own notices;
+  // `firstRun: true` leaves it to happen.
+  if (!firstRun) {
+    writeFileSync(
+      path.join(home, 'statusline.json'),
+      JSON.stringify({
+        v: 1,
+        choices: { [path.resolve(settings)]: { choice: 'off' } },
+        paths: [],
+      }),
+    );
+  }
   return {
     dir,
     home,
@@ -378,14 +389,15 @@ export function writeAllow(project, rules) {
         [path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs'), 'allow', name, host],
         {
           cwd: project.dir,
-          env: {
+          // As the user (rc.2 item 1): the ticket UserPromptSubmit mints.
+          env: asUser(['allow', name, host], {
             ...process.env,
             HOME: project.home,
             ZEROH_HOME: project.home,
             ZEROH_CREDENTIAL_HOME: project.home,
             ZEROH_CLAUDE_SETTINGS: project.settings,
             ZEROH_SERVICE_MANAGER_DIR: project.serviceManager,
-          },
+          }),
         },
       );
     }

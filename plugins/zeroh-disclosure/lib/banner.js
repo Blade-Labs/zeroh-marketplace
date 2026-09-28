@@ -173,13 +173,24 @@ const PROXY_WORDS = {
 };
 export const ASK_LINE = "Ask Claude: 'what does ZeroH Disclosure protect?'";
 
-function fullDetails({ proxy, paused, unmaskStatus, retention }) {
+// What happens to a secret the user types when the proxy can't mask it, by
+// the `uncertain` setting (lib/config.js): sent with a "not protected" line
+// by default, stopped with `uncertain block`.
+function typedSecretWords(uncertain) {
+  return uncertain === 'block'
+    ? 'typed secrets are stopped, not sent'
+    : 'a typed secret is sent with a "not protected" line';
+}
+
+function fullDetails({ proxy, paused, unmaskStatus, retention, uncertain }) {
   const lines = [
     paused
       ? "Masking is paused: ZeroH can't open its vault (see below)."
       : MASKS_TYPING.has(proxy)
         ? 'Masks what you type, files Claude reads, command output and tool results.'
-        : 'Masks files Claude reads, command output and tool results. A prompt with a secret is stopped, not sent.',
+        : uncertain === 'block'
+          ? 'Masks files Claude reads, command output and tool results. A prompt with a secret is stopped, not sent.'
+          : 'Masks files Claude reads, command output and tool results. What you type is not masked: a prompt with a secret is sent, with a notice.',
     'Images and scanned PDFs are not masked; they pass with a notice.',
   ];
   if (PROXY_WORDS[proxy]) lines.push(PROXY_WORDS[proxy]);
@@ -192,18 +203,18 @@ const CONTEXT_NOTE = {
   on: 'the proxy masks them',
   ready: 'the proxy masks them from your first prompt on',
 };
-const PROXY_LINE = {
-  overridden:
-    "⚠ ANTHROPIC_BASE_URL is set outside ZeroH's settings (your shell or another settings file), so what you type can't be masked; typed secrets are stopped instead",
-  'no-login-item':
-    "⚠ nothing on this system can keep ZeroH's local proxy running after a restart (no login item), so what you type can't be masked; typed secrets are stopped instead. Files and command output are still masked",
-  off: '⚠ proxy off: typed secrets will be stopped, not masked',
-  'turned-off':
-    '⚠ proxy off (you turned it off): typed secrets are stopped, not masked. `/zeroh-disclosure:proxy on` turns it back on',
-  provider:
-    '⚠ Bedrock, Vertex or Foundry: the proxy is not used, so typed secrets will be stopped, not masked',
-  down: "⚠ the local proxy isn't running: restart Claude Code; until then typed secrets are stopped, not sent",
-};
+function proxyLine(proxy, uncertain) {
+  const typed = typedSecretWords(uncertain);
+  return {
+    overridden: `⚠ ANTHROPIC_BASE_URL is set outside ZeroH's settings (your shell or another settings file), so what you type can't be masked; ${typed}`,
+    'no-login-item': `⚠ nothing on this system can keep ZeroH's local proxy running after a restart (no login item), so what you type can't be masked; ${typed}. Files and command output are still masked`,
+    off: `⚠ proxy off: what you type isn't masked; ${typed}`,
+    'turned-off': `⚠ proxy off (you turned it off): what you type isn't masked; ${typed}. \`/zeroh-disclosure:proxy on\` turns it back on`,
+    provider: `⚠ Bedrock, Vertex or Foundry: the proxy is not used, so what you type isn't masked; ${typed}`,
+    // A session pointing at a proxy that is gone can't send at all (D-10).
+    down: "⚠ the local proxy isn't running: restart Claude Code; until then typed secrets are stopped, not sent",
+  }[proxy];
+}
 
 // One coherent message per state: no warning when the proxy masks this
 // session, one plain line otherwise.
@@ -211,6 +222,7 @@ export function warningLines({
   contextFindings = [],
   proxy = 'off',
   unmaskWarnings = [],
+  uncertain = 'pass',
 } = {}) {
   const lines = contextFindings.map(
     ({ displayPath, count }) =>
@@ -219,7 +231,8 @@ export function warningLines({
       }`,
   );
   lines.push(...unmaskWarnings.map((warning) => `⚠ ${warning}`));
-  if (PROXY_LINE[proxy]) lines.push(PROXY_LINE[proxy]);
+  const line = proxyLine(proxy, uncertain);
+  if (line) lines.push(line);
   return lines;
 }
 
@@ -240,13 +253,15 @@ export function buildBanner({
   unmaskStatus = '',
   // The receipt retention policy in one line (lib/receipt-retention.js).
   retention = '',
+  // The `uncertain` setting: what happens to a typed secret without the proxy.
+  uncertain = 'pass',
 } = {}) {
   const effectiveMode = mode === 'banner' && firstRun ? 'full' : mode;
   const parts = [];
   if (effectiveMode === 'full' || effectiveMode === 'banner') {
     let text = `\n${artBlock({ version, plan, proxy, paused, colour })}`;
     if (effectiveMode === 'full') {
-      text += `\n\n${fullDetails({ proxy, paused, unmaskStatus, retention })}`;
+      text += `\n\n${fullDetails({ proxy, paused, unmaskStatus, retention, uncertain })}`;
     }
     parts.push(text);
   } else if (effectiveMode === 'compact') {
@@ -254,7 +269,11 @@ export function buildBanner({
       paused
         ? `⚠ ZeroH Disclosure · ${plan} · paused: see the message below`
         : `🛡 ZeroH Disclosure · ${plan} · ${known.length} ${plural(known.length, 'secret')} protected · ${
-            MASKS_TYPING.has(proxy) ? 'typing masked' : 'typing stopped'
+            MASKS_TYPING.has(proxy)
+              ? 'typing masked'
+              : uncertain === 'block'
+                ? 'typing stopped'
+                : 'typing not masked'
           }`,
     );
   }

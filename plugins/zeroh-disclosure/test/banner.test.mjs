@@ -20,6 +20,7 @@ import {
   warningLines,
   writeBannerMode,
 } from '../lib/banner.js';
+import { asUser } from './as-user.mjs';
 
 const PLUGIN = fileURLToPath(new URL('..', import.meta.url));
 const CLI = path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs');
@@ -77,9 +78,19 @@ test('full, banner, compact, and off modes render their promised content', () =>
     mode: 'full',
     proxy: 'off',
     unmaskStatus: 'EMAIL unmasked · 12 min left',
-    warnings: ['⚠ proxy off: typed secrets will be stopped, not masked'],
+    warnings: warningLines({ proxy: 'off' }),
   }).text;
-  assert.match(granted, /Masks files Claude reads.*stopped, not sent\./u);
+  // rc.2 default (pass): a typed secret without the proxy is sent with a
+  // notice; `uncertain block` stops it.
+  assert.match(
+    granted,
+    /Masks files Claude reads.*What you type is not masked: a prompt with a secret is sent, with a notice\./u,
+  );
+  assert.match(
+    buildBanner({ ...status, mode: 'full', proxy: 'off', uncertain: 'block' })
+      .text,
+    /Masks files Claude reads.*stopped, not sent\./u,
+  );
   assert.match(granted, /Unmasked now: EMAIL unmasked · 12 min left\./u);
   assert.match(granted, /⚠ proxy off[^\n]*\nAsk Claude: /u);
 
@@ -126,9 +137,12 @@ test('warning lines cover context, unmask, and every proxy state with one line a
     [
       '⚠ CLAUDE.md has 2 secrets: they reach the model: the proxy is off',
       '⚠ EMAIL unmasked for 37 more minutes',
-      '⚠ proxy off: typed secrets will be stopped, not masked',
+      `⚠ proxy off: what you type isn't masked; a typed secret is sent with a "not protected" line`,
     ],
   );
+  assert.deepEqual(warningLines({ proxy: 'off', uncertain: 'block' }), [
+    "⚠ proxy off: what you type isn't masked; typed secrets are stopped, not sent",
+  ]);
   assert.deepEqual(
     warningLines({
       contextFindings: [{ displayPath: 'CLAUDE.md', count: 1 }],
@@ -138,8 +152,8 @@ test('warning lines cover context, unmask, and every proxy state with one line a
   );
   // T-16/T-19: the session that installs the proxy goes through it from its
   // first prompt, so it says nothing about restarting. (A secret typed in
-  // that very first prompt is stopped, not masked: the proxy has not seen
-  // the session yet.)
+  // that very first prompt is sent with a notice, or stopped in block mode:
+  // the proxy has not seen the session yet.)
   assert.deepEqual(warningLines({ proxy: 'ready' }), []);
   assert.match(
     buildBanner({ mode: 'banner', proxy: 'ready' }).text,
@@ -148,7 +162,7 @@ test('warning lines cover context, unmask, and every proxy state with one line a
   for (const proxy of ['provider', 'down', 'overridden', 'off']) {
     const lines = warningLines({ proxy });
     assert.equal(lines.length, 1, proxy);
-    assert.match(lines[0], /^⚠ .*typed secrets/u, proxy);
+    assert.match(lines[0], /^⚠ .*typed secret/u, proxy);
     assert.match(
       buildBanner({ mode: 'banner', proxy }).text,
       /✓ Protected: files and output are masked/u,
@@ -184,7 +198,7 @@ test('the CLI writes every supported mode under ZEROH_HOME', () => {
   for (const mode of ['full', 'compact', 'off']) {
     const result = spawnSync(process.execPath, [CLI, 'banner', mode], {
       encoding: 'utf8',
-      env: {
+      env: asUser(['banner', mode], {
         PATH: process.env.PATH,
         HOME: home,
         USERPROFILE: home,
@@ -192,7 +206,7 @@ test('the CLI writes every supported mode under ZEROH_HOME', () => {
         ZEROH_CREDENTIAL_HOME: path.join(home, 'credentials'),
         ZEROH_CLAUDE_SETTINGS: settings,
         ZEROH_SERVICE_MANAGER_DIR: serviceManager,
-      },
+      }),
     });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(readFileSync(bannerFiles(home).config)).mode, mode);

@@ -35,6 +35,7 @@ import {
   tempProject,
   stateDirOf,
 } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 
 const CLI = fileURLToPath(
   new URL('../bin/zeroh-disclosure.mjs', import.meta.url),
@@ -61,7 +62,7 @@ function envFor(project, extra = {}) {
 function cli(project, args, { cwd = project.dir, input, extra = {} } = {}) {
   return spawnSync(process.execPath, [CLI, ...args], {
     cwd,
-    env: envFor(project, extra),
+    env: asUser(args, envFor(project, extra)),
     input,
     encoding: 'utf8',
   });
@@ -322,7 +323,8 @@ test('an unreadable vault is told to the user, once, and the proxy names the fix
   assert.equal(second.code, 0, second.stderr);
   assert.doesNotMatch(second.json?.systemMessage ?? '', /vault/u);
 
-  // The proxy refuses at once, without a retry, and says what to do.
+  // The proxy never masks what it can't restore: the request goes on
+  // unmasked (the prompt hook told the user; block mode stops the prompt).
   const upstream = await fakeUpstream();
   t.after(() => upstream.close());
   const previous = process.env.ZEROH_HOME;
@@ -341,11 +343,13 @@ test('an unreadable vault is told to the user, once, and the proxy names the fix
     `http://127.0.0.1:${port}/v1/messages`,
     JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
   );
-  assert.equal(answer.status, 400);
-  assert.equal(answer.headers['x-should-retry'], 'false');
-  assert.match(answer.text, /can't open this project's vault/u);
-  assert.match(answer.text, /doctor --fix/u);
-  assert.equal(upstream.seen.length, 0, 'nothing was sent');
+  assert.equal(answer.status, 200, answer.text);
+  assert.equal(upstream.seen.length, 1, 'the request went on');
+  assert.match(JSON.stringify(upstream.seen[0]), /hello/u);
+  assert.doesNotMatch(
+    JSON.stringify(upstream.seen[0]),
+    /\[[A-Z_]+-[0-9a-f]{6}\]/u,
+  );
 });
 
 test('vault clear from a subdirectory clears the project, its restore files and commitment keys (LV-B6)', () => {
@@ -390,7 +394,7 @@ test('receipts alone cannot recover a typed phone number (LV-B4)', async () => {
       session_id: 'brute',
       prompt: `please call the customer on ${FAKE_PHONE} today`,
     },
-    { project },
+    { project, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(blocked.code, 2, 'the prompt was stopped (proxy off)');
   const sessionDir = path.join(stateDirOf(project), 'sessions', 'brute');
@@ -452,7 +456,7 @@ test(
     const clean = runHook(
       'user-prompt-submit',
       { session_id: 'ro-1', prompt: 'please list the files' },
-      { project },
+      { project, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
     );
     assert.equal(clean.code, 0, clean.stderr);
     const tool = runHook(
@@ -463,7 +467,7 @@ test(
         tool_input: { command: 'ls -la' },
         tool_use_id: 'toolu_ro',
       },
-      { project },
+      { project, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
     );
     assert.equal(tool.code, 0, tool.stderr);
     assert.notEqual(
@@ -486,7 +490,7 @@ test(
     const start = runHook(
       'session-start',
       { session_id: 'ro-2', source: 'startup' },
-      { project },
+      { project, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
     );
     assert.equal(start.code, 0, start.stderr);
     assert.match(
@@ -496,7 +500,7 @@ test(
     const cleanAgain = runHook(
       'user-prompt-submit',
       { session_id: 'ro-2', prompt: 'please run the tests' },
-      { project },
+      { project, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
     );
     assert.equal(cleanAgain.code, 0, cleanAgain.stderr);
     const secret = runHook(
@@ -505,7 +509,7 @@ test(
         session_id: 'ro-2',
         prompt: 'deploy with sk_live_ZEROHFAKE1111111111111111 now',
       },
-      { project },
+      { project, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
     );
     assert.equal(secret.code, 2);
     assert.doesNotMatch(secret.stderr, /could not check it/u);

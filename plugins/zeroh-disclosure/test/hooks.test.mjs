@@ -34,9 +34,15 @@ import {
   writeAllow,
   stateDirOf,
 } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 import { createGrant, revokeGrants } from '../lib/unmask.js';
 import { signatureFor } from '../lib/allow-rules.js';
-import { formatReceiptSummary, receiptSummary } from '../lib/report.js';
+import {
+  formatReceiptSummary,
+  receiptSummary,
+  sessionTokenMap,
+} from '../lib/report.js';
+import { formatSessionTokenMap } from '../lib/report-slip.js';
 import { Vault } from '../lib/vault.js';
 import { BASH_FAILURE_LINE } from '../lib/exit-status.js';
 
@@ -400,13 +406,13 @@ test('Stop prints only the turn that just ended', () => {
   const stopped = runHook(
     'user-prompt-submit',
     { session_id: sessionId, prompt: `Refund using ${FAKE_STRIPE}` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(stopped.code, 2, stopped.stderr);
   runHook(
     'user-prompt-submit',
     { session_id: sessionId, prompt: 'Inspect .env.' },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   runHook(
     'post-tool-use',
@@ -416,12 +422,12 @@ test('Stop prints only the turn that just ended', () => {
       tool_input: { file_path: '.env' },
       tool_response: `STRIPE_KEY=${FAKE_STRIPE}\n`,
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   const stop = runHook(
     'stop',
     { session_id: sessionId, stop_hook_active: false },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(stop.code, 0, stop.stderr);
   assert.match(stop.json.systemMessage, /· turn 2 ·/u);
@@ -638,17 +644,18 @@ test('PreToolUse blocks a restored key bound for another host, until allowed', (
   // still writes the rule where the hook reads it.
   const subdirectory = path.join(p.dir, 'src', 'nested');
   mkdirSync(subdirectory, { recursive: true });
+  // As the user (rc.2 item 1): in a real terminal the user confirms a code.
   const ran = spawnSync('sh', ['-c', suggestion.slice(2)], {
     cwd: subdirectory,
     encoding: 'utf8',
-    env: {
+    env: asUser(['allow', 'STRIPE_KEY', 'paste.example'], {
       PATH: process.env.PATH,
       HOME: p.home,
       ZEROH_HOME: p.home,
       ZEROH_CREDENTIAL_HOME: p.home,
       ZEROH_CLAUDE_SETTINGS: p.settings,
       ZEROH_SERVICE_MANAGER_DIR: p.serviceManager,
-    },
+    }),
   });
   assert.equal(ran.status, 0, ran.stderr);
   assert.equal(existsSync(path.join(subdirectory, '.zeroh')), false);
@@ -753,21 +760,24 @@ test('PreToolUse restores tokens in Edit so the edit matches the real file', () 
   );
 });
 
-test('PreToolUse refuses private keys and encoded secret files', () => {
+// rc.2 (A2): read and masked by default (rc2-pass-default.test.mjs); these
+// are the block-mode stops.
+test('PreToolUse refuses private keys and encoded secret files in block mode', () => {
   const p = tempProject();
+  const block = { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } };
   const read = runHook(
     'pre-tool-use',
     {
       tool_name: 'Read',
       tool_input: { file_path: '/home/me/.ssh/id_ed25519' },
     },
-    { project: p },
+    block,
   );
   assert.equal(read.json.hookSpecificOutput.permissionDecision, 'deny');
   const b64 = runHook(
     'pre-tool-use',
     { tool_name: 'Bash', tool_input: { command: 'cat .env | base64' } },
-    { project: p },
+    block,
   );
   assert.equal(b64.json.hookSpecificOutput.permissionDecision, 'deny');
   const powerShell = runHook(
@@ -776,14 +786,14 @@ test('PreToolUse refuses private keys and encoded secret files', () => {
       tool_name: 'PowerShell',
       tool_input: { command: 'Get-Content C:\\Users\\me\\.ssh\\id_ed25519' },
     },
-    { project: p },
+    block,
   );
   assert.equal(powerShell.json.hookSpecificOutput.permissionDecision, 'deny');
 });
 
-// Sensitive files are deny-only: the old whole-file mask mode (and the
-// ZEROH_SENSITIVE_FILES switch) no longer exists.
-test('a private key file is denied even when ZEROH_SENSITIVE_FILES=mask is set', () => {
+// There is no ZEROH_SENSITIVE_FILES switch: block mode (ZEROH_UNCERTAIN) is
+// what stops private key files; the old variable changes nothing.
+test('a private key file is denied in block mode whatever ZEROH_SENSITIVE_FILES says', () => {
   const p = tempProject();
   const file = path.join(p.dir, 'server.pem');
   writeFileSync(
@@ -793,7 +803,10 @@ test('a private key file is denied even when ZEROH_SENSITIVE_FILES=mask is set',
   const pre = runHook(
     'pre-tool-use',
     { tool_name: 'Read', tool_input: { file_path: file } },
-    { project: p, extraEnv: { ZEROH_SENSITIVE_FILES: 'mask' } },
+    {
+      project: p,
+      extraEnv: { ZEROH_SENSITIVE_FILES: 'mask', ZEROH_UNCERTAIN: 'block' },
+    },
   );
   assert.equal(pre.json.hookSpecificOutput.permissionDecision, 'deny');
   assert.match(
@@ -802,7 +815,9 @@ test('a private key file is denied even when ZEROH_SENSITIVE_FILES=mask is set',
   );
 });
 
-test('PreToolUse applies the shell deny policy to raw PowerShell secrets', () => {
+// rc.2 (D-23): by default a raw secret in a command gets the destination
+// rules instead (rc2-pass-default.test.mjs); block mode keeps the denial.
+test('PreToolUse applies the shell deny policy to raw PowerShell secrets in block mode', () => {
   const p = tempProject();
   const denied = runHook(
     'pre-tool-use',
@@ -810,7 +825,7 @@ test('PreToolUse applies the shell deny policy to raw PowerShell secrets', () =>
       tool_name: 'PowerShell',
       tool_input: { command: `Write-Output ${FAKE_STRIPE}` },
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   ).json.hookSpecificOutput;
   assert.equal(denied.permissionDecision, 'deny');
   assert.match(denied.permissionDecisionReason, /sensitive data detected/);
@@ -1070,7 +1085,7 @@ test('named-token brackets are not treated as PostToolUse secrets', () => {
 
 // Claude Code drops an updatedToolOutput whose shape differs from the tool's response and passes the
 // original through (seen live), so the withheld output must keep the real response shapes.
-test('vault errors withhold Read and Bash output in the shape Claude Code expects', () => {
+test('in block mode vault errors withhold Read and Bash output in the shape Claude Code expects', () => {
   const p = tempProject();
   maskedToken(p);
   writeFileSync(path.join(p.home, 'vault.key'), 'ZEROHFAKE-corrupt-key');
@@ -1090,7 +1105,7 @@ test('vault errors withhold Read and Bash output in the shape Claude Code expect
         },
       },
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(read.code, 0, read.stderr);
   const readOut = read.json.hookSpecificOutput.updatedToolOutput;
@@ -1112,7 +1127,7 @@ test('vault errors withhold Read and Bash output in the shape Claude Code expect
         isImage: false,
       },
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   const bashOut = bash.json.hookSpecificOutput.updatedToolOutput;
   assert.deepEqual(Object.keys(bashOut).sort(), [
@@ -1126,7 +1141,7 @@ test('vault errors withhold Read and Bash output in the shape Claude Code expect
   assert.ok(!JSON.stringify(bash.json).includes(FAKE_STRIPE));
 });
 
-test('vault errors withhold PostToolUse output, deny PreToolUse, and leave display tokens visible', () => {
+test('in block mode vault errors withhold PostToolUse output, deny PreToolUse, and leave display tokens visible', () => {
   const p = tempProject();
   const token = maskedToken(p);
   writeFileSync(path.join(p.home, 'vault.key'), 'ZEROHFAKE-corrupt-key');
@@ -1138,7 +1153,7 @@ test('vault errors withhold PostToolUse output, deny PreToolUse, and leave displ
       tool_input: { file_path: `${p.dir}/.env` },
       tool_response: `STRIPE_KEY=${FAKE_STRIPE}`,
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(post.code, 0, post.stderr);
   assert.match(
@@ -1154,7 +1169,7 @@ test('vault errors withhold PostToolUse output, deny PreToolUse, and leave displ
       tool_name: 'Bash',
       tool_input: { command: `printf '%s' ${token}` },
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(pre.code, 0, pre.stderr);
   assert.equal(pre.json.hookSpecificOutput.permissionDecision, 'deny');
@@ -1167,7 +1182,7 @@ test('vault errors withhold PostToolUse output, deny PreToolUse, and leave displ
   const display = runHook(
     'message-display',
     { delta: `Key ${token} is unavailable.` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(display.code, 0, display.stderr);
   assert.equal(
@@ -1181,7 +1196,7 @@ test('UserPromptSubmit stops a prompt holding a known secret and offers a masked
   const res = runHook(
     'user-prompt-submit',
     { prompt: `Refund order 1182 using ${FAKE_STRIPE}` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(res.code, 2);
   // T-30: three plain lines at most, the provider named from the public
@@ -1209,7 +1224,7 @@ test('UserPromptSubmit stops a prompt holding a known secret and offers a masked
   const again = runHook(
     'user-prompt-submit',
     { prompt: `Refund order 1182 using ${masked[1]}` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(again.code, 0);
   const pre = runHook(
@@ -1273,7 +1288,7 @@ test('PreToolUse late-binds PowerShell single quotes without literal restore', (
   );
 });
 
-test('PreToolUse denies unprovable shell commands without updatedInput', () => {
+test('PreToolUse runs unprovable shell commands with the token by default, and denies them in block mode', () => {
   for (const toolName of ['Bash', 'PowerShell']) {
     const p = tempProject();
     const token = maskedToken(p);
@@ -1281,19 +1296,31 @@ test('PreToolUse denies unprovable shell commands without updatedInput', () => {
       toolName === 'Bash'
         ? { command: `printf '%s' '${token}` }
         : { command: `Write-Output ‘${token}’` };
-    const { json } = runHook(
+    const passed = runHook(
       'pre-tool-use',
       { tool_name: toolName, tool_input: input },
       { project: p },
+    ).json;
+    assert.notEqual(
+      passed.hookSpecificOutput?.permissionDecision,
+      'deny',
+      toolName,
+    );
+    assert.match(passed.systemMessage, /ran with the token, not your key/u);
+    assert.match(
+      passed.hookSpecificOutput.additionalContext,
+      /plain argument.*double quotes.*variable/s,
+    );
+    assert.ok(!JSON.stringify(passed).includes(FAKE_STRIPE));
+    const { json } = runHook(
+      'pre-tool-use',
+      { tool_name: toolName, tool_input: input },
+      { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
     );
     const output = json.hookSpecificOutput;
     assert.equal(output.permissionDecision, 'deny', toolName);
+    // Block mode stops it earlier, at the command it cannot parse.
     assert.equal(output.updatedInput, undefined);
-    assert.ok(output.permissionDecisionReason.includes(token));
-    assert.match(
-      output.permissionDecisionReason,
-      /plain argument.*double quotes.*variable/s,
-    );
     assert.doesNotMatch(JSON.stringify(json), /restored literally/i);
     assert.ok(!JSON.stringify(json).includes(FAKE_STRIPE));
   }
@@ -1520,7 +1547,7 @@ test('UserPromptSubmit stops an @-mentioned file that holds secrets', () => {
   const res = runHook(
     'user-prompt-submit',
     { prompt: 'Why does the webhook fail? @.env' },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(res.code, 2);
   assert.match(res.stderr, /@\.env/);
@@ -1660,7 +1687,7 @@ test('MessageDisplay and PreToolUse saves never prune', () => {
   assert.equal(vaultFor(p).size, 2);
 });
 
-test('session retention: SessionEnd then --resume leaves expired tokens that PreToolUse denies', () => {
+test('session retention: SessionEnd then --resume leaves expired tokens that PreToolUse runs as text, or denies in block mode', () => {
   const p = tempProject();
   const env = { ZEROH_VAULT_RETENTION: 'session' };
   runHook(
@@ -1692,10 +1719,17 @@ test('session retention: SessionEnd then --resume leaves expired tokens that Pre
     ],
     ['Write', { file_path: 'config.txt', content: `owner=${token}` }],
   ]) {
-    const denied = runHook(
+    const passed = runHook(
       'pre-tool-use',
       { tool_name: toolName, tool_input: toolInput },
       { project: p, extraEnv: env },
+    ).json;
+    assert.notEqual(passed.hookSpecificOutput?.permissionDecision, 'deny');
+    assert.match(passed.systemMessage, /the value expired/u, toolName);
+    const denied = runHook(
+      'pre-tool-use',
+      { tool_name: toolName, tool_input: toolInput },
+      { project: p, extraEnv: { ...env, ZEROH_UNCERTAIN: 'block' } },
     );
     const output = denied.json.hookSpecificOutput;
     assert.equal(output.permissionDecision, 'deny', toolName);
@@ -1750,7 +1784,7 @@ test('a held vault lock does not crash MessageDisplay or PreToolUse', () => {
   }
 });
 
-test('UserPromptSubmit fails closed when the vault cannot be saved', async (t) => {
+test('UserPromptSubmit fails closed when the vault cannot be saved (block mode)', async (t) => {
   const { chmodSync, mkdirSync } = await import('node:fs');
   const p = tempProject();
   const proxy = await withProxy(p);
@@ -1762,7 +1796,7 @@ test('UserPromptSubmit fails closed when the vault cannot be saved', async (t) =
     const res = runHook(
       'user-prompt-submit',
       { prompt: 'Email zerohfake.person@example.com about the refund' },
-      proxy,
+      { ...proxy, extraEnv: { ...proxy.extraEnv, ZEROH_UNCERTAIN: 'block' } },
     );
     assert.equal(res.code, 2, res.stderr);
     assert.match(res.stderr, /can't save its vault|could not save its vault/);
@@ -1794,6 +1828,7 @@ test('a repository .zeroh.env may only set allowlisted keys; the rest are ignore
   );
   // The shell sets ANTHROPIC_BASE_URL, so ZeroH cannot route this session.
   const extraEnv = {
+    ZEROH_UNCERTAIN: 'block',
     ZEROH_PROXY: '',
     ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
   };
@@ -1877,6 +1912,7 @@ test('typed secrets are blocked on Bedrock and Vertex even with ZEROH_PROXY unse
       {
         project: p,
         extraEnv: {
+          ZEROH_UNCERTAIN: 'block',
           ZEROH_PROXY: '',
           [provider]: '1',
           ANTHROPIC_BASE_URL:
@@ -2097,12 +2133,24 @@ test('ZEROH_PROXY=1 in the environment never skips the typed-secret block or the
       ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
     },
   };
+  // Block mode keeps the typed-secret stop; by default (A1) it is sent with
+  // the "proxy not running" notice, and the variable claims no masking.
   const prompt = runHook(
     'user-prompt-submit',
     { prompt: `deploy with ${FAKE_STRIPE}` },
-    claimed,
+    { ...claimed, extraEnv: { ...claimed.extraEnv, ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(prompt.code, 2, prompt.stderr);
+  const passed = runHook(
+    'user-prompt-submit',
+    { session_id: 'claimed-pass', prompt: `deploy with ${FAKE_STRIPE}` },
+    claimed,
+  );
+  assert.equal(passed.code, 0, passed.stderr);
+  assert.match(
+    passed.json.systemMessage,
+    /this prompt was not protected \(proxy not running\)/u,
+  );
   assert.doesNotMatch(prompt.stdout, new RegExp(FAKE_STRIPE, 'u'));
   const background = runHook(
     'pre-tool-use',
@@ -2112,7 +2160,22 @@ test('ZEROH_PROXY=1 in the environment never skips the typed-secret block or the
     },
     claimed,
   );
-  assert.equal(background.json.hookSpecificOutput.permissionDecision, 'deny');
+  // rc.2 (D-22): the guard still sees no proxy. By default the command runs
+  // with the "proxy not running" notice; block mode stops it.
+  assert.notEqual(
+    background.json?.hookSpecificOutput?.permissionDecision,
+    'deny',
+  );
+  assert.match(background.json.systemMessage, /proxy not running/u);
+  const blocked = runHook(
+    'pre-tool-use',
+    {
+      tool_name: 'Bash',
+      tool_input: { command: 'tail -f app.log', run_in_background: true },
+    },
+    { ...claimed, extraEnv: { ...claimed.extraEnv, ZEROH_UNCERTAIN: 'block' } },
+  );
+  assert.equal(blocked.json.hookSpecificOutput.permissionDecision, 'deny');
 });
 
 // T-16, T-17 and T-19: the first session starts the proxy and says one
@@ -2131,7 +2194,11 @@ test('the first session is protected from its first prompt and never shows the k
   };
   const { stopDefaultProxy } = await import('../lib/proxy-manager.js');
   t.after(() => stopDefaultProxy({ env }));
-  const extraEnv = { ZEROH_PROXY: '', TERM: 'dumb' };
+  const extraEnv = {
+    ZEROH_UNCERTAIN: 'block',
+    ZEROH_PROXY: '',
+    TERM: 'dumb',
+  };
   const first = runHook(
     'session-start',
     { session_id: 'install-session', source: 'startup' },
@@ -2250,7 +2317,9 @@ test('a session naming another proxy URL has its typed secrets masked only once 
   const other = {
     ...proxy,
     extraEnv: {
+      ZEROH_UNCERTAIN: 'block',
       ...proxy.extraEnv,
+      ZEROH_UNCERTAIN: 'block',
       ANTHROPIC_BASE_URL: url.replace(
         /\/z\/[^/]+$/u,
         '/z/ZEROHFAKEotherkey000000',
@@ -2374,4 +2443,148 @@ test('PreToolUse denies Skill calls of user-only commands and restores nothing i
     assert.equal(run.json, null, JSON.stringify(input));
     assert.ok(!run.stdout.includes(FAKE_STRIPE));
   }
+});
+
+// Astra finding 9: a sensitive value in a file name or a command is masked in
+// the model's view and must not come back through the receipt: not in the
+// token map's source, not in the audit's file keys, not in receipt.html, and
+// not in the token map the model can ask for.
+test('file names and commands with sensitive values stay masked in receipts (Astra 9)', async () => {
+  // Built at run time so no tool on the way rewrites the fixture.
+  const email = ['zeroh.fake', 'example.com'].join('@');
+  const cases = [
+    {
+      session: 'receipt-read-name',
+      event: (p) => ({
+        tool_name: 'Read',
+        tool_input: { file_path: `${p.dir}/${FAKE_STRIPE} ${email} notes.txt` },
+        tool_response: {
+          type: 'text',
+          file: {
+            filePath: `${p.dir}/${FAKE_STRIPE} ${email} notes.txt`,
+            content: `STRIPE_KEY=${FAKE_STRIPE}\n`,
+            numLines: 1,
+            startLine: 1,
+            totalLines: 1,
+          },
+        },
+      }),
+      file: true,
+    },
+    {
+      session: 'receipt-bash-command',
+      event: () => ({
+        tool_name: 'Bash',
+        tool_input: { command: `echo ${FAKE_STRIPE} ${email}` },
+        tool_response: {
+          stdout: `${FAKE_STRIPE} ${email}\n`,
+          stderr: '',
+          interrupted: false,
+        },
+      }),
+    },
+  ];
+  for (const item of cases) {
+    const p = tempProject();
+    runHook(
+      'user-prompt-submit',
+      { session_id: item.session, prompt: 'Inspect the configured value.' },
+      { project: p },
+    );
+    const post = runHook(
+      'post-tool-use',
+      { session_id: item.session, ...item.event(p) },
+      { project: p },
+    );
+    assert.equal(post.code, 0, post.stderr);
+    for (const value of [FAKE_STRIPE, email]) {
+      assert.ok(!post.stdout.includes(value), `hook output: ${value}`);
+    }
+    const dir = path.join(stateDirOf(p), 'sessions', item.session);
+    const ledgerText = readFileSync(path.join(dir, 'turn-1.json'), 'utf8');
+    for (const value of [FAKE_STRIPE, email]) {
+      assert.ok(
+        !ledgerText.includes(value),
+        `${item.session} ledger: ${value}`,
+      );
+    }
+    const ledger = JSON.parse(ledgerText);
+    const sources = ledger.audit.masked.token_map.map((entry) => entry.source);
+    assert.ok(sources.length > 0);
+    for (const source of sources) {
+      assert.match(source, /\[API_KEY-[0-9a-f]{6}\]/u, 'masked form kept');
+      assert.match(source, /\[EMAIL-[0-9a-f]{6}\]/u, 'masked form kept');
+    }
+    if (item.file) {
+      const keys = Object.keys(ledger.audit.files);
+      assert.equal(keys.length, 1);
+      assert.match(
+        keys[0],
+        /\/\[API_KEY-[0-9a-f]{6}\] \[EMAIL-[0-9a-f]{6}\] notes\.txt$/u,
+        'file identity kept in masked form',
+      );
+    }
+    const stop = runHook(
+      'stop',
+      { session_id: item.session, stop_hook_active: false },
+      { project: p },
+    );
+    assert.equal(stop.code, 0, stop.stderr);
+    const html = readFileSync(path.join(dir, 'receipt.html'), 'utf8');
+    for (const value of [FAKE_STRIPE, email]) {
+      assert.ok(!stop.stdout.includes(value), `stop: ${value}`);
+      assert.ok(!html.includes(value), `receipt.html: ${value}`);
+    }
+  }
+});
+
+// Receipts written before the fix still hold raw sources and file keys; the
+// token map masks them when it renders.
+test('the token map masks raw sources left in older receipts (Astra 9)', async () => {
+  const p = tempProject();
+  const sessionId = 'receipt-legacy-source';
+  runHook(
+    'user-prompt-submit',
+    { session_id: sessionId, prompt: 'Inspect the configured value.' },
+    { project: p },
+  );
+  runHook(
+    'post-tool-use',
+    {
+      session_id: sessionId,
+      tool_name: 'Bash',
+      tool_input: { command: 'cat config.txt' },
+      tool_response: {
+        stdout: `STRIPE_KEY=${FAKE_STRIPE}\n`,
+        stderr: '',
+        interrupted: false,
+      },
+    },
+    { project: p },
+  );
+  const dir = path.join(stateDirOf(p), 'sessions', sessionId);
+  const file = path.join(dir, 'turn-1.json');
+  const ledger = JSON.parse(readFileSync(file, 'utf8'));
+  for (const entry of ledger.audit.masked.token_map) {
+    entry.source = `cat ${FAKE_STRIPE}.txt`;
+  }
+  writeFileSync(file, JSON.stringify(ledger));
+  runHook(
+    'stop',
+    { session_id: sessionId, stop_hook_active: false },
+    { project: p },
+  );
+  const previous = process.env.ZEROH_HOME;
+  process.env.ZEROH_HOME = p.home;
+  try {
+    const { rows } = await sessionTokenMap({ projectRoot: p.dir, sessionId });
+    assert.ok(rows.length > 0);
+    const text = formatSessionTokenMap(rows);
+    assert.ok(!text.includes(FAKE_STRIPE), text);
+    assert.match(text, /cat \[API_KEY-[0-9a-f]{6}\]\.txt/u);
+  } finally {
+    process.env.ZEROH_HOME = previous;
+  }
+  const html = readFileSync(path.join(dir, 'receipt.html'), 'utf8');
+  assert.ok(!html.includes(FAKE_STRIPE));
 });

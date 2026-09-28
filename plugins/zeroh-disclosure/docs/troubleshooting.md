@@ -3,16 +3,17 @@
 Match the symptom below to its likely cause, then use the smallest fix that preserves local evidence.
 Where a fix names `zeroh-disclosure <command>`, use the slash command inside Claude Code when there
 is one (`/zeroh-disclosure:doctor --fix`, `/zeroh-disclosure:proxy off`), or run
-`node "<plugin>/bin/zeroh-disclosure.mjs" <command>` in a terminal; see
-[Run the CLI](how-to.md#run-the-cli).
+`node "<plugin>/bin/zeroh-disclosure.mjs" <command>` in a terminal outside Claude Code (a command
+that changes protection shows a code to type back); see [Run the CLI](how-to.md#run-the-cli).
 
 ## Contents
 
+- ["Nothing changed: … only you can do it"](#nothing-changed--only-you-can-do-it)
 - [A hook does not fire](#a-hook-does-not-fire)
 - [The session banner is missing or has the wrong mode](#the-session-banner-is-missing-or-has-the-wrong-mode)
 - [A token appears in command output](#a-token-appears-in-command-output)
 - [A real value appears in model-facing output](#a-real-value-appears-in-model-facing-output)
-- [A shell token placement is denied](#a-shell-token-placement-is-denied)
+- [A command ran with the token, not your key](#a-command-ran-with-the-token-not-your-key)
 - [An image could not be processed](#an-image-could-not-be-processed)
 - [Bash or PowerShell is denied by the settings guard](#bash-or-powershell-is-denied-by-the-settings-guard)
 - [A receipt command was denied as data exfiltration](#a-receipt-command-was-denied-as-data-exfiltration)
@@ -21,17 +22,26 @@ is one (`/zeroh-disclosure:doctor --fix`, `/zeroh-disclosure:proxy off`), or run
 - [A destination stays blocked after editing allow.json](#a-destination-stays-blocked-after-editing-allowjson)
 - [A bare host is denied](#a-bare-host-is-denied)
 - [A command shows "[ZeroH: the command failed …]"](#a-command-shows-zeroh-the-command-failed-)
-- [A background command or Monitor is denied](#a-background-command-or-monitor-is-denied)
+- [A background command or Monitor is not protected](#a-background-command-or-monitor-is-not-protected)
 - [ZeroH could not open its vault](#zeroh-could-not-open-its-vault)
 - [An old token no longer restores](#an-old-token-no-longer-restores)
-- [An expired token is denied](#an-expired-token-is-denied)
-- [A typed secret is blocked instead of masked](#a-typed-secret-is-blocked-instead-of-masked)
+- [An expired token ran as text](#an-expired-token-ran-as-text)
+- [A typed secret is not masked](#a-typed-secret-is-not-masked)
 - [The local proxy is unavailable](#the-local-proxy-is-unavailable)
 - [A project where ZeroH Disclosure is disabled](#a-project-where-zeroh-disclosure-is-disabled)
 - [Remove the login item by hand](#remove-the-login-item-by-hand)
 - [Unmask says it needs an interactive session](#unmask-says-it-needs-an-interactive-session)
 - [Report miss has no dialog](#report-miss-has-no-dialog)
 - [A values file remains on disk](#a-values-file-remains-on-disk)
+
+## "Nothing changed: … only you can do it"
+
+ZeroH's command-line tool was run from inside Claude Code (by Claude through Bash or PowerShell, or
+from Claude Code's `!` shell) for a command that changes what ZeroH protects. It records the
+request and changes nothing. Type the slash command it names (for example
+`/zeroh-disclosure:proxy off`) in Claude Code, or run the terminal command it names in a terminal
+outside Claude Code. "ZeroH found no matching request" after a slash command means the command's
+request expired (it lasts a minute) or its arguments were quoted differently; type it again.
 
 ## A hook does not fire
 
@@ -102,13 +112,24 @@ hello@bladelabs.io, with the plugin and Claude Code versions and the steps. Neve
 value. If ZeroH simply did not recognise the value, use `/zeroh-disclosure:report-miss` so it is
 masked from now on.
 
-## A shell token placement is denied
+## A command ran with the token, not your key
 
-The denial says ZeroH could not safely late-bind a named token and gives the scanner reason. Bash
-and PowerShell are denied instead of receiving a real value in `updatedInput`, because Claude Code
-can persist that attachment in its transcript.
+The line `ZeroH Disclosure: this command ran with the token, not your key: …` means ZeroH could
+not put the real value back, so the command ran with the token text and probably failed. It is
+never given a real value some other way: Bash and PowerShell never receive a real value in
+`updatedInput`, because Claude Code can persist that attachment in its transcript. The reason
+after the colon says why:
 
-Use the token as a plain argument, inside double quotes, or assign it to a variable first. Balance
+- `ZeroH couldn't prepare the value`: ZeroH could not safely late-bind the token in this command
+  (Claude is told the scanner's reason);
+- `Monitor can't receive restored values`: run the command with Bash instead;
+- `the value expired`: see [An expired token ran as text](#an-expired-token-ran-as-text);
+- `ZeroH couldn't open its vault`: see [ZeroH could not open its vault](#zeroh-could-not-open-its-vault).
+
+With `/zeroh-disclosure:settings uncertain block` these calls are denied instead.
+
+For a command ZeroH couldn't prepare, use the token as a plain argument, inside double quotes, or
+assign it to a variable first. Balance
 all quotes, substitutions, heredocs, here-strings, and block comments. Replace typographic
 PowerShell quotes (`‘ ’ ‚ ‛ “ ” „`) with ASCII quotes. Do not paste the real value into the command.
 
@@ -144,8 +165,9 @@ The command referred to ZeroH's folder (`ZEROH_HOME`), `allow.json`,
 `vault.key`, `allow.key`, or a direct `zeroh-disclosure allow` invocation. The same rule applies to
 file and MCP tools.
 
-Run the administrative command yourself in a terminal. For receipt and report reads, use the
-plugin slash commands:
+Type the slash command yourself (for example `/zeroh-disclosure:allow NAME HOST`), or run the
+command in a terminal outside Claude Code. For receipt and report reads, use the plugin slash
+commands:
 
 ```text
 /zeroh-disclosure:mask-receipt
@@ -225,7 +247,8 @@ Hand edits invalidate the HMAC. The whole file is ignored and `SessionStart` sho
 ZeroH Disclosure: this project's allow list was changed outside `zeroh-disclosure allow`, so it is ignored.
 ```
 
-Recreate the rule from your own terminal:
+Recreate the rule with `/zeroh-disclosure:allow STRIPE_KEY payments-gateway.example.com`, or from
+your own terminal outside Claude Code (confirm with the code it shows):
 
 ```bash
 zeroh-disclosure allow STRIPE_KEY payments-gateway.example.com
@@ -252,19 +275,23 @@ ZeroH makes every Bash and PowerShell command end with status 0 so that its outp
 through masking, and prints this line when the real command failed. Read it as the command's
 failure. Commands that call `exit` or `set -e` use a form Claude Code asks you to approve.
 
-## A background command or Monitor is denied
+## A background command or Monitor is not protected
 
-Their output reaches the model without passing ZeroH's output masking, so they run only while the
-ZeroH proxy is active. The proxy starts at `SessionStart` and the first prompt puts the session
-behind it, unless you opted out with `ZEROH_PROXY=off`; see [The local proxy is unavailable](#the-local-proxy-is-unavailable). Otherwise
-run the command in the foreground.
+Their output reaches the model without passing ZeroH's output masking, so only the ZeroH proxy can
+mask it. Without the proxy they run with a "not protected (proxy not running)" line
+(`uncertain block` denies them). The proxy starts at `SessionStart` and the first prompt puts the
+session behind it, unless you opted out with `ZEROH_PROXY=off`; see
+[The local proxy is unavailable](#the-local-proxy-is-unavailable). Otherwise run the command in
+the foreground.
 
 ## ZeroH could not open its vault
 
 The session start says so in plain words and the banner shows "Paused" instead of "Protected".
-Until it is fixed, `PostToolUse` withholds tool output, `PreToolUse` denies tool calls,
-`MessageDisplay` keeps tokens on screen, and the proxy answers every request with a message naming
-the fix instead of sending it. Raw content never passes through.
+Until it is fixed, nothing can be masked. By default tool output goes to Claude as it is, with a
+"not protected (check failed)" line, tool calls run with their tokens ("ran with the token, not
+your key"), `MessageDisplay` keeps tokens on screen, and prompts are sent with a "not protected"
+line. With `uncertain block`, `PostToolUse` withholds tool output, `PreToolUse` denies tool calls,
+and the proxy answers every request with a message naming the fix instead of sending it.
 
 The one fix, from a terminal, in any folder (it checks the vault key and every project's vault,
 not only the folder it runs in, and names each project it changes):
@@ -303,19 +330,20 @@ remain safe, but an expired token has no value to restore. Read or produce the o
 again so ZeroH can mask it and recreate the mapping. A value still present in `.env` or a supported
 credential file is re-read on the next `SessionStart` and does not expire by age.
 
-## An expired token is denied
+## An expired token ran as text
 
-`PreToolUse` reports that a token `expired and ZeroH no longer holds the value`. The call used a
-token whose mapping was removed by retention or `vault clear`, for example after `claude --resume`
-of a session that ended under `session` retention. ZeroH denies the call rather than run it with
-the literal token, which would fail or write the token into a file.
+The line says `ran with the token, not your key: the value expired (read the file again)`. The call
+used a token whose mapping was removed by retention or `vault clear`, for example after
+`claude --resume` of a session that ended under `session` retention, so it ran with the token text,
+which may fail or write the token into a file. Claude is told the value expired. With
+`uncertain block` the call is denied instead.
 
 Share the value again (or have the model re-read its source) so ZeroH masks it under a new token,
 then retry. Expired tokens are never reassigned to another value. ZeroH remembers only the token,
 its type and when it expired, for 90 days; after that the token is treated like any unknown token
 and passes through unchanged. If you resume sessions often, use `ZEROH_VAULT_RETENTION=7d` or `30d`.
 
-## A typed secret is blocked instead of masked
+## A typed secret is not masked
 
 This means the current session is not using the default local proxy. It is expected when
 `ZEROH_PROXY=off` is set for this session, after `proxy off`, on Bedrock, Vertex or Foundry, whose
@@ -324,11 +352,13 @@ traffic does not pass the proxy, and when your shell or a higher-precedence sett
 puts the session behind the proxy by itself; if Claude Code does not pick up the changed settings
 file, ZeroH says so once and a restart fixes it.
 
-`UserPromptSubmit` cannot replace the prompt, so it blocks the submission with a short message
-(what it found, by kind or provider, and why it could not be masked; never the prompt or a value)
-and copies a masked rewrite to the clipboard when a supported clipboard command is available, or
-shows it for you to paste. Paste that rewrite, or
-close the session, remove the opt-out, and start Claude Code again.
+By default the prompt is sent as typed, and a line says it was not protected (proxy not running)
+and how to fix it. `UserPromptSubmit` cannot replace the prompt: with
+`/zeroh-disclosure:settings uncertain block` it blocks the submission instead, with a short
+message (what it found, by kind or provider, and why it could not be masked; never the prompt or a
+value), and copies a masked rewrite to the clipboard when a supported clipboard command is
+available, or shows it for you to paste. Paste that rewrite, or close the session, remove the
+opt-out, and start Claude Code again.
 
 ## The local proxy is unavailable
 

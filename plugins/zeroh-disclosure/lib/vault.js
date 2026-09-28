@@ -68,10 +68,12 @@ import { DOCTOR, DOCTOR_FIX } from './fix-command.js';
 
 const LOCK_STALE_MS = 30_000;
 const LOCK_WAIT_MS = 10_000;
-// The vault lock is held for milliseconds. Waiting stays below the shortest
-// hook timeout (MessageDisplay, 5 s), and a lock left by a killed hook is
-// reclaimed as soon as its owner is gone or after ten seconds.
-const VAULT_LOCK = { waitMs: 3_000, staleMs: 10_000, reclaimDeadOwner: true };
+// The vault lock is held for milliseconds. Waiting stays well below the
+// shortest hook deadline (MessageDisplay: its 5 s timeout minus the loader's
+// 2 s, hooks/fail-closed.js), so a held lock is reported by the hook itself,
+// not by the watchdog; a lock left by a killed hook is reclaimed as soon as
+// its owner is gone or after ten seconds.
+const VAULT_LOCK = { waitMs: 2_000, staleMs: 10_000, reclaimDeadOwner: true };
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const TOUCH_INTERVAL_MS = HOUR_MS;

@@ -53,6 +53,15 @@ export function stopPrompt(message, { systemMessage = null } = {}) {
   process.exit(2);
 }
 
+// Says that the hook is starting a change it cannot take back (turning the
+// proxy off, removing settings), in words that fit "ZeroH was <label> when it
+// ran out of time": if the hook then fails or runs out of time, the loader's
+// answer says the change may be half-done and points to
+// `/zeroh-disclosure:doctor`. `markSideEffect(null)` clears it once done.
+export function markSideEffect(label) {
+  if (globalThis.zerohHook) globalThis.zerohHook.state.sideEffect = label;
+}
+
 // UserPromptSubmit: the prompt is fully checked; a failure from here on must
 // not stop it.
 export function markPromptCleared() {

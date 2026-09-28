@@ -40,6 +40,7 @@ import {
   isolatedProxyEnvironment as isolatedEnvironment,
   PLUGIN,
 } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 
 function settingsDoc(isolated) {
   return JSON.parse(readFileSync(isolated.settings, 'utf8'));
@@ -401,7 +402,7 @@ test('doctor says what it checked, what it fixed and what to do next', async (t)
     spawnSync(
       process.execPath,
       [path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs'), ...args],
-      { env: isolated.env, cwd: isolated.root, encoding: 'utf8' },
+      { env: asUser(args, isolated.env), cwd: isolated.root, encoding: 'utf8' },
     );
 
   const clean = cli('doctor');

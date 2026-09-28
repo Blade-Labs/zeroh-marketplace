@@ -6,8 +6,7 @@
 // repeats the prompt or any value; provider names come only from the public
 // prefix catalog (lib/detector.js providerLabel).
 import { isSecretType } from './data-kinds.js';
-import { providerLabel } from './detector.js';
-import { PERSONAL_DATA_KINDS } from './pii/index.js';
+import { PERSONAL_DATA_KINDS, providerLabel } from './detector.js';
 
 const KIND_NAMES = {
   ...Object.fromEntries(

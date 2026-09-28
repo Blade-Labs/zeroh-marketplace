@@ -44,6 +44,7 @@ import {
   postJson,
   testDaemons,
 } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
 
 const CLI = path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs');
 const BODY = JSON.stringify({
@@ -119,7 +120,7 @@ test('proxy off stays off in the next prompt and session until proxy on (LP-B2)'
   );
 
   const off = spawnSync(process.execPath, [CLI, 'proxy', 'off'], {
-    env,
+    env: asUser(['proxy', 'off'], env),
     encoding: 'utf8',
   });
   assert.equal(off.status, 0, off.stderr);
@@ -175,7 +176,7 @@ test('proxy off stays off in the next prompt and session until proxy on (LP-B2)'
 
   // proxy on: the next session sets it up again.
   const on = spawnSync(process.execPath, [CLI, 'proxy', 'on'], {
-    env,
+    env: asUser(['proxy', 'on'], env),
     encoding: 'utf8',
   });
   assert.equal(on.status, 0, on.stderr);
@@ -502,7 +503,7 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   const uninstallEnv = { ...env, ZEROH_CLAUDE_BIN: fakeClaude };
   const uninstall = (...args) =>
     spawnSync(process.execPath, [CLI, 'uninstall', ...args], {
-      env: uninstallEnv,
+      env: asUser(['uninstall', ...args], uninstallEnv),
       cwd: project,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
@@ -544,7 +545,8 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   assert.equal(existsSync(restoreRecordPath(isolated.settings)), false);
   assert.equal(existsSync(path.join(project, '.zeroh')), false);
   assert.ok(existsSync(path.join(other, '.zeroh', 'notes.txt')));
-  assert.equal(existsSync(env.ZEROH_HOME), false);
+  // Only the tombstone is left, for the sessions still running.
+  assert.deepEqual(readdirSync(env.ZEROH_HOME), ['uninstalled']);
   assert.equal(createServiceManager({ env }).registeredKind(), null);
   assert.ok(await until(async () => !(await probeProxy(installed))));
 
@@ -562,7 +564,7 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
       project,
     );
     assert.equal(after.code, 0, `${name}: ${after.stderr}`);
-    assert.equal(existsSync(env.ZEROH_HOME), false, name);
+    assert.deepEqual(readdirSync(env.ZEROH_HOME), ['uninstalled'], name);
   }
   assert.equal(
     settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL,

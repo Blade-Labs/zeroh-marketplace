@@ -3,8 +3,24 @@
 // Static string checks cannot stop a determined shell from constructing a
 // protected path at runtime. They raise the bar and make direct attempts
 // visible to the user through a denied tool call.
-import { SHELL_TOOLS } from './shell-tools.js';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { SHELL_TOOLS, shellOf } from './shell-tools.js';
+import {
+  analyzeBash,
+  analyzeShell,
+  programName,
+  shellReadings,
+} from './shell-scan.js';
+import {
+  AWK_PROGRAMS,
+  awkProgram,
+  execCommand,
+  interpreterCode,
+  interpreterSpec,
+  readCode,
+  sedProgram,
+} from './shell-programs.js';
+import { uncertainMode } from './config.js';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +64,12 @@ function comparisonKey(value, platform) {
   return key;
 }
 
+export const STATUSLINE_STYLE_FILE = 'statusline-style.json';
+
+function samePathKey(a, b, { platform }) {
+  return comparisonKey(a, platform) === comparisonKey(b, platform);
+}
+
 function inside(candidate, directory, { platform, pathImpl }) {
   const candidateKey = comparisonKey(candidate, platform);
   const directoryKey = comparisonKey(directory, platform);
@@ -69,6 +91,18 @@ function realpathWherePossible(absolute, pathImpl) {
     cursor = parent;
   }
   return pathImpl.join(realpathSync(cursor), ...tail);
+}
+
+// True for a regular file with one link, or nothing at all, at `file`
+// (lstat: a symbolic link is itself, not what it points to).
+function plainFileOrAbsent(file) {
+  let stat;
+  try {
+    stat = lstatSync(file);
+  } catch (error) {
+    return error?.code === 'ENOENT';
+  }
+  return stat.isFile() && stat.nlink === 1;
 }
 
 function resolvedPair(value, base, pathImpl) {
@@ -121,6 +155,20 @@ export function isZeroHSettingsPath(
     inside(candidate.lexical, locations.home.lexical, options) ||
     inside(candidate.real, locations.home.real, options);
   if (!protectedPath) return false;
+  // The status line style is the one ZeroH file the model may read and
+  // write, when the user asks it to change how the line looks: it can't
+  // change what the line says (lib/statusline.js validates it on every
+  // read). Only the file itself, never a link to somewhere else: a
+  // symbolic link, dangling or not, or a file with other hard links is
+  // protected like the rest of the home (Astra rc.2 F11).
+  const style = (entry) => pathImpl.join(entry, STATUSLINE_STYLE_FILE);
+  if (
+    samePathKey(candidate.lexical, style(locations.home.lexical), options) &&
+    samePathKey(candidate.real, style(locations.home.real), options) &&
+    plainFileOrAbsent(candidate.lexical)
+  ) {
+    return false;
+  }
   if (
     read &&
     inside(candidate.lexical, locations.receipts.lexical, options) &&
@@ -138,6 +186,7 @@ export function textReferencesZeroHSettings(
     platform = process.platform,
     pathImpl = platform === 'win32' ? path.win32 : path,
     home = zerohHome(),
+    shell = null,
   } = {},
 ) {
   const value = String(text);
@@ -164,6 +213,32 @@ export function textReferencesZeroHSettings(
     const word = raw.replace(/\\([ .])/g, '$1');
     if (word && isZeroHSettingsPath(word, root, { platform, pathImpl, home }))
       return true;
+  }
+  // The same paths however the shell spells them (`~/.ze"roh"/…`, `$'…'`).
+  if (shell) {
+    const analysis = analyzeShell(value, shell);
+    const env = { ...process.env, ZEROH_HOME: home };
+    for (const entry of analysis.commands) {
+      for (const word of [
+        ...words(entry),
+        ...(entry.redirects || []).map((redirect) => redirect.target),
+      ]) {
+        if (!word) continue;
+        for (const candidate of wordPathValues(word, env)) {
+          if (
+            candidate &&
+            (/(?:^|[\\/])\.zeroh(?:[\\/]|$)/iu.test(candidate) ||
+              SETTINGS_FILE_RE.test(candidate) ||
+              isZeroHSettingsPath(candidate, root, {
+                platform,
+                pathImpl,
+                home,
+              }))
+          )
+            return true;
+        }
+      }
+    }
   }
   return false;
 }
@@ -215,7 +290,7 @@ function mentionsElicitation(value) {
   );
 }
 
-function commandWritesElicitationHook(command, root) {
+function commandWritesElicitationHook(command, root, shell = 'bash') {
   if (!mentionsElicitation(command)) return false;
   let targetsProtectedPath = false;
   if (/\.claude[\\/]settings(?:\.local)?\.json/iu.test(command))
@@ -232,11 +307,10 @@ function commandWritesElicitationHook(command, root) {
   if (!targetsProtectedPath) return false;
 
   // Shells can write through interpreters, .NET methods, or arbitrary helper
-  // programs. Once a protected path and hook keyword are both present, only a
-  // narrow, operator-free set of inspection commands is safe to allow.
-  return !/^\s*(?:cat|rg|grep|Get-Content|Select-String)\b[^;&|<>]*$/iu.test(
-    command,
-  );
+  // programs. Once a protected path and the hook keyword are both present,
+  // only a plain read passes (as in rc.1: adding an Elicitation hook would let
+  // something other than the user answer unmask consent).
+  return !isReadOnlyInspection(command, shell);
 }
 
 export function deniesElicitationHookEdits(
@@ -250,7 +324,7 @@ export function deniesElicitationHookEdits(
     return stringsIn(input).some((value) => mentionsElicitation(value));
   }
   if (SHELL_TOOLS.has(toolName) && typeof input?.command === 'string') {
-    return commandWritesElicitationHook(input.command, root);
+    return commandWritesElicitationHook(input.command, root, shellOf(toolName));
   }
   return false;
 }
@@ -392,7 +466,12 @@ export function deniesZeroHSettings(
     });
   }
   if (SHELL_TOOLS.has(toolName) && typeof input?.command === 'string')
-    return textReferencesZeroHSettings(input.command, root);
+    return (
+      commandRunsZeroHManagement(input.command, shellOf(toolName)) ||
+      textReferencesZeroHSettings(input.command, root, {
+        shell: shellOf(toolName),
+      })
+    );
   if (String(toolName).startsWith('mcp__')) {
     const strings = stringsIn(input);
     return (
@@ -413,10 +492,959 @@ export function deniesZeroHSettings(
 // escapes and key order do not matter. Shell commands that name these files
 // are allowed only when they provably only read.
 
-const CLAUDE_CONTROL_ENV_RE = /^(?:ZEROH_.*|ANTHROPIC_BASE_URL)$/iu;
+// Claude Code applies a settings file's `env` to its own process, so to every
+// hook and statusLine command it starts: these would move ZeroH's home or
+// Claude's, change which programs or modules run, or route around the proxy.
+const CLAUDE_CONTROL_ENV_RE =
+  /^(?:ZEROH_.*|ANTHROPIC_BASE_URL|HOME|USERPROFILE|LOCALAPPDATA|APPDATA|XDG_[A-Z_]+|CLAUDE_CONFIG_DIR|CLAUDE_CODE_PLUGIN_CACHE_DIR|CLAUDE_PROJECT_DIR|PATH|PATHEXT|NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_[A-Z_]+|BASH_ENV|ENV|SHELL|COMSPEC|PSMODULEPATH|TMPDIR|TEMP|TMP)$/iu;
 const ZEROH_PLUGIN_ID_RE = /^zeroh-disclosure(?:@|$)/iu;
-const READ_ONLY_COMMAND_RE =
-  /^\s*(?:cat|head|tail|less|more|grep|egrep|fgrep|rg|jq|ls|stat|wc|file|Get-Content|gc|Select-String|sls|Get-Item|Get-ChildItem|Test-Path)\b[^;&|<>`\r\n]*$/iu;
+// ---------------------------------------------------------------------------
+// Shell commands that name protected paths (rc.2 item 3, Astra R1).
+//
+// The command is read with the shared tokenizer (lib/shell-scan.js), so
+// quoting (`--p"re"`, `$'--pre'`, `~/.cl"aude"/settings.json`), launchers and
+// nested or inline commands are seen as the shell sees them.
+//
+// In `pass` mode (the default; owner rule 2026-09-27: ZeroH must not stop
+// ordinary work) a command is denied only when it clearly writes, deletes or
+// executes against a protected path: rm, mv, cp onto it, sed -i, tee, a `>`
+// or `>>` redirection, chmod/chown, truncate, `rg --pre` in any spelling,
+// `find -exec`/`-delete`, `xargs rm`, an interpreter given the file as its
+// script, and sed, awk or inline code whose write resolves to it
+// (protectedEffect). Reads pass. A program that names a protected path but
+// whose effect can't be read runs with the notice (`script-or-interpreter`),
+// and anything the tokenizer cannot read runs too (`unparseable`).
+//
+// In `block` mode (opt-in, ZEROH_UNCERTAIN=block) a command naming a
+// protected path must be a plain read: cat, head, tail, wc, ls, stat or jq,
+// each with only the options listed below, no launcher, no writing
+// redirection. Anything else, or anything unparseable, is denied.
+//
+// ZeroH's own state (the vault, its keys, the signed allow list) is closed to
+// shell commands in both modes, as in rc.1 (textReferencesZeroHSettings):
+// reading a key file would undo the masking itself.
+
+export const PROTECTED_SHELL_DENY_REASON =
+  'ZeroH Disclosure: this command would change or run Claude Code settings, plugin files or hooks. Only the user may change them. To look at these files, use the Read or Grep tool.';
+export const PROTECTED_SHELL_BLOCK_REASON =
+  'ZeroH Disclosure (uncertain = block): commands that name Claude Code settings, plugin files or hooks may only read them with cat, head, tail, wc, ls, stat or jq. Use the Read or Grep tool to look at these files; only the user may change them.';
+
+// Per-command option allowlists for block mode. Short options may be
+// clustered (`-nv`); `values` take the next word or an attached `=value`.
+const SAFE_READERS = Object.freeze({
+  cat: {
+    flags:
+      '-A -b -e -E -n -s -t -T -u -v --show-all --number-nonblank --show-ends --number --squeeze-blank --show-tabs --show-nonprinting',
+  },
+  head: {
+    flags: '-q -v -z --quiet --silent --verbose --zero-terminated',
+    values: '-c -n --bytes --lines',
+    numeric: true,
+  },
+  tail: {
+    flags:
+      '-f -F -q -v -z -r --follow --retry --quiet --silent --verbose --zero-terminated',
+    values:
+      '-c -n -s --bytes --lines --sleep-interval --pid --max-unchanged-stats',
+    numeric: true,
+  },
+  wc: {
+    flags: '-c -m -l -L -w --bytes --chars --lines --max-line-length --words',
+  },
+  ls: {
+    flags:
+      '-a -A -b -B -c -C -d -D -f -F -g -G -h -H -i -k -l -L -m -n -N -o -p -q -Q -r -R -s -S -t -u -U -v -x -X -Z -1 ' +
+      '--all --almost-all --author --escape --ignore-backups --directory --dired --classify --file-type --no-group ' +
+      '--human-readable --si --dereference-command-line --dereference-command-line-symlink-to-dir --inode ' +
+      '--kibibytes --dereference --numeric-uid-gid --literal --hide-control-chars --show-control-chars ' +
+      '--quote-name --reverse --recursive --size --context --zero --group-directories-first --full-time',
+    values:
+      '-I -T -w --block-size --color --format --hide --hyperlink --ignore --indicator-style --quoting-style --sort --tabsize --time --time-style --width',
+  },
+  stat: {
+    flags: '-L -f -t --dereference --file-system --terse',
+    values: '-c --format --printf --cached',
+  },
+  jq: {
+    flags:
+      '-r -j -a -c -n -e -s -S -C -M -R --raw-output --raw-output0 --join-output --ascii-output --compact-output --null-input --exit-status --slurp --sort-keys --color-output --monochrome-output --raw-input --tab --seq --stream --stream-errors',
+    values: '--indent',
+    pairs: '--arg --argjson',
+  },
+});
+
+// Programs that read and never write or run anything given these options
+// (the Elicitation guard's notion of a plain read).
+const READERS = new Set([
+  ...Object.keys(SAFE_READERS),
+  'less',
+  'more',
+  'grep',
+  'egrep',
+  'fgrep',
+  'rg',
+  'file',
+  'bat',
+  'get-content',
+  'gc',
+  'select-string',
+  'sls',
+  'get-item',
+  'gi',
+  'get-childitem',
+  'gci',
+  'dir',
+  'test-path',
+]);
+
+const WRITING_REDIRECTS = new Set(['>', '>>', '>|', '<>', '&>', '&>>']);
+const WRITES_ANY_OPERAND = new Set([
+  'rm',
+  'rmdir',
+  'unlink',
+  'shred',
+  'truncate',
+  'chmod',
+  'chown',
+  'chgrp',
+  'touch',
+  'tee',
+  'sponge',
+  'setfacl',
+  'chattr',
+  'xattr',
+  'patch',
+  'mv',
+  // PowerShell
+  'set-content',
+  'sc',
+  'add-content',
+  'ac',
+  'out-file',
+  'remove-item',
+  'del',
+  'erase',
+  'ri',
+  'rd',
+  'move-item',
+  'move',
+  'mi',
+  'new-item',
+  'ni',
+  'clear-content',
+  'clc',
+  'rename-item',
+  'rni',
+  'ren',
+  'set-item',
+  'si',
+  'set-acl',
+  'tee-object',
+]);
+const WRITES_DESTINATION = new Set([
+  'cp',
+  'install',
+  'ln',
+  'rsync',
+  'scp',
+  'copy-item',
+  'copy',
+  'cpi',
+]);
+const SCRIPT_RUNNERS = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'dash',
+  'ksh',
+  'fish',
+  'source',
+  '.',
+  'python',
+  'python3',
+  'node',
+  'perl',
+  'ruby',
+  'php',
+  'pwsh',
+  'powershell',
+]);
+const INLINE_CODE_FLAGS = new Set([
+  '-c',
+  '-e',
+  '-E',
+  '-r',
+  '--eval',
+  '-p',
+  '--print',
+  '-command',
+  '-c',
+]);
+
+function splitOptions(list) {
+  return new Set(
+    String(list ?? '')
+      .split(/\s+/u)
+      .filter(Boolean),
+  );
+}
+
+// A word as a path: `~` and the variables the guards know are expanded.
+function wordPathValues(word, env) {
+  const home = env.HOME || env.USERPROFILE || os.homedir();
+  let value = String(word.value);
+  if (word.tilde && (value === '~' || /^~[\\/]/u.test(value)))
+    value = home + value.slice(1);
+  value = value
+    .replace(/^\$(?:\{HOME\}|HOME(?![A-Za-z0-9_]))/u, home)
+    .replace(/^\$env:(?:USERPROFILE|HOME)(?![A-Za-z0-9_])/iu, home);
+  for (const name of [
+    'CLAUDE_CONFIG_DIR',
+    'CLAUDE_PLUGIN_ROOT',
+    'ZEROH_HOME',
+  ]) {
+    if (!env[name]) continue;
+    value = value.replace(
+      new RegExp(
+        `^(?:\\$\\{${name}\\}|\\$${name}(?![A-Za-z0-9_])|\\$env:${name}(?![A-Za-z0-9_]))`,
+        'iu',
+      ),
+      env[name],
+    );
+  }
+  const values = [value];
+  const attached =
+    /^--?[A-Za-z][\w-]*=(.+)$/su.exec(value) || /^of=(.+)$/su.exec(value);
+  if (attached) values.push(attached[1]);
+  return values;
+}
+
+const PROTECTED_VARIABLE_RE =
+  /(?:\$env:|\$\{?|%)(?:ZEROH_CLAUDE_SETTINGS|CLAUDE_CONFIG_DIR|CLAUDE_PLUGIN_ROOT)(?:\}|%|\b)/iu;
+const PROTECTED_TEXT_RE =
+  /(?:^|[\s'"=:/\\])\.?claude[/\\](?:settings(?:\.local)?\.json|plugins\b)|managed-settings\.json|zeroh-restore\.json/iu;
+
+// A predicate: does this word name a Claude settings file, a plugin file or
+// hook, or ZeroH's own state?
+function protectedWordTest(root, opts) {
+  const env = opts.env || process.env;
+  return (word) => {
+    if (!word) return false;
+    const raw = String(word.raw ?? word.value ?? '');
+    if (PROTECTED_VARIABLE_RE.test(raw) || PROTECTED_TEXT_RE.test(raw))
+      return true;
+    for (const value of wordPathValues(word, env)) {
+      if (!value) continue;
+      if (PROTECTED_TEXT_RE.test(value)) return true;
+      // The folders that hold them: `find ~/.claude -delete`, `rm -r .claude`.
+      const resolved = resolvedPair(value, root, opts.pathImpl);
+      for (const folder of [
+        opts.configDir,
+        opts.pathImpl.join(root, '.claude'),
+      ]) {
+        const pair = resolvedPair(folder, root, opts.pathImpl);
+        if (
+          samePath(resolved.lexical, pair.lexical, opts) ||
+          samePath(resolved.real, pair.real, opts)
+        )
+          return true;
+      }
+      if (claudeControlKind(value, root, opts)) return true;
+      if (
+        isClaudeSettingsOrHookPath(value, root, {
+          platform: opts.platform,
+          pathImpl: opts.pathImpl,
+          userHome: env.HOME || os.homedir(),
+          claudeConfigDir: opts.configDir,
+        })
+      )
+        return true;
+    }
+    return false;
+  };
+}
+
+function words(entry) {
+  return [entry.programWord, ...(entry.args || [])].filter(Boolean);
+}
+
+function operandsOf(args) {
+  const out = [];
+  let rest = false;
+  for (const word of args) {
+    if (!rest && word.value === '--') {
+      rest = true;
+      continue;
+    }
+    if (!rest && word.value.startsWith('-') && word.value.length > 1) continue;
+    out.push(word);
+  }
+  return out;
+}
+
+// True when a command clearly writes, deletes or runs against a protected
+// path (see the list above), for programs read by their arguments alone.
+function explicitWrite(entry, isProtected, lineNamesProtected) {
+  for (const redirect of entry.redirects || []) {
+    if (WRITING_REDIRECTS.has(redirect.op) && isProtected(redirect.target))
+      return true;
+    if (/^[1-6*]?>>?$/u.test(redirect.op) && isProtected(redirect.target))
+      return true;
+  }
+  const program = entry.program;
+  if (!program) return false;
+  const args = entry.args || [];
+  const values = args.map((word) => word.value);
+  const anyProtected = words(entry).some(isProtected);
+  if (
+    program === 'rg' &&
+    values.some((v) => /^--(?:pre|hostname-bin)(?:=|$)/u.test(v))
+  )
+    return anyProtected || lineNamesProtected;
+  if (
+    (program === 'less' || program === 'more') &&
+    values.some((v) => v.startsWith('+'))
+  )
+    return anyProtected || lineNamesProtected;
+  if (
+    program === 'find' &&
+    values.some((v) =>
+      /^-(?:exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/u.test(v),
+    )
+  )
+    return anyProtected;
+  if (
+    entry.stdinArgs &&
+    (WRITES_ANY_OPERAND.has(program) || WRITES_DESTINATION.has(program))
+  )
+    return anyProtected || lineNamesProtected;
+  if (WRITES_ANY_OPERAND.has(program)) return args.some(isProtected);
+  if (WRITES_DESTINATION.has(program)) {
+    const target = args.findIndex((w) =>
+      /^(?:-t|--target-directory(?:=.*)?|-destination|-dest)$/iu.test(w.value),
+    );
+    if (target >= 0) {
+      const inline = /^--target-directory=(.*)$/u.exec(values[target]);
+      if (inline)
+        return isProtected({
+          ...args[target],
+          value: inline[1],
+          raw: inline[1],
+        });
+      return isProtected(args[target + 1]);
+    }
+    const operands = operandsOf(args);
+    return operands.length > 1 && isProtected(operands.at(-1));
+  }
+  if (program === 'dd')
+    return args.some(
+      (w) =>
+        /^of=/u.test(w.value) &&
+        isProtected({
+          ...w,
+          value: w.value.slice(3),
+          raw: w.raw.replace(/^of=/u, ''),
+        }),
+    );
+  if (
+    program === 'git' &&
+    /^(?:rm|mv|restore|checkout|apply|clean)$/u.test(
+      operandsOf(args)[0]?.value ?? '',
+    )
+  )
+    return args.slice(1).some(isProtected);
+  if (SCRIPT_RUNNERS.has(program) && !interpreterSpec(program)) {
+    const operands = operandsOf(args);
+    if (operands[0] && isProtected(operands[0])) return true;
+    // Shells: their inline code is read as commands (lib/shell-scan.js);
+    // PowerShell's `-Command` too. This covers what that reading can't.
+    for (let index = 0; index < args.length; index += 1) {
+      if (
+        INLINE_CODE_FLAGS.has(values[index].toLowerCase()) ||
+        /^-[a-z]*c$/u.test(values[index])
+      ) {
+        const code = args[index + 1];
+        if (code && codeNamesProtected(code.value, isProtected)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// What a command does to protected paths (Astra rc.2 V4): 'write' for a
+// recognised write, delete or run against one (a default stop), 'uncertain'
+// for a program that names one but whose effect ZeroH can't read (it runs,
+// with the notice; block mode denies), null for a recognised read or
+// nothing. Programs with a grammar of their own (sed, awk, interpreters) are
+// read by it; the others by explicitWrite.
+const WRITE = 'write';
+const UNCERTAIN = 'uncertain';
+
+function worse(a, b) {
+  if (a === WRITE || b === WRITE) return WRITE;
+  if (a === UNCERTAIN || b === UNCERTAIN) return UNCERTAIN;
+  return null;
+}
+
+function protectedEffect(entry, ctx) {
+  if (explicitWrite(entry, ctx.isProtected, ctx.lineNamesProtected))
+    return WRITE;
+  const program = entry.program;
+  if (!program) return null;
+  if (program === 'sed') return sedEffect(entry, ctx);
+  if (AWK_PROGRAMS.has(program)) return awkEffect(entry, ctx);
+  const interpreter = interpreterCode(entry);
+  if (interpreter) return interpreterEffect(interpreter, ctx);
+  return null;
+}
+
+// A shell command a program runs (sed's `e`, awk's system(), an
+// interpreter's os.system): read like any other command line.
+function commandTextEffect(text, ctx) {
+  const names = codeNamesProtected(text, ctx.isProtected);
+  if (ctx.depth >= 4) return names ? UNCERTAIN : null;
+  const analysis = analyzeBash(text);
+  if (!analysis.ok) return names ? UNCERTAIN : null;
+  let effect = null;
+  for (const entry of analysis.commands)
+    effect = worse(
+      effect,
+      protectedEffect(entry, {
+        ...ctx,
+        depth: ctx.depth + 1,
+        lineNamesProtected: ctx.lineNamesProtected || names,
+      }),
+    );
+  return effect;
+}
+
+// A word for a path the program itself names (a sed `w` file, an awk
+// string).
+function pathWord(value) {
+  const text = String(value).trim();
+  return { value: text, raw: text, tilde: text.startsWith('~') };
+}
+
+function literalNamesProtected(value, ctx) {
+  return (
+    ctx.isProtected(pathWord(value)) ||
+    codeNamesProtected(value, ctx.isProtected)
+  );
+}
+
+// sed: `-i` on a protected file, a `w`/`W`/`s///w` to one, or one given as
+// the script file, is a write; an `e` command is read as a command line; a
+// script ZeroH can't see or read (`$SCRIPT`, `-f file`, an unknown
+// command) or `s///e` is uncertain when the script or sed's files name a
+// protected path.
+function sedEffect(entry, ctx) {
+  const { isProtected } = ctx;
+  const sed = sedProgram(entry);
+  if (sed.inPlace && (entry.args || []).some(isProtected)) return WRITE;
+  if (sed.scriptFiles.some(isProtected)) return WRITE;
+  const { program } = sed;
+  if (program.writes.some((file) => literalNamesProtected(file, ctx)))
+    return WRITE;
+  let effect = null;
+  let unresolved = false;
+  for (const command of program.executes) {
+    if (!command.trim()) unresolved = true;
+    else effect = worse(effect, commandTextEffect(command, ctx));
+  }
+  if (effect === WRITE) return WRITE;
+  const scriptText = sed.scripts.map((word) => word.value).join('\n');
+  const named =
+    codeNamesProtected(scriptText, isProtected) || sed.files.some(isProtected);
+  if (!named) return effect;
+  if (!program.ok || sed.scriptFiles.length || unresolved)
+    return worse(effect, UNCERTAIN);
+  return effect;
+}
+
+// awk: `-i inplace` on a protected file, a protected program file, and an
+// output redirection or pipe whose target resolves to a protected path (a
+// string, FILENAME of a protected input, a `-v`/operand/program variable
+// holding one) are writes; system(), print pipes and `cmd | getline` with a
+// string command are read as command lines. When the program, its
+// assignments or its files name a protected path, a redirection or command
+// ZeroH can't resolve, or a program it can't see or read, is uncertain.
+function awkEffect(entry, ctx) {
+  const { isProtected } = ctx;
+  const awk = awkProgram(entry);
+  if (awk.programFiles.some(isProtected)) return WRITE;
+  if (awk.inPlace && awk.files.some(isProtected)) return WRITE;
+  const variables = { ...awk.scan.assigns };
+  for (const word of awk.assignments) {
+    const match = /^([A-Za-z_]\w*)=(.*)$/su.exec(String(word.value));
+    if (match) variables[match[1]] = word.dynamic ? null : match[2];
+  }
+  const inputs = awk.files.filter(
+    (word) => !/^[A-Za-z_]\w*=/u.test(String(word.value)),
+  );
+  // A target's paths, or null when it can't be resolved.
+  const resolve = (target) => {
+    if (target.literal !== undefined) return [target.literal];
+    if (target.name === 'FILENAME')
+      return inputs.some((word) => word.dynamic)
+        ? null
+        : inputs.map((word) => String(word.value));
+    if (target.name !== undefined)
+      return typeof variables[target.name] === 'string'
+        ? [variables[target.name]]
+        : null;
+    return null;
+  };
+  let effect = null;
+  let unresolved = false;
+  for (const redirect of awk.scan.redirects) {
+    const resolved = resolve(redirect.target);
+    if (resolved === null) {
+      unresolved = true;
+      continue;
+    }
+    if (redirect.kind === 'file') {
+      if (resolved.some((file) => literalNamesProtected(file, ctx)))
+        return WRITE;
+    } else
+      for (const command of resolved)
+        effect = worse(effect, commandTextEffect(command, ctx));
+  }
+  for (const target of [
+    ...awk.scan.system,
+    ...awk.scan.getline
+      .filter((g) => g.kind === 'command')
+      .map((g) => g.target),
+  ]) {
+    if (target.literal === undefined) unresolved = true;
+    else effect = worse(effect, commandTextEffect(target.literal, ctx));
+  }
+  if (effect === WRITE) return WRITE;
+  const programText = awk.programs.map((word) => word.value).join('\n');
+  const named =
+    codeNamesProtected(programText, isProtected) ||
+    awk.assignments.some((word) =>
+      codeNamesProtected(String(word.value), isProtected),
+    ) ||
+    awk.files.some(isProtected);
+  if (!named) return effect;
+  if (
+    awk.dynamic ||
+    !awk.programs.length ||
+    awk.programFiles.length ||
+    !awk.scan.ok ||
+    unresolved
+  )
+    return worse(effect, UNCERTAIN);
+  return effect;
+}
+
+// An interpreter: its script or an in-place edit (`perl -pi`) of a
+// protected file is a write; inline code is read by its language's table
+// (readCode): a write call naming a protected path is a write, a read call
+// is a read, a command it runs is read as a command line, and a write, open
+// or run ZeroH can't resolve is uncertain when the code names a protected
+// path. Code ZeroH can't see (stdin from a pipe or a file) is uncertain
+// when the line names one.
+function interpreterEffect(interpreter, ctx) {
+  const { isProtected } = ctx;
+  if (interpreter.script && isProtected(interpreter.script)) return WRITE;
+  if (interpreter.inPlace && interpreter.operands.some(isProtected))
+    return WRITE;
+  let effect = null;
+  for (const { code, dynamic } of interpreter.code) {
+    if (dynamic) {
+      if (ctx.lineNamesProtected) effect = worse(effect, UNCERTAIN);
+      continue;
+    }
+    effect = worse(effect, codeEffect(code, interpreter.language, ctx));
+    if (effect === WRITE) return WRITE;
+  }
+  return effect;
+}
+
+function codeEffect(code, language, ctx) {
+  const names = (text) => codeNamesProtected(String(text), ctx.isProtected);
+  if (!names(code)) return null;
+  const scan = readCode(code, language);
+  if (!scan.language) return UNCERTAIN;
+  const argNames = (arg) =>
+    Boolean(arg) &&
+    (arg.literal !== null && arg.literal !== undefined
+      ? literalNamesProtected(arg.literal, ctx)
+      : names(arg.text));
+  let effect = scan.ok ? null : UNCERTAIN;
+  let unresolved = false;
+  for (const call of scan.calls) {
+    if (call.kind === 'write') {
+      if (call.targets.some(argNames)) return WRITE;
+      if (call.targets.some((arg) => arg.literal === null)) unresolved = true;
+    } else if (call.kind === 'open') {
+      unresolved = true;
+    } else if (call.kind === 'exec') {
+      const command = execCommand(call);
+      if (command === null) unresolved = true;
+      else {
+        effect = worse(effect, commandTextEffect(command, ctx));
+        if (effect === WRITE) return WRITE;
+      }
+    } else if (call.kind === 'eval' || call.kind === 'dynamic')
+      unresolved = true;
+  }
+  return unresolved ? worse(effect, UNCERTAIN) : effect;
+}
+
+function codeNamesProtected(code, isProtected) {
+  if (PROTECTED_TEXT_RE.test(code) || PROTECTED_VARIABLE_RE.test(code))
+    return true;
+  return code
+    .split(/[\s'"=<>|;&(){},]+/u)
+    .filter(Boolean)
+    .some((part) =>
+      isProtected({ value: part, raw: part, tilde: part.startsWith('~') }),
+    );
+}
+
+function optionsAllowed(spec, args) {
+  const flags = splitOptions(spec.flags);
+  const values = splitOptions(spec.values);
+  const pairs = splitOptions(spec.pairs);
+  let operandsOnly = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const word = args[index];
+    const value = word.value;
+    if (operandsOnly || !value.startsWith('-') || value === '-') continue;
+    if (value === '--') {
+      operandsOnly = true;
+      continue;
+    }
+    if (word.dynamic) return false;
+    if (spec.numeric && /^-\d+$/u.test(value)) continue;
+    if (value.startsWith('--')) {
+      const [name, inline] = value.split(/=(.*)/su);
+      if (flags.has(name) && inline === undefined) continue;
+      if (values.has(name)) {
+        if (inline === undefined) index += 1;
+        continue;
+      }
+      if (pairs.has(name)) {
+        index += 2;
+        continue;
+      }
+      return false;
+    }
+    for (let k = 1; k < value.length; k += 1) {
+      const option = `-${value[k]}`;
+      if (flags.has(option)) continue;
+      if (values.has(option)) {
+        if (k === value.length - 1) index += 1;
+        break;
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+function harmlessRedirect(redirect) {
+  const target = redirect.target?.value;
+  if (redirect.op === '>&' || redirect.op === '<&')
+    return /^(?:[0-2]|-)$/u.test(target ?? '');
+  if (redirect.op === '>' || redirect.op === '>>')
+    return redirect.fd === '2' && target === '/dev/null';
+  if (redirect.op === '<') return target === '/dev/null';
+  return false;
+}
+
+// Block mode: every command is a listed reader with listed options.
+function plainSafeRead(analysis) {
+  if (!analysis.ok || !analysis.commands.length) return false;
+  return analysis.commands.every((entry) => {
+    if (
+      entry.inline ||
+      entry.dynamicProgram ||
+      entry.dynamicCode ||
+      entry.foreignCode
+    )
+      return false;
+    if (entry.launchers?.length || entry.assignments?.length || entry.stdinArgs)
+      return false;
+    if (!(entry.redirects || []).every(harmlessRedirect)) return false;
+    const spec = Object.hasOwn(SAFE_READERS, entry.program ?? '')
+      ? SAFE_READERS[entry.program]
+      : null;
+    return Boolean(spec) && optionsAllowed(spec, entry.args || []);
+  });
+}
+
+// The Elicitation guard's plain read: listed readers, no option that runs
+// another program, no writing redirection.
+export function isReadOnlyInspection(command, shell = 'bash') {
+  const analysis = analyzeShell(String(command), shell);
+  if (!analysis.ok || !analysis.commands.length) return false;
+  return analysis.commands.every((entry) => {
+    if (
+      entry.inline ||
+      entry.dynamicProgram ||
+      entry.dynamicCode ||
+      entry.foreignCode
+    )
+      return false;
+    if (entry.launchers?.length || entry.stdinArgs) return false;
+    if (!(entry.redirects || []).every(harmlessRedirect)) return false;
+    if (!READERS.has(entry.program ?? '')) return false;
+    const values = (entry.args || []).map((word) => word.value);
+    if (
+      entry.program === 'rg' &&
+      values.some((v) => /^--(?:pre|hostname-bin)(?:=|$)/u.test(v))
+    )
+      return false;
+    if (
+      (entry.program === 'less' || entry.program === 'more') &&
+      values.some((v) => v.startsWith('+'))
+    )
+      return false;
+    return true;
+  });
+}
+
+// The decision for a shell command that may name protected paths:
+// { deny, reason, unchecked } where `unchecked` is a lib/unchecked.js reason
+// for a command that passed without being read.
+export function protectedShellDecision(
+  toolName,
+  input,
+  root = process.cwd(),
+  options = {},
+) {
+  const none = { deny: false, reason: null, unchecked: null };
+  if (!SHELL_TOOLS.has(toolName) || typeof input?.command !== 'string')
+    return none;
+  const opts = controlOptions(root, options);
+  const mode = options.mode || uncertainMode(opts.env);
+  const command = input.command;
+  const shell = shellOf(toolName);
+  const isProtected = protectedWordTest(root, opts);
+  const namesProtected = commandNamesClaudeControl(command, root, opts);
+  const readings = shellReadings(command, shell).filter(
+    (reading) => reading.ok,
+  );
+  const tokenNamed = readings.some((reading) =>
+    reading.commands.some(
+      (entry) =>
+        words(entry).some(isProtected) ||
+        (entry.redirects || []).some((redirect) =>
+          isProtected(redirect.target),
+        ),
+    ),
+  );
+  if (!namesProtected && !tokenNamed) return none;
+  if (mode === 'block') {
+    // The shell's own reading decides; it must be a plain read.
+    return plainSafeRead(analyzeShell(command, shell))
+      ? none
+      : { deny: true, reason: PROTECTED_SHELL_BLOCK_REASON, unchecked: null };
+  }
+  if (!readings.length)
+    return { deny: false, reason: null, unchecked: 'unparseable' };
+  const ctx = {
+    isProtected,
+    lineNamesProtected: namesProtected || tokenNamed,
+    depth: 0,
+  };
+  let effect = null;
+  for (const reading of readings)
+    for (const entry of reading.commands)
+      effect = worse(effect, protectedEffect(entry, ctx));
+  if (effect === WRITE)
+    return { deny: true, reason: PROTECTED_SHELL_DENY_REASON, unchecked: null };
+  // Names a protected path, but what it does to it can't be read: it runs,
+  // with the notice (principle 4; block mode denied above).
+  if (effect === UNCERTAIN)
+    return { deny: false, reason: null, unchecked: 'script-or-interpreter' };
+  return none;
+}
+
+// ---------------------------------------------------------------------------
+// The ZeroH CLI from a model's shell (a UX layer since rc.2; Astra R3/R6).
+//
+// The enforcement is in the CLI itself: every state-changing subcommand
+// requires the user's authority (lib/user-authority.js). This check only
+// answers early, with a clear message, when a command plainly runs a
+// management subcommand: the CLI by any path or launcher, in command position
+// (`zeroh-disclosure proxy off`, `env -u X zeroh-disclosure …`, `node
+// …/bin/zeroh-disclosure.mjs …`, `npx zeroh-disclosure …`, `$(which
+// zeroh-disclosure) …`, `bash -c "…"`), or after a program ZeroH does not
+// know followed by a known management subcommand. A quoted argument is text
+// unless an interpreter runs it (`rg 'zeroh-disclosure proxy off' README.md`).
+
+export const MANAGEMENT_DENY_REASON =
+  'ZeroH Disclosure settings can only be changed by the user (proxy, doctor, uninstall, allow, settings, unmask caps, vault, receipts, banner). Do not run the ZeroH CLI yourself or try another way; tell the user the exact slash command to type, for example /zeroh-disclosure:proxy off. A person can also run it in their own terminal.';
+
+const ZEROH_CLI_NAMES = new Set([
+  'zeroh-disclosure',
+  'zeroh-disclosure.mjs',
+  'zeroh-disclosure.js',
+  'zeroh-disclosure.ps1',
+]);
+const ZEROH_CLI_READ_ONLY = new Set([
+  'catalog',
+  'verify',
+  'help',
+  '--help',
+  '-h',
+  '--version',
+  '-v',
+]);
+export const ZEROH_MANAGEMENT_SUBCOMMANDS = Object.freeze([
+  'allow',
+  'unmask',
+  'statusline',
+  'vault',
+  'receipt',
+  'receipts',
+  'reports',
+  'report',
+  'tokens',
+  'doctor',
+  'proxy',
+  'banner',
+  'uninstall',
+  'settings',
+  'authorize',
+]);
+const MANAGEMENT = new Set(ZEROH_MANAGEMENT_SUBCOMMANDS);
+// Runners that start a script or package named by a later word.
+const CLI_RUNNERS = new Set([
+  'node',
+  'nodejs',
+  'bun',
+  'deno',
+  'npx',
+  'pnpx',
+  'bunx',
+  'pnpm',
+  'npm',
+  'yarn',
+  'tsx',
+  'ts-node',
+]);
+const RUNNER_WORDS = new Set(['exec', 'dlx', 'x', 'run', 'run-script']);
+// Programs whose arguments are text: a CLI name among them is data.
+const TEXT_PROGRAMS = new Set([
+  'echo',
+  'printf',
+  'grep',
+  'egrep',
+  'fgrep',
+  'rg',
+  'git',
+  'gh',
+  'cat',
+  'less',
+  'more',
+  'head',
+  'tail',
+  'man',
+  'which',
+  'whereis',
+  'type',
+  'ls',
+  'find',
+  'sed',
+  'awk',
+  'jq',
+  'wc',
+  'diff',
+  'cd',
+  'write-output',
+  'write-host',
+  'select-string',
+  'sls',
+  'get-command',
+  'gcm',
+  'get-help',
+  'get-content',
+  'gc',
+  'test-path',
+  'get-childitem',
+  'gci',
+  'dir',
+]);
+// Kept for callers of the pre-rc.2 name.
+export const CLI_LAUNCHERS = Object.freeze([...CLI_RUNNERS]);
+
+function cliWord(word) {
+  if (!word) return false;
+  if (word.dynamic) return /zeroh-disclosure/iu.test(word.raw || word.value);
+  return (
+    ZEROH_CLI_NAMES.has(programName(word.value)) ||
+    ZEROH_CLI_NAMES.has(
+      String(word.value)
+        .replace(/^.*[\\/]/u, '')
+        .toLowerCase(),
+    )
+  );
+}
+
+function subcommandAfter(list, index) {
+  for (let k = index + 1; k < list.length; k += 1) {
+    const value = list[k].value;
+    if (value.startsWith('-') && !ZEROH_CLI_READ_ONLY.has(value)) {
+      if (value === '--cwd') k += 1;
+      continue;
+    }
+    return value.toLowerCase();
+  }
+  return undefined;
+}
+
+function entryRunsManagement(entry) {
+  const all = words(entry);
+  if (!all.length) return false;
+  let start = 0;
+  // `node x/bin/zeroh-disclosure.mjs`, `npx -y zeroh-disclosure`, `pnpm exec …`
+  if (CLI_RUNNERS.has(entry.program ?? '')) {
+    start = 1;
+    while (
+      start < all.length &&
+      (all[start].value.startsWith('-') || RUNNER_WORDS.has(all[start].value))
+    )
+      start += 1;
+  }
+  if (
+    cliWord(all[start]) &&
+    (entry.dynamicProgram || start === 0
+      ? true
+      : CLI_RUNNERS.has(entry.program ?? ''))
+  ) {
+    const sub = subcommandAfter(all, start);
+    if (sub !== undefined && !ZEROH_CLI_READ_ONLY.has(sub)) return true;
+  }
+  if (TEXT_PROGRAMS.has(entry.program ?? '') || entry.lookupOnly) return false;
+  // An unknown wrapper: the CLI name anywhere, then a known management word.
+  for (let k = 0; k < all.length; k += 1) {
+    if (!cliWord(all[k])) continue;
+    const sub = subcommandAfter(all, k);
+    if (sub !== undefined && MANAGEMENT.has(sub)) return true;
+  }
+  return false;
+}
+
+const UNREADABLE_CLI_RE =
+  /(?:^|[\s;&|`(])(?:[^\s;&|`()'"]*[\\/])?zeroh-disclosure(?:\.mjs|\.js|\.cmd|\.ps1|\.exe)?\s+(?:-\S+\s+)*(\w+)/iu;
+
+export function commandRunsZeroHManagement(command, shell = 'bash') {
+  const text = String(command);
+  if (!/zeroh-disclosure/iu.test(text)) return false;
+  const readings = shellReadings(text, shell).filter((reading) => reading.ok);
+  if (!readings.length) {
+    // Unreadable: the plain spelling at a command start still counts.
+    const plain = UNREADABLE_CLI_RE.exec(text);
+    return Boolean(plain && MANAGEMENT.has(plain[1].toLowerCase()));
+  }
+  return readings.some((reading) => reading.commands.some(entryRunsManagement));
+}
 const CLAUDE_CLI_RE =
   /(?:^|[\s(`'"])(?:[^\s;&|'"`()]*[\\/])?claude(?:-code)?(?:\.exe|\.cmd|\.ps1)?(?=$|[\s'"])/iu;
 const PLUGIN_CLI_RE =
@@ -448,6 +1476,7 @@ function controlOptions(root, options = {}) {
   ].filter(Boolean);
   return {
     resolvedControl: true,
+    mode: options.mode,
     platform,
     pathImpl,
     env,
@@ -592,8 +1621,9 @@ function entriesMatching(object, pattern) {
   );
 }
 
-// True when the change would switch ZeroH off or let something else answer
-// the unmask dialog.
+// True when the change would switch ZeroH off, touch any status line, move
+// the environment its hooks run in, or let something else answer the unmask
+// dialog.
 export function settingsChangeWeakensZeroH(before, after) {
   const b = before || {};
   const a = after || {};
@@ -602,6 +1632,12 @@ export function settingsChangeWeakensZeroH(before, after) {
     return true;
   }
   if (stable(elicitationHooks(a)) !== stable(elicitationHooks(b))) return true;
+  // ZeroH's status line says whether the session is protected. The model
+  // may not add, change or remove a `statusLine` in any settings file: a new
+  // one in a higher scope would shadow ZeroH's, and a changed one could run
+  // anything. Only the user changes it (/zeroh-disclosure:settings
+  // statusline, or /statusline).
+  if (stable(a.statusLine) !== stable(b.statusLine)) return true;
   const pluginsBefore = entriesMatching(b.enabledPlugins, ZEROH_PLUGIN_ID_RE);
   const pluginsAfter = entriesMatching(a.enabledPlugins, ZEROH_PLUGIN_ID_RE);
   for (const id of new Set([
@@ -683,10 +1719,8 @@ export function deniesClaudeControlChange(
     );
   }
   if (SHELL_TOOLS.has(toolName) && typeof input?.command === 'string') {
-    const command = input.command;
-    if (commandRunsClaudeControlCli(command)) return true;
-    if (!commandNamesClaudeControl(command, root, opts)) return false;
-    return !(READ_ONLY_COMMAND_RE.test(command) && !/\$\(/u.test(command));
+    if (commandRunsClaudeControlCli(input.command)) return true;
+    return protectedShellDecision(toolName, input, root, opts).deny;
   }
   return false;
 }

@@ -62,6 +62,11 @@ const STRUCTURAL_KEYS = new Set([
   'encrypted_index',
 ]);
 
+// Fields of a block that hold a tool's own data (tool_use, server_tool_use,
+// mcp_tool_use `input`; Responses API `arguments`): no structural exemption
+// applies inside them.
+const TOOL_DATA_KEYS = new Set(['input', 'arguments']);
+
 function isThinking(value) {
   return value?.type === 'thinking' || value?.type === 'redacted_thinking';
 }
@@ -122,7 +127,11 @@ export function scrubBody(json, opts, acc = []) {
   };
 
   // Deep masking of every free-text string, keeping structural fields,
-  // binary sources and signed thinking unchanged.
+  // binary sources and signed thinking unchanged. Those exemptions hold for
+  // the protocol envelope only (blocks, messages, sources). A tool's `input`
+  // is the tool's own data, where `name`, `id` or `signature` are ordinary
+  // fields that may hold a value restored for that tool: it is masked
+  // throughout, with no exempt key (Astra finding 8).
   function scrubGeneric(value, scrubText) {
     if (typeof value === 'string') return scrubText(value);
     if (Array.isArray(value)) {
@@ -132,9 +141,23 @@ export function scrubBody(json, opts, acc = []) {
     if (isThinking(value)) return value;
     const out = {};
     for (const [key, child] of Object.entries(value)) {
-      if (STRUCTURAL_KEYS.has(key)) out[key] = child;
+      if (TOOL_DATA_KEYS.has(key)) out[key] = scrubData(child, scrubText);
+      else if (STRUCTURAL_KEYS.has(key)) out[key] = child;
       else if (key === 'source') out[key] = scrubSource(child, scrubText);
       else out[key] = scrubGeneric(child, scrubText);
+    }
+    return out;
+  }
+
+  function scrubData(value, scrubText) {
+    if (typeof value === 'string') return scrubText(value);
+    if (Array.isArray(value)) {
+      return value.map((entry) => scrubData(entry, scrubText));
+    }
+    if (!value || typeof value !== 'object') return value;
+    const out = {};
+    for (const [key, child] of Object.entries(value)) {
+      out[key] = scrubData(child, scrubText);
     }
     return out;
   }
@@ -175,10 +198,10 @@ export function scrubBody(json, opts, acc = []) {
     if (message.role === 'assistant') {
       return { ...message, content: scrubAssistantContent(message.content) };
     }
-    if (
-      message.type === 'tool_result' ||
-      message.type === 'function_call_output'
-    ) {
+    // Responses API items without a role: tool results, and the model's own
+    // tool calls (whose arguments hold restored values). Reasoning items are
+    // provider-encrypted and pass unchanged.
+    if (typeof message.type === 'string' && message.type !== 'reasoning') {
       return scrubToolResult(message);
     }
     return message;
@@ -544,7 +567,17 @@ export function createMaskingProxy({
       );
     }
     const json = JSON.parse(decode(body, encoding).toString('utf8'));
-    const vault = new Vault(requestRoot);
+    // A vault that can't be opened: tokens could never be turned back into
+    // real values, so the request goes on unmasked rather than with dead
+    // tokens (owner decision 2026-09-27). The prompt hook has already told
+    // the user, and stopped the prompt in `uncertain block` mode.
+    let vault;
+    try {
+      vault = new Vault(requestRoot);
+    } catch (error) {
+      if (!isVaultError(error)) throw error;
+      return { body: Buffer.from(JSON.stringify(json), 'utf8'), masked: true };
+    }
     // Unmask grants belong to one Claude session: the one in the header.
     const sessionId = String(req.headers['x-claude-code-session-id'] || '');
     const grants = sessionId ? activeGrants(requestRoot, { sessionId }) : [];

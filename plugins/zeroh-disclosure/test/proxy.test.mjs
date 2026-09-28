@@ -23,6 +23,7 @@ import {
 } from './helpers.mjs';
 import { createGrant } from '../lib/unmask.js';
 import { Vault } from '../lib/vault.js';
+import { restoreForTool } from '../lib/tool-policies.js';
 
 // The access key the test proxies accept, and a proxy that masks every
 // request with one project's vault unless `route` says otherwise.
@@ -984,5 +985,97 @@ test('a request that meets a stale kept-alive upstream connection is sent once m
   } finally {
     proxy.close();
     upstream.close();
+  }
+});
+
+// Astra finding 8: key names such as name, id or signature are protocol
+// metadata only in the envelope. Inside a tool's input they are the tool's
+// data, and a value restored there must be masked again in later history.
+test('restored tool input named like protocol fields is masked in history (Astra 8)', () => {
+  const p = tempProject();
+  process.env.ZEROH_HOME = p.home;
+  const vault = new Vault(p.dir);
+  const token = vault.tokenFor('API_KEY', FAKE_STRIPE, 'known:STRIPE_KEY');
+  const input = {
+    name: token,
+    id: token,
+    signature: token,
+    type: token,
+    role: token,
+    call_id: token,
+    tool_use_id: token,
+    media_type: token,
+    encrypted_content: token,
+    cache_control: { type: token },
+    description: token,
+    nested: [{ name: token, source: { type: 'url', url: token } }],
+    block: { type: 'thinking', thinking: token, signature: token },
+  };
+  const restored = restoreForTool('mcp__crm__store', input, vault, null, {
+    rules: { API_KEY: ['mcp:crm'] },
+  });
+  assert.equal(
+    restored.input.name,
+    FAKE_STRIPE,
+    'restored for the allowed server',
+  );
+  assert.equal(restored.input.block.thinking, FAKE_STRIPE);
+  const opts = { vault, known: [], profile: 'prompt' };
+  const body = {
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_ZEROHFAKE',
+            name: 'mcp__crm__store',
+            input: restored.input,
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_ZEROHFAKE',
+            content: [
+              { type: 'text', text: JSON.stringify({ name: FAKE_STRIPE }) },
+            ],
+          },
+        ],
+      },
+    ],
+    input: [
+      {
+        type: 'function_call',
+        call_id: 'call_ZEROHFAKE',
+        name: 'store',
+        arguments: JSON.stringify({ name: FAKE_STRIPE }),
+      },
+    ],
+  };
+  const out = scrubBody(body, opts);
+  assert.ok(
+    !JSON.stringify(out).includes(FAKE_STRIPE),
+    'no copy of the restored value survives',
+  );
+  // The envelope itself is unchanged.
+  const block = out.messages[0].content[0];
+  assert.equal(block.type, 'tool_use');
+  assert.equal(block.id, 'toolu_ZEROHFAKE');
+  assert.equal(block.name, 'mcp__crm__store');
+  assert.equal(out.messages[1].content[0].tool_use_id, 'toolu_ZEROHFAKE');
+  assert.equal(out.input[0].call_id, 'call_ZEROHFAKE');
+  assert.equal(out.input[0].name, 'store');
+  for (const key of Object.keys(input)) {
+    if (key === 'cache_control' || key === 'nested' || key === 'block')
+      continue;
+    assert.match(
+      out.messages[0].content[0].input[key],
+      /^\[API_KEY-[0-9a-f]{6}\]$/u,
+      key,
+    );
   }
 });

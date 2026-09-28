@@ -366,7 +366,7 @@ test('a value masked by its context stays masked when it comes back bare', () =>
   const first = runHook(
     'post-tool-use',
     readEvent(p, 'rr1', `[db]\ndb_password = "${CONTEXT_SECRET}"\n`),
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   const masked = readOutput(first);
   assert.ok(!masked.includes(CONTEXT_SECRET));
@@ -384,7 +384,7 @@ test('a value masked by its context stays masked when it comes back bare', () =>
         new_string: `const pw = "${tok}";`,
       },
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(
     edit.json.hookSpecificOutput.updatedInput.new_string,
@@ -394,7 +394,7 @@ test('a value masked by its context stays masked when it comes back bare', () =>
   const reread = runHook(
     'post-tool-use',
     readEvent(p, 'rr2', `const pw = "${CONTEXT_SECRET}";\n`, 'app.js'),
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(readOutput(reread), `const pw = "${tok}";\n`);
   const encoded = Buffer.from(CONTEXT_SECRET).toString('base64');
@@ -409,7 +409,7 @@ test('a value masked by its context stays masked when it comes back bare', () =>
         stderr: '',
       },
     },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   const stdout = printed.json.hookSpecificOutput.updatedToolOutput.stdout;
   assert.ok(!stdout.includes(CONTEXT_SECRET));
@@ -442,7 +442,7 @@ test('a value masked by its context stays masked when it comes back bare', () =>
   const typed = runHook(
     'user-prompt-submit',
     { prompt: `use ${CONTEXT_SECRET} please` },
-    { project: p },
+    { project: p, extraEnv: { ZEROH_UNCERTAIN: 'block' } },
   );
   assert.equal(typed.code, 2, typed.stderr);
   assert.ok(!typed.stderr.includes(CONTEXT_SECRET));

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { PERSONAL_DATA_KINDS } from '../pii/index.js';
+import { PERSONAL_DATA_KINDS } from '../detector.js';
 
 // The one policy the plugin applies. Each receipt records which rule matched:
 // credentials (keys, passwords, tokens, secrets) are blocked, personal data is
@@ -8,8 +8,8 @@ import { PERSONAL_DATA_KINDS } from '../pii/index.js';
 // something else with the text (the proxy masks and sends it; without the
 // proxy any finding stops the prompt) records that action instead. The rules name what was found, never a regulator.
 // Names and currency amounts are not masked by the free policy: they need
-// context-aware detection, which is Premium. Every kind lib/pii detects is
-// masked; ACCOUNT_NUMBER is no longer detected, but a value the user reported
+// context-aware detection, which is Premium. Every personal-data kind the
+// detector finds (PERSONAL_DATA_KINDS) is masked; ACCOUNT_NUMBER is no longer detected, but a value the user reported
 // under it (or a vault entry from an earlier version) is still masked.
 const PERSONAL_DATA = [
   ...PERSONAL_DATA_KINDS.map(({ type }) => type),

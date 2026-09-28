@@ -4,6 +4,11 @@ The free plugin detects values by pattern and by exact value. Run
 `node "<plugin>/bin/zeroh-disclosure.mjs" catalog` (or ask Claude "what does ZeroH Disclosure
 detect?") to print the rule set that is installed.
 
+The patterns come from Blade Labs' MIT-licensed detection engine, shipped in
+[`vendor/sensitive-data-detectors`](../vendor/sensitive-data-detectors) (its
+[README](../vendor/sensitive-data-detectors/README.md) says which version). The exact-value
+matching of your own values is the plugin's (`lib/secrets.js`).
+
 ## Contents
 
 - [Secrets](#secrets)
@@ -33,7 +38,8 @@ detect?") to print the rule set that is installed.
   URL-encoded form. Once a value is masked, it stays masked wherever it shows up again.
 - **Private key and credential stores** (SSH keys, `.p12`, `.pfx`, `.jks`, `.kdbx`, `.ppk`,
   Terraform state, `.netrc`, `.pgpass`, `.git-credentials`, kubeconfig, AWS credentials, Docker
-  config) are never read into the conversation.
+  config) can be read; what the detector finds in them is masked, with a one-line notice
+  (`uncertain block` refuses them). ZeroH's own keys are never read.
 
 ## Personal data
 

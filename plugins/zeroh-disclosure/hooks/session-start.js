@@ -3,7 +3,8 @@
 // SessionStart: load configuration and known secrets, start or repair the
 // local proxy, scan preloaded context and print the banner.
 import path from 'node:path';
-import { configWarning, loadConfig } from '../lib/config.js';
+import { fileURLToPath } from 'node:url';
+import { configWarning, loadConfig, uncertainMode } from '../lib/config.js';
 import {
   collectActiveTokens,
   loadSession,
@@ -28,9 +29,22 @@ import {
 } from '../lib/banner.js';
 import { registeredProjectRoots, registerProjectRoot } from '../lib/report.js';
 import { pruneReceipts } from '../lib/receipt-retention.js';
+import { updateSessionStatus } from '../lib/session-status.js';
+import { recordPluginRoot } from '../lib/statusline-settings.js';
+import { shadowedStatusline } from '../lib/first-run.js';
+import { managedSettingsPath } from '../lib/statusline.js';
+import { zerohHome } from '../lib/private-fs.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const event = await readStdinJson();
+// The status line shows "starting" until this hook has finished.
+updateSessionStatus(
+  { cwd: projectDir(event), sessionId: event?.session_id },
+  (status) => {
+    status.phase = 'starting';
+    return status;
+  },
+);
 try {
   cleanupStaleRunFiles();
 } catch {
@@ -139,6 +153,7 @@ const warnings = warningLines({
   contextFindings,
   proxy: proxy === 'no-login-item' ? 'quiet' : proxy,
   unmaskWarnings: unmask.warnings,
+  uncertain: uncertainMode(),
 });
 if (proxyGuard?.report) {
   warnings.push(`  Details (stays on this machine): ${proxyGuard.report}`);
@@ -149,6 +164,7 @@ const banner = renderBanner({
   proxy,
   warnings,
   paused: Boolean(vaultError),
+  uncertain: uncertainMode(),
   // Claude Code renders colour in the SessionStart message only (T-28).
   colour: colourAllowed(),
 });
@@ -173,15 +189,28 @@ const lines = [
   '  say "⟦API_KEY-3f9a1c⟧ is a Stripe key", never "[API_KEY-3f9a1c] is a placeholder".',
   "- When the user asks you to unmask a kind of data, call request_unmask for it; they decide in Claude Code's dialog. Keys never unmask.",
   '- When the user asks to stop showing real values, call end_unmask (the kind, or all).',
+  "- To change how ZeroH's status line looks, when the user asks, edit this with Write or Edit:",
+  `  ${path.join(zerohHome(), 'statusline-style.json')}`,
+  '  {"version": 1} plus any of: fields (order of shield, name, state, fix, masked, sent,',
+  '  notProtected, unmask, receipt), separator, labels, emoji (true/false), wording',
+  '  ("long"/"compact"), colour (true/false), onlyWhenNotProtected. Never change statusLine.',
   '',
   `Known secrets for this project: ${known.length} (from .env files and secret-named environment variables).`,
-  `Typed prompts: ${proxyIsActive ? 'masked automatically by the ZeroH proxy' : 'a prompt containing a secret is stopped and the user resends a masked copy'}.`,
+  `Typed prompts: ${
+    proxyIsActive
+      ? 'masked automatically by the ZeroH proxy'
+      : uncertainMode() === 'block'
+        ? 'a prompt containing a secret is stopped and the user resends a masked copy'
+        : 'not masked; a prompt containing a secret is sent as typed, and the user is told'
+  }.`,
 ];
 
 if (vaultError) {
   lines.push(
     '',
-    '⚠ ZeroH Disclosure could not open its vault for this project. Tool output is withheld and tool calls are denied until the user runs `/zeroh-disclosure:doctor --fix`; tell the user if they ask why.',
+    uncertainMode() === 'block'
+      ? '⚠ ZeroH Disclosure could not open its vault for this project. Tool output is withheld and tool calls are denied until the user runs `/zeroh-disclosure:doctor --fix`; tell the user if they ask why.'
+      : '⚠ ZeroH Disclosure could not open its vault for this project. Until the user runs `/zeroh-disclosure:doctor --fix`, tool output reaches you unmasked and tokens cannot be put back into commands; tell the user if they ask why.',
   );
 }
 
@@ -220,7 +249,7 @@ const userNotices = banner ? [banner] : [];
 if (vaultNotice) userNotices.push(vaultNotice);
 if (session.ephemeral) {
   userNotices.push(
-    "ZeroH Disclosure: ZeroH's own folder is read-only, so no receipts are kept in this session. Masking still works; a prompt holding a secret is stopped, not sent.",
+    "ZeroH Disclosure: ZeroH's own folder is read-only, so no receipts are kept in this session. Masking still works.",
   );
 }
 if (allowRules.ignored) userNotices.push(ALLOW_FILE_NOTICE);
@@ -237,13 +266,44 @@ if (proxyError) {
     ? 'The dead local proxy setting was removed; other Claude Code settings were preserved.'
     : 'Claude Code settings were left unchanged.';
   userNotices.push(
-    `ZeroH Disclosure: the local proxy could not start (${proxyError.message}). ${recovery} Typed secrets remain blocked.`,
+    `ZeroH Disclosure: the local proxy could not start (${proxyError.message}). ${recovery} ${
+      uncertainMode() === 'block'
+        ? 'Typed secrets remain blocked.'
+        : 'Until it runs, what you type is not masked: a typed secret is sent with a "not protected" line.'
+    }`,
   );
+}
+
+// What the status line shows for this session (lib/statusline.js).
+updateSessionStatus({ cwd: root, sessionId }, (status) => {
+  status.proxy = proxy;
+  status.paused = Boolean(vaultError);
+  status.phase = 'ready';
+  return status;
+});
+// Where the status line command finds this plugin version, and, for the
+// first prompt, which marketplace it came from (lib/first-run.js).
+recordPluginRoot(
+  zerohHome(),
+  path.dirname(path.dirname(fileURLToPath(import.meta.url))),
+);
+// A project or managed settings file that sets its own status line over
+// ZeroH's: said once per session start.
+{
+  const shadowed = shadowedStatusline({
+    root,
+    managedPath: managedSettingsPath(),
+  });
+  if (shadowed) userNotices.push(shadowed);
 }
 
 function vaultNoticeText(error) {
   const problem = vaultProblem(error);
-  return `⚠ ZeroH Disclosure can't open its vault for this project: ${problem.reason}. Until that is fixed, tool output is withheld, tool calls are stopped and the proxy sends nothing. ${problem.fix}`;
+  const until =
+    uncertainMode() === 'block'
+      ? 'tool output is withheld, tool calls are stopped and the proxy sends nothing'
+      : 'nothing can be masked: prompts, tool calls and tool output go through as they are, each with a "not protected" line, and tokens stay tokens';
+  return `⚠ ZeroH Disclosure can't open its vault for this project: ${problem.reason}. Until that is fixed, ${until}. ${problem.fix}`;
 }
 
 emit({

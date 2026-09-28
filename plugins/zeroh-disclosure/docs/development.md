@@ -1,26 +1,26 @@
 # Developing ZeroH Disclosure
 
-How to run the tests, try a change in Claude Code, and update the generated rule catalogs.
+How to run the tests, try a change in Claude Code, and update the detection engine.
 
 ## Contents
 
 - [Ground rules](#ground-rules)
 - [Run the tests](#run-the-tests)
 - [Try a change in Claude Code](#try-a-change-in-claude-code)
-- [Update the provider rules](#update-the-provider-rules)
-- [Update the top-level domain list](#update-the-top-level-domain-list)
-- [Update the personal-data libraries](#update-the-personal-data-libraries)
+- [Update the detection rules and libraries](#update-the-detection-rules-and-libraries)
 - [Re-record Read response shapes](#re-record-read-response-shapes)
 - [Where things live](#where-things-live)
 
 ## Ground rules
 
-- The hooks, the proxy and the CLI use Node.js built-ins, plus the libraries vendored under
-  `vendor/` (validator.js, libphonenumber-js, i18n-iso-countries, Saudi-ID-Validator). A plugin install copies this folder without
+- The hooks, the proxy and the CLI use Node.js built-ins, plus the detection engine vendored
+  under `vendor/sensitive-data-detectors/` (with validator.js, libphonenumber-js,
+  i18n-iso-countries and Saudi-ID-Validator inside it). A plugin install copies this folder without
   `node_modules`, so do not add runtime dependencies: vendor a pinned release instead, with its
   licence, `SOURCE.json` and an import script, and list it in `NOTICE`.
-- Do not hand-write personal-data detection. `lib/pii/` only proposes candidates and keeps code
-  readable; a vendored library decides.
+- Do not hand-write personal-data detection. The engine only proposes candidates and keeps code
+  readable; a vendored library decides. Detection changes go to the engine's package, not here
+  (see [Update the detection rules and libraries](#update-the-detection-rules-and-libraries)).
 - Use fake values only: a `ZEROHFAKE` marker in every secret-shaped value, `example.com` or
   `.invalid` hosts, and addresses such as `alice@example.com`. Never put a real key in a test,
   fixture, issue or pull request, even a revoked one.
@@ -74,79 +74,38 @@ session starts. The first session also installs the local proxy; when you are do
 `/zeroh-disclosure:proxy off` in that session, or
 `node /tmp/zeroh-disclosure-try/bin/zeroh-disclosure.mjs proxy off` from a terminal.
 
-## Update the provider rules
+## Update the detection rules and libraries
 
-`lib/rules/gitleaks.generated.json` is generated from the pinned gitleaks rule file in
-`vendor/gitleaks/`. The current catalog imports 221 of 222 source rules and records the one it
-could not translate, with the reason. Its provenance is embedded in the JSON.
+The detection engine (secrets, personal data, the gitleaks provider rules, the IANA top-level
+domains and the vendored validator.js, libphonenumber-js, i18n-iso-countries and
+Saudi-ID-Validator) is not maintained here. It is `@bladelabs/sensitive-data-detectors`
+(`packages/sensitive-data-detectors` in the Blade Labs monorepo, MIT), and
+`vendor/sensitive-data-detectors/` is a synced copy of it. **Do not edit the copy.**
 
-To move to a new gitleaks release:
-
-1. Put the new upstream TOML and the unchanged upstream licence in `vendor/gitleaks/`.
-2. Update the source path and `SOURCE_METADATA` in `scripts/import-gitleaks.mjs`.
-3. Update `lib/rules/NOTICE` and `NOTICE` with the version and commit.
-4. Generate the catalog and check it:
+1. Change the package and follow its README (Updating the vendored code): its import scripts
+   fetch, pin and check each upstream, and its tests cover detection.
+2. Commit the package change, then copy it here from the monorepo root and check:
 
    ```bash
-   node scripts/import-gitleaks.mjs
-   node scripts/import-gitleaks.mjs --check
+   pnpm nx run zeroh-marketplace:sync-detectors
+   node scripts/sync-detectors.mjs --check
    npm test
    ```
 
-The generator translates the supported RE2 syntax to JavaScript regular expressions, keeps the
-applicable allow lists, records skipped rules and why, and writes deterministic JSON. `--check`
-compares parsed JSON, so formatting does not count as drift.
+   The zeroh-marketplace test target runs the same `--check`: it fails when the copy and the
+   package differ, and skips outside the monorepo (the public tree ships the copy as it is).
+   `vendor/sensitive-data-detectors/SOURCE.json` records the package version, the monorepo commit
+   and each file's SHA-256; `test/detectors.test.mjs` checks the copy against it and runs the
+   copy's own `import-*.mjs --check` scripts.
 
-Review every skipped rule. A change in the count is something to inspect, not a number to update.
-
-## Update the top-level domain list
-
-The destination check uses the IANA list of top-level domains to tell hosts from file names.
-`lib/rules/tlds.generated.json` is generated from `vendor/iana/tlds-alpha-by-domain.txt`:
-
-1. Replace the vendored file with the current
-   [IANA list](https://data.iana.org/TLD/tlds-alpha-by-domain.txt), unchanged.
-2. Regenerate and check:
-
-   ```bash
-   node scripts/import-tlds.mjs
-   node scripts/import-tlds.mjs --check
-   npm test
-   ```
-
-3. Update the version in `lib/rules/NOTICE` and `NOTICE`.
-
-The same list also checks the top-level domain of email addresses (`lib/pii/index.js`).
-
-## Update the personal-data libraries
-
-`vendor/validator` holds the validator.js modules `lib/pii` calls (`isEmail`, `isCreditCard`,
-`isIBAN`, `isIdentityCard`, `isTaxID`, `isIP`, `isPassportNumber`, `isBtcAddress`,
-`isEthereumAddress`) and every module they require, unchanged from the npm
-package's CommonJS build. `vendor/libphonenumber-js` holds that package's prebuilt
-`bundle/libphonenumber-max.js`, unchanged, as `libphonenumber-max.cjs`. Each folder has the
-licences and a `SOURCE.json` with the tarball URL, its npm integrity and the SHA-256 of every file.
-
-1. Set the new version, tarball URL and integrity (`npm view <package>@<version> dist`) in
-   `RELEASE` in `scripts/import-validator.mjs` or `scripts/import-libphonenumber.mjs`.
-2. Download, verify and replace the vendored files, then check:
-
-   ```bash
-   node scripts/import-validator.mjs --fetch
-   node scripts/import-libphonenumber.mjs --fetch
-   node scripts/import-validator.mjs --check
-   node scripts/import-libphonenumber.mjs --check
-   npm test
-   ```
-
-   The ISO 3166 codes (`vendor/i18n-iso-countries`) and the Saudi ID check
-   (`vendor/saudi-id-validator`) are pinned the same way in
-   `scripts/import-reference-data.mjs` (`--fetch`, `--check`).
-
-3. Update the versions in `NOTICE` and the CHANGELOG. `test/pii.test.mjs` carries test cases from
-   both projects' suites; rerun the
+3. Update `NOTICE`, the CHANGELOG and [What ZeroH Disclosure detects](detection.md) when a version,
+   a count or a kind changed, and rerun the
    [false-positive measurement](detection.md#false-positives-measured) if the update changes what
    is found.
+
+What the plugin adds on top of the engine lives in `lib/detector.js`: its own tokens are never
+detected again, `ZEROH_PHONE_REGION` sets the phone region, and the catalog lists the exact-match
+values from `.env` and credential files (`lib/secrets.js`).
 
 ## Re-record Read response shapes
 
@@ -172,7 +131,7 @@ When Claude Code changes one of these responses:
 | Area                   | Files                                                                                                                                                                                                                                                                                  |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Hooks                  | `hooks/hooks.json`, the fail-closed loader `hooks/run.js` (with `hooks/fail-closed.js`) and one script per event in `hooks/`                                                                                                                                                           |
-| Detection              | `lib/detector.js` (patterns), `lib/secrets.js` (known values, scrubbing, destinations), `lib/context-scan.js`, `lib/rules/` (generated data)                                                                                                                                           |
+| Detection              | `vendor/sensitive-data-detectors/` (the engine, a synced copy), `lib/detector.js` (the plugin's additions), `lib/secrets.js` (known values, scrubbing, destinations), `lib/context-scan.js`, `scripts/sync-detectors.mjs`                                                              |
 | Vault and tokens       | `lib/vault.js`, `lib/tokens.js`, `lib/mask.js`, `lib/crypto.js`                                                                                                                                                                                                                        |
 | Restore and guards     | `lib/late-bind.js`, `lib/exit-status.js`, `lib/allow-rules.js`, `lib/settings-guard.js`, `lib/tool-policies.js`                                                                                                                                                                        |
 | Formats                | `lib/pdf-text.js`, `lib/format-audit.js`                                                                                                                                                                                                                                               |

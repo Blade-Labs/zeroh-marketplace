@@ -1,0 +1,5 @@
+# vendor/sensitive-data-detectors is a byte-for-byte copy of a monorepo package,
+# pinned by SHA-256 (its SOURCE.json and the upstream SOURCE.json files). A CRLF
+# checkout (core.autocrlf=true on Windows) would fail those checks.
+sensitive-data-detectors/** text=auto eol=lf
+sensitive-data-detectors/vendor/** -text

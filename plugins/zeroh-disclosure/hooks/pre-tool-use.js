@@ -4,7 +4,9 @@
 // used (only for allowed hosts), and deny calls that would leak a secret or
 // change ZeroH's own settings.
 import path from 'node:path';
-import { loadConfig } from '../lib/config.js';
+import { loadConfig, uncertainMode } from '../lib/config.js';
+import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
+import { shellDestinations } from '../lib/shell-destinations.js';
 import { hmacKeyBytes, loadSession, writeJson } from '../lib/session.js';
 import {
   applyMasked,
@@ -18,11 +20,16 @@ import { saveQuietly, Vault } from '../lib/vault.js';
 import {
   bashSensitiveReason,
   checkDestinations,
+  commandNamesZeroHSecret,
   destinationText,
   expiredTokens,
   hostsIn,
   isSensitivePath,
+  isZeroHSecretPath,
   loadAllowRules,
+  mcpServerAllowed,
+  mcpServerOf,
+  networkHostsIn,
   powershellSensitiveReason,
 } from '../lib/secrets.js';
 import { recordDestinationCheck } from '../lib/report.js';
@@ -42,9 +49,13 @@ import {
   preparePowerShellLateBinding,
 } from '../lib/late-bind.js';
 import {
+  commandRunsClaudeControlCli,
+  commandRunsZeroHManagement,
   deniesElicitationHookEdits,
   deniesUserOnlyCommand,
   deniesZeroHSettings,
+  MANAGEMENT_DENY_REASON,
+  protectedShellDecision,
   SETTINGS_DENY_REASON,
   USER_ONLY_DENY_REASON,
 } from '../lib/settings-guard.js';
@@ -52,6 +63,7 @@ import { isSecretType, tokenType } from '../lib/data-kinds.js';
 import { shellOf } from '../lib/shell-tools.js';
 import { claimUnmaskMcpSession } from '../lib/unmask.js';
 import { terminalCommand } from '../lib/fix-command.js';
+import { TOKEN_RE } from '../lib/token-pattern.js';
 
 // Fail closed (hooks/run.js): any unexpected error denies the call instead of
 // letting the tool run unguarded.
@@ -65,10 +77,41 @@ const sessionId = event?.session_id;
 
 if (!toolName || !toolInput) process.exit(0);
 
-// The guards need no configuration, so they run before it is loaded: a project
-// file that cannot be read must not switch them off.
+// One-line notices for the user (systemMessage) about what ran without
+// ZeroH's full protection (owner rule 2026-09-27: pass by default; see
+// lib/unchecked.js). Each emit below carries them.
+const notices = [];
+// What the model is told when its call runs with a token instead of the
+// value (additionalContext), so it can fix the call itself.
+const modelNotes = [];
+async function passUnchecked(
+  reason,
+  { subject = 'command', valueName = null } = {},
+) {
+  const { notice } = await recordUnchecked({
+    reason,
+    tool: toolName,
+    cwd,
+    sessionId,
+    subject,
+    valueName,
+  });
+  if (notice && !notices.includes(notice)) notices.push(notice);
+}
+
+// The guards run whether or not the configuration can be read: a project
+// file that cannot be read must not switch them off. It is read first only
+// for the `uncertain` mode (pass by default, see lib/config.js).
 const root = projectDir(event);
+let configFailed = false;
+try {
+  configFailed = (await loadConfig({ cwd })).unreadable?.length > 0;
+} catch {
+  configFailed = true;
+}
+const mode = uncertainMode(process.env);
 if (deniesUserOnlyCommand(toolName, toolInput)) {
+  // deny-inventory: user-only-command
   emitDeny(USER_ONLY_DENY_REASON);
   process.exit(0);
 }
@@ -76,22 +119,48 @@ if (deniesUserOnlyCommand(toolName, toolInput)) {
 // arguments become prompt text, so nothing is ever restored into them.
 if (toolName === 'Skill' || toolName === 'SlashCommand') process.exit(0);
 if (deniesElicitationHookEdits(toolName, toolInput, root)) {
+  // deny-inventory: elicitation-hook
   emitDeny(
     'ZeroH Disclosure blocked an attempt to add or change an Elicitation hook. Unmask consent must be answered by the user in Claude Code.',
   );
   process.exit(0);
 }
-if (deniesZeroHSettings(toolName, toolInput, root)) {
+if (shellOf(toolName) && typeof toolInput.command === 'string') {
+  // A UX answer: the CLI itself refuses management without the user's
+  // authority (lib/user-authority.js); this says so before it runs.
+  if (commandRunsZeroHManagement(toolInput.command, shellOf(toolName))) {
+    // deny-inventory: management-cli
+    emitDeny(MANAGEMENT_DENY_REASON);
+    process.exit(0);
+  }
+  if (!commandRunsClaudeControlCli(toolInput.command)) {
+    const decision = protectedShellDecision(toolName, toolInput, root, {
+      mode,
+    });
+    if (decision.deny) {
+      // deny-inventory: protected-path-write
+      emitDeny(decision.reason);
+      process.exit(0);
+    }
+    if (decision.unchecked) await passUnchecked(decision.unchecked);
+  }
+}
+if (deniesZeroHSettings(toolName, toolInput, root, { mode })) {
+  // deny-inventory: zeroh-settings
   emitDeny(SETTINGS_DENY_REASON);
   process.exit(0);
 }
-try {
-  await loadConfig({ cwd });
-} catch {
-  emitDeny(
-    '🛡  ZeroH Disclosure denied this tool call because it could not read its configuration (.zeroh.env). Ask the user to fix or remove that file.',
-  );
-  process.exit(0);
+// An unreadable .zeroh.env: the defaults (and the user's own settings)
+// apply, with a notice (owner decision 2026-09-27); `block` mode denies.
+if (configFailed) {
+  if (mode === 'block') {
+    // deny-inventory: config-unreadable
+    emitDeny(
+      '🛡  ZeroH Disclosure denied this tool call because it could not read its configuration (.zeroh.env). Ask the user to fix or remove that file.',
+    );
+    process.exit(0);
+  }
+  await passUnchecked('config-unreadable', { subject: subjectOf(toolName) });
 }
 
 // Private keys, keystores and credential stores never enter the conversation,
@@ -101,13 +170,15 @@ if (
   /request_unmask$/u.test(toolName) &&
   !claimUnmaskMcpSession(root, sessionId)
 ) {
+  // deny-inventory: unmask-session-claim
   emitDeny(
     'ZeroH Disclosure refused this unmask request because another session is starting one for the same project. Try again after that request finishes.',
   );
   process.exit(0);
 }
 // Background shells and Monitor stream their output to the model without a
-// PostToolUse call, so only the proxy can mask it.
+// PostToolUse call, so only the proxy can mask it. Without the proxy they run
+// with a notice (D-22); `block` mode stops them.
 const shell = shellOf(toolName);
 const background =
   toolName === 'Monitor' ||
@@ -119,43 +190,95 @@ if (
     requireSeen: true,
   }))
 ) {
-  emitDeny(
-    [
-      `🛡  ZeroH Disclosure blocked this ${toolName === 'Monitor' ? 'Monitor' : `background ${toolName}`} call: its output reaches you without passing ZeroH's output masking, and the ZeroH proxy is not active in this session.`,
-      '',
-      toolName === 'Monitor'
-        ? 'Run the command in the foreground with Bash instead, or ask the user to turn the ZeroH proxy on.'
-        : 'Run the command in the foreground (without run_in_background), or ask the user to turn the ZeroH proxy on.',
-    ].join('\n'),
-  );
-  process.exit(0);
+  if (mode === 'block') {
+    // deny-inventory: background-no-proxy
+    emitDeny(
+      [
+        uncheckedNotice('proxy-not-running', { mode: 'block' }),
+        '',
+        `Its output would reach you without passing ZeroH's output masking. ${
+          toolName === 'Monitor'
+            ? 'Run the command in the foreground with Bash instead, or ask the user to turn the ZeroH proxy on.'
+            : 'Run the command in the foreground (without run_in_background), or ask the user to turn the ZeroH proxy on.'
+        }`,
+      ].join('\n'),
+    );
+    process.exit(0);
+  }
+  await passUnchecked('proxy-not-running');
 }
+// Private keys and credential stores (A2): read by default, their output
+// masked by PostToolUse like any other, with a notice; `block` mode stops
+// them. A secrets file piped through an encoder would slip past masking: it
+// runs with a notice too, and `block` mode stops it. ZeroH's own keys stay
+// closed in every mode: reading one would undo the masking itself.
 const sensitive = sensitiveReason(toolName, toolInput, root);
 if (sensitive) {
-  emitDeny(
-    [
-      `🛡  ZeroH Disclosure blocked this ${toolName} call: it ${sensitive}.`,
-      '',
-      'Files like this are never read into the conversation. If the task needs a value from',
-      'it, ask the user to put it in an environment variable and refer to the variable.',
-    ].join('\n'),
+  const zerohOwn =
+    isZeroHSecretPath(
+      toolInput.file_path || toolInput.notebook_path || toolInput.path,
+    ) ||
+    (typeof toolInput.command === 'string' &&
+      commandNamesZeroHSecret(toolInput.command));
+  if (zerohOwn || mode === 'block') {
+    // deny-inventory: sensitive-file
+    emitDeny(
+      [
+        `🛡  ZeroH Disclosure blocked this ${toolName} call: it ${sensitive}.`,
+        '',
+        zerohOwn
+          ? "ZeroH's own keys are never read into the conversation."
+          : 'Files like this are not read into the conversation while ZeroH blocks what it cannot fully protect (uncertain = block). If the task needs a value from it, ask the user to put it in an environment variable and refer to the variable.',
+      ].join('\n'),
+    );
+    process.exit(0);
+  }
+  await passUnchecked(
+    /encoder/u.test(sensitive) ? 'unknown-format' : 'sensitive-file-masked',
+    { subject: shell ? 'command' : 'tool call' },
   );
-  process.exit(0);
 }
 let vault;
 try {
   vault = new Vault(root, { sessionId });
 } catch {
-  emitDeny(
-    '🛡  ZeroH Disclosure denied this tool call because it could not open its vault. Ask the user to run `/zeroh-disclosure:doctor --fix`.',
+  if (mode === 'block') {
+    // deny-inventory: vault-unavailable-tool
+    emitDeny(
+      '🛡  ZeroH Disclosure denied this tool call because it could not open its vault. Ask the user to run `/zeroh-disclosure:doctor --fix`.',
+    );
+    process.exit(0);
+  }
+  // Without the vault nothing can be put back: the call runs as written,
+  // tokens and all (owner decision 2026-09-27).
+  const holdsToken = new RegExp(TOKEN_RE.source, 'u').test(
+    JSON.stringify(toolInput),
   );
+  await passUnchecked(
+    holdsToken ? 'token-vault-unavailable' : 'vault-unavailable',
+    { subject: subjectOf(toolName) },
+  );
+  if (holdsToken) {
+    modelNotes.push(
+      `ZeroH Disclosure could not open its vault, so this ${toolName} call ran with the tokens as plain text, not the real values. Tell the user to run /zeroh-disclosure:doctor.`,
+    );
+  }
+  emitNotices();
   process.exit(0);
 }
 
 // A token whose mapping expired has no value to put back. Running the call
 // with the literal token would fail silently or write it into a file.
 const expired = expiredTokens(toolInput, vault);
-if (expired.length) {
+if (expired.length && mode !== 'block') {
+  // Runs with the token text where the value expired (owner decision
+  // 2026-09-27); any other token is still put back below.
+  await passUnchecked('token-expired', { subject: subjectOf(toolName) });
+  modelNotes.push(
+    `ZeroH Disclosure no longer holds the value of ${expired.join(', ')} (it expired), so this call used the token text. Do not use the token again: re-read its source so ZeroH masks it under a new token, or ask the user to share it again.`,
+  );
+} else if (expired.length) {
+  // deny-inventory: expired-token
   emitDeny(
     [
       `🛡  ZeroH Disclosure blocked this ${toolName} call: ${expired.join(', ')} expired and ZeroH no longer holds the value.`,
@@ -192,7 +315,106 @@ await writeToolAudit({
   perField: pii.perField,
 });
 
-if (pii.action === 'deny') {
+// D-23: a raw known secret the model wrote into a shell command or an MCP
+// call is not swapped and not denied: it gets the same destination rules as
+// a restored token. A known-disallowed destination is blocked; an allowed one
+// runs; an uncertain one runs with a notice. Tool output stays masked as
+// always. `block` mode keeps the rc.1 rule and denies the call.
+// WebFetch: a raw secret in its URL gets the same rules (owner decision
+// 2026-09-27): the URL's host must be allowed for it.
+const rawPass =
+  pii.action === 'deny' &&
+  mode !== 'block' &&
+  (toolName === 'WebFetch' ||
+    (!pii.perField.some((field) => field.urlField) &&
+      (shell !== null || toolName.startsWith('mcp__'))));
+if (rawPass) {
+  const raw = [
+    ...new Set(
+      pii.perField.flatMap((field) =>
+        (field.replacements || []).map((entry) => entry.replacement),
+      ),
+    ),
+  ].map((token) => ({ token }));
+  const rules = loadAllowRules(root);
+  if (shell) {
+    const command = String(toolInput.command ?? '');
+    const text = destinationText(toolName, toolInput);
+    const hosts = [
+      ...new Set([
+        ...hostsIn(text, { cwd: root }),
+        ...networkHostsIn(command, { shell }),
+      ]),
+    ];
+    const check = checkDestinations(raw, text, vault, rules, { hosts });
+    await recordDestinationCheck({
+      session,
+      hosts,
+      blockedHosts: check.violations.map((violation) => violation.host),
+    });
+    if (!check.ok) {
+      emitDestinationDeny(check.violations);
+      process.exit(0);
+    }
+    if (shellDestinations(command, { shell }).uncertain.length) {
+      await passUnchecked('raw-secret-in-command', {
+        valueName: valueNameOf(raw),
+      });
+    }
+  } else if (toolName === 'WebFetch') {
+    const hosts = urlHosts(toolInput.url);
+    const check = checkDestinations(
+      raw,
+      destinationText(toolName, toolInput),
+      vault,
+      rules,
+      { hosts },
+    );
+    await recordDestinationCheck({
+      session,
+      hosts,
+      blockedHosts: check.violations.map((violation) => violation.host),
+    });
+    if (!check.ok) {
+      emitDestinationDeny(check.violations);
+      process.exit(0);
+    }
+    if (!hosts.length) {
+      await passUnchecked('raw-secret-in-command', {
+        subject: 'tool call',
+        valueName: valueNameOf(raw),
+      });
+    }
+  } else {
+    const server = mcpServerOf(toolName);
+    const blocked = raw.filter(
+      ({ token }) =>
+        !mcpServerAllowed(
+          { token, entry: vault.entryOf(token) },
+          rules,
+          server,
+        ),
+    );
+    if (blocked.length) {
+      const names = [...new Set(blocked.map(({ token }) => nameOf(token)))];
+      // deny-inventory: mcp-not-allowed
+      emitDeny(
+        [
+          `🛡  ZeroH Disclosure blocked this ${toolName} call: it holds ${names.join(', ')}, and the user has not allowed ${server ? `the ${server} MCP server` : 'this MCP server'} to receive it.`,
+          '',
+          'Only the user can allow this. Do not try another way; ask the user to type:',
+          ...names.map(
+            (name) =>
+              `  /zeroh-disclosure:allow ${shellArg(name)} mcp:${server}`,
+          ),
+        ].join('\n'),
+      );
+      process.exit(0);
+    }
+  }
+}
+
+if (pii.action === 'deny' && !rawPass) {
   const reason = [
     `🛡  ZeroH Disclosure: sensitive data detected in ${toolName} input.`,
     '',
@@ -203,7 +425,13 @@ if (pii.action === 'deny') {
     'avoid raw sensitive values — e.g. read the value from an env var, redirect',
     'output to a file the user controls, or ask the user to redact first.',
   ].join('\n');
+  // deny-inventory: raw-secret-policy
   emitDeny(reason);
+  process.exit(0);
+}
+
+if (rawPass) {
+  await finish(toolInput, null, false);
   process.exit(0);
 }
 
@@ -252,11 +480,12 @@ async function finish(baseInput, context, changed = false) {
     mintedTokens(pii.perField),
     { rules },
   );
-  const restored = plan.restored;
-  const restoredInput = plan.input;
+  let restored = plan.restored;
+  let restoredInput = plan.input;
   // Last-use bookkeeping only; a failed write must not stop the restore.
   saveQuietly(vault, 'ZeroH Disclosure (PreToolUse)');
   const notes = context ? [context] : [];
+  notes.push(...modelNotes);
   if (plan.held.length && plan.scope.mode === 'mcp') {
     notes.push(mcpHeldNote(plan.held, plan.scope.server));
   } else if (plan.held.length) {
@@ -267,57 +496,84 @@ async function finish(baseInput, context, changed = false) {
   }
   let allowedInput = restoredInput;
   let restoredForTool = restored.length > 0;
-  // Monitor has no late binding, so it never gets a restore.
+  // Monitor has no late binding, so it never gets a restore: it runs with
+  // the tokens (owner decision 2026-09-27); `block` mode denies it.
   if (restored.length && toolName === 'Monitor') {
-    emitDeny(
-      [
-        '🛡  ZeroH Disclosure blocked this Monitor call: ZeroH cannot put real values back into a Monitor command.',
-        '',
-        'Ask the user to run it themselves, or to put the value in an environment variable the command reads.',
-      ].join('\n'),
+    if (mode === 'block') {
+      // deny-inventory: monitor-restore
+      emitDeny(
+        [
+          '🛡  ZeroH Disclosure blocked this Monitor call: ZeroH cannot put real values back into a Monitor command.',
+          '',
+          'Ask the user to run it themselves, or to put the value in an environment variable the command reads.',
+        ].join('\n'),
+      );
+      return;
+    }
+    await passUnchecked('token-monitor');
+    notes.push(
+      'ZeroH Disclosure cannot put real values into a Monitor command, so it ran with the tokens as plain text. Run the command with Bash instead, or read the value from an environment variable.',
     );
-    return;
+    restored = [];
+    restoredInput = baseInput;
+    allowedInput = baseInput;
+    restoredForTool = false;
   }
   if (restored.length) {
     const destinations = destinationText(toolName, restoredInput);
-    const hosts = hostsIn(destinations);
-    const check = checkDestinations(restored, destinations, vault, rules);
+    // Shell commands are read with the shell they run in: every network
+    // command's destination operands, whatever launcher or quoting (rc.2).
+    const shellCommand =
+      shell && typeof baseInput.command === 'string' ? baseInput.command : null;
+    const hosts = [
+      ...new Set([
+        ...hostsIn(destinations, { cwd: root }),
+        ...(shellCommand ? networkHostsIn(shellCommand, { shell }) : []),
+      ]),
+    ];
+    const check = checkDestinations(restored, destinations, vault, rules, {
+      hosts,
+    });
     await recordDestinationCheck({
       session,
       hosts,
       blockedHosts: check.violations.map((violation) => violation.host),
     });
     if (!check.ok) {
-      // Plain words and the one slash command that allows it (DEST-3).
-      const named = check.violations.map((violation) => ({
-        ...violation,
-        label: violation.name || violation.token,
-        command: `/zeroh-disclosure:allow ${shellArg(violation.name || violation.token)} ${shellArg(violation.host)}`,
-      }));
-      const lines = [
-        `🛡  ZeroH Disclosure blocked this ${toolName} call: ${leavingKind(check.violations)} would leave for a host it is not allowed to reach.`,
-        '',
-        ...named.map((v) => `${v.label} may not be sent to ${v.host}.`),
-        '',
-        'Only the user can allow this. Do not try another way; ask the user to type:',
-        ...named.map((v) => `  ${v.command}`),
-      ];
-      // --cwd pins the rule to the project the hook reads, even when the
-      // user's shell sits in a subdirectory.
-      const commands = named.map(
-        (v) =>
-          `${v.command}  (terminal: ${terminalCommand(['allow', '--cwd', root, v.name || v.token, v.host])})`,
-      );
+      emitDestinationDeny(check.violations);
+      return;
+    }
+    // Where the value goes cannot always be read: a $HOST, a script, an
+    // unknown launcher, a command the tokenizer cannot parse. In `pass` mode
+    // (the default) the command runs as it would without ZeroH and the pass
+    // is recorded on the turn; in `block` mode it is denied.
+    const uncertain = shellCommand
+      ? [
+          ...new Set(
+            shellDestinations(shellCommand, { shell }).uncertain.map(
+              (u) => u.reason,
+            ),
+          ),
+        ]
+      : [];
+    if (uncertain.length && mode === 'block') {
+      // deny-inventory: uncertain-destination
       emitDeny(
-        lines.join('\n'),
         [
-          `ZeroH Disclosure blocked ${named.map((v) => `${v.label} → ${v.host}`).join(', ')}. To allow it, type:`,
-          ...commands,
+          uncheckedNotice(uncertain[0], {
+            mode: 'block',
+            valueName: valueNameOf(restored),
+          }),
+          '',
+          'Name the destination host literally in the command, or ask the user to run it.',
         ].join('\n'),
       );
       return;
     }
-    if (shell && typeof baseInput.command === 'string') {
+    for (const reason of uncertain) {
+      await passUnchecked(reason, { valueName: valueNameOf(restored) });
+    }
+    if (shellCommand) {
       // Monitor never gets here: it has no late binding and was denied above.
       const prepareLateBinding =
         shell === 'powershell'
@@ -329,8 +585,9 @@ async function finish(baseInput, context, changed = false) {
         sessionId,
         toolUseId,
       });
-      if (!lateBinding.ok) {
+      if (!lateBinding.ok && mode === 'block') {
         const tokens = [...new Set(restored.map((entry) => entry.token))];
+        // deny-inventory: late-binding-failed
         emitDeny(
           [
             `🛡  ZeroH Disclosure blocked this ${toolName} call: ${tokens.join(', ')} could not be safely late-bound (${lateBinding.reason}).`,
@@ -340,6 +597,14 @@ async function finish(baseInput, context, changed = false) {
           ].join('\n'),
         );
         return;
+      } else if (!lateBinding.ok) {
+        // Runs as written, with the tokens (owner decision 2026-09-27).
+        await passUnchecked('token-late-binding');
+        notes.push(
+          `ZeroH Disclosure could not put the real value back safely (${lateBinding.reason}), so this ${toolName} call ran with the tokens as plain text. Use the token as a plain argument, inside double quotes, or assign it to a variable.`,
+        );
+        allowedInput = baseInput;
+        restoredForTool = false;
       } else if (lateBinding.bindings.length > 0) {
         allowedInput = { ...baseInput, command: lateBinding.command };
       } else {
@@ -363,14 +628,63 @@ async function finish(baseInput, context, changed = false) {
     baseInput,
   );
   const updated = restored.length || changed || shellInput !== baseInput;
-  if (!updated && !notes.length) return;
+  if (!updated && !notes.length && !notices.length) return;
   emit({
+    ...(notices.length ? { systemMessage: notices.join('\n') } : {}),
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       ...(updated ? { updatedInput: shellInput } : {}),
       ...(notes.length ? { additionalContext: notes.join('\n\n') } : {}),
     },
   });
+}
+
+// Plain words and the one slash command that allows it (DEST-3).
+function emitDestinationDeny(violations) {
+  const named = violations.map((violation) => ({
+    ...violation,
+    label: violation.name || violation.token,
+    command: `/zeroh-disclosure:allow ${shellArg(violation.name || violation.token)} ${shellArg(violation.host)}`,
+  }));
+  const lines = [
+    `🛡  ZeroH Disclosure blocked this ${toolName} call: ${leavingKind(violations)} would leave for a host it is not allowed to reach.`,
+    '',
+    ...named.map((v) => `${v.label} may not be sent to ${v.host}.`),
+    '',
+    'Only the user can allow this. Do not try another way; ask the user to type:',
+    ...named.map((v) => `  ${v.command}`),
+  ];
+  // --cwd pins the rule to the project the hook reads, even when the
+  // user's shell sits in a subdirectory.
+  const commands = named.map(
+    (v) =>
+      `${v.command}  (terminal: ${terminalCommand(['allow', '--cwd', root, v.name || v.token, v.host])})`,
+  );
+  // deny-inventory: host-not-allowed
+  emitDeny(
+    lines.join('\n'),
+    [
+      `ZeroH Disclosure blocked ${named.map((v) => `${v.label} → ${v.host}`).join(', ')}. To allow it, type:`,
+      ...commands,
+    ].join('\n'),
+  );
+}
+
+// The name (or type) of the values in `entries` for a notice: the first
+// named one.
+function valueNameOf(entries) {
+  for (const { token } of entries) {
+    const entry = vault.entryOf(token);
+    const source = String(entry?.source ?? '');
+    if (source.startsWith('known:')) return source.slice(6);
+    if (entry?.type) return entry.type;
+  }
+  return null;
+}
+
+function nameOf(token) {
+  const source = String(vault.entryOf(token)?.source ?? '');
+  return source.startsWith('known:') ? source.slice(6) : token;
 }
 
 // Tokens an MCP tool receives unrestored: the value stays masked for this tool
@@ -471,9 +785,41 @@ async function writeToolAudit({
   });
 }
 
-function emitDeny(reason, systemMessage = null) {
+// 'command' for a shell tool, 'tool call' for any other (the notice's words).
+function subjectOf(name) {
+  return shellOf(name) ? 'command' : 'tool call';
+}
+
+// Only the notices: the call runs as the model wrote it.
+function emitNotices() {
+  if (!notices.length && !modelNotes.length) return;
   emit({
-    ...(systemMessage ? { systemMessage } : {}),
+    ...(notices.length ? { systemMessage: notices.join('\n') } : {}),
+    ...(modelNotes.length
+      ? {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            additionalContext: modelNotes.join('\n\n'),
+          },
+        }
+      : {}),
+  });
+}
+
+// The host of a WebFetch URL, or none when it can't be read.
+function urlHosts(url) {
+  try {
+    const { hostname } = new URL(String(url));
+    return hostname ? [hostname.toLowerCase()] : [];
+  } catch {
+    return [];
+  }
+}
+
+function emitDeny(reason, systemMessage = null) {
+  const message = [...notices, systemMessage].filter(Boolean).join('\n');
+  emit({
+    ...(message ? { systemMessage: message } : {}),
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',

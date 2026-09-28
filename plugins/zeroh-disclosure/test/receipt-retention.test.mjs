@@ -24,6 +24,7 @@ import {
 } from '../lib/receipt-retention.js';
 import { buildBanner } from '../lib/banner.js';
 import { commitmentKeyPath, projectDataDir } from '../lib/session.js';
+import { asUser } from './as-user.mjs';
 
 const PLUGIN = fileURLToPath(new URL('..', import.meta.url));
 const DAY = 24 * 60 * 60 * 1000;
@@ -164,7 +165,7 @@ test('`receipts keep` writes the user-level setting and keeps other lines', () =
     spawnSync(
       process.execPath,
       [path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs'), 'receipts', ...args],
-      { env, encoding: 'utf8' },
+      { env: asUser(['receipts', ...args], env), encoding: 'utf8' },
     );
   const kept = run('keep', 'forever');
   assert.equal(kept.status, 0, kept.stderr);

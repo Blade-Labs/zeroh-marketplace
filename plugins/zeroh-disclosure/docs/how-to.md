@@ -12,7 +12,8 @@ notices, work with the local proxy, run PowerShell, and remove the plugin.
 - [Keep receipts for longer or shorter](#keep-receipts-for-longer-or-shorter)
 - [Allow a destination host](#allow-a-destination-host)
 - [Allow a value into an MCP tool](#allow-a-value-into-an-mcp-tool)
-- [Manage unmask caps, grants, and the optional status line](#manage-unmask-caps-grants-and-the-optional-status-line)
+- [Show ZeroH in the status line](#show-zeroh-in-the-status-line)
+- [Manage unmask caps and grants](#manage-unmask-caps-and-grants)
 - [Report a value that was not masked](#report-a-value-that-was-not-masked)
 - [Read and verify a receipt](#read-and-verify-a-receipt)
 - [Run a local report](#run-a-local-report)
@@ -75,9 +76,24 @@ node "<plugin-root>/bin/zeroh-disclosure.mjs" doctor
 ```
 
 Where this guide writes `zeroh-disclosure <command>`, run
-`node "<plugin-root>/bin/zeroh-disclosure.mjs" <command>`. The proxy keeps its own copy at
-`<ZEROH_HOME>/bin/zeroh-disclosure-proxy/bin/zeroh-disclosure.mjs`, which works after the plugin is
-removed.
+`node "<plugin-root>/bin/zeroh-disclosure.mjs" <command>`.
+
+Commands that change what ZeroH protects (`allow`, `allow --remove`, `unmask caps`, `vault clear`,
+`doctor --fix`, `banner`, `proxy off|on`, `receipts keep`, `uncertain`, `uninstall --yes`) run only
+on your own authority:
+
+- **In Claude Code**, type the slash command. Its `!` block records the request, ZeroH applies it
+  when it checks your typed prompt, and the result appears on the same turn, starting with
+  `✓ Done by ZeroH Disclosure` (Claude Code labels it "operation blocked by hook" because nothing
+  is sent to Claude).
+- **In a terminal outside Claude Code**, the command shows the exact action and a four-character
+  code; type the code and press Enter. Anything else cancels. It reads the code from the terminal
+  itself, so it can't be piped in.
+- **Anywhere else** (Claude running the tool through Bash or PowerShell, or Claude Code's own `!`
+  shell) it changes nothing and says `Nothing changed: … only you can do it`, with the slash command
+  and the terminal command to use instead. The proxy keeps its own copy at
+  `<ZEROH_HOME>/bin/zeroh-disclosure-proxy/bin/zeroh-disclosure.mjs`, which works after the plugin is
+  removed.
 
 Project commands (`allow`, `vault`, `receipt`, `tokens`, `report` and others) act on the same
 project root the hooks use: `CLAUDE_PROJECT_DIR` when Claude Code sets it, else the current
@@ -133,8 +149,8 @@ masked but no hook ever used, and leftovers from a session that crashed, are rem
 fresh start (`claude` or `/clear`) once they have not been used for 24 hours; a fresh start never
 removes values another live session used recently. Two sessions in the same project each keep their
 own values until they end. After a session ends, `claude --resume` cannot restore its values: the
-resumed transcript keeps the tokens, and ZeroH denies a tool call that uses one (see
-[An expired token is denied](troubleshooting.md#an-expired-token-is-denied)). Use `7d` or `30d` if
+resumed transcript keeps the tokens, and a tool call that uses one runs with the token text (see
+[An expired token ran as text](troubleshooting.md#an-expired-token-ran-as-text)). Use `7d` or `30d` if
 you resume sessions and need their values.
 
 Values found in `.env` and supported credential files are re-read at `SessionStart` and do not age
@@ -157,11 +173,10 @@ last-use age, and the number of expired tokens remembered. `vault status` never 
 To remove every mapping for the current project immediately:
 
 ```bash
-zeroh-disclosure vault clear
 zeroh-disclosure vault clear --yes
 ```
 
-The first form asks for confirmation; `--yes` is intended for deliberate automation.
+`--yes` is required, and in a terminal you then confirm with the code it shows.
 `/zeroh-disclosure:settings vault clear --yes` does the same inside Claude Code. From a
 subdirectory it clears the project the directory belongs to, and it says how many values it
 removed (or that the project had no vault). It also removes pending restore files under
@@ -171,8 +186,9 @@ back; it can only add values it detects afresh.
 
 Clearing or expiry does not rewrite transcripts. ZeroH keeps a value-free record of each expired
 token (its type and expiry time, never the value or a hash of it) for 90 days. An expired token is
-never reassigned to a different value, and a tool call that uses one is denied with a message
-asking the model to have you share the value again. Re-encountering the same value gives it a new
+never reassigned to a different value. A tool call that uses one runs with the token text, with
+the line "ran with the token, not your key: the value expired (read the file again)", and Claude is
+asked to have you share the value again (`uncertain block` denies the call instead). Re-encountering the same value gives it a new
 token. A value that is still retained keeps its existing stable token.
 
 ## Keep receipts for longer or shorter
@@ -183,6 +199,21 @@ Receipts are kept for 90 days by default. Change it with
 `<ZEROH_HOME>/config.env`. A project's `.zeroh.env` may only shorten it. Older sessions are removed
 at the next Claude Code start, at most once a day; the current session and the vault are never
 touched. `/zeroh-disclosure:status` shows the policy in force. Receipts contain no values.
+
+## Choose what happens in uncertain cases
+
+Sometimes ZeroH can't prove a case either way, for example where a command sends a restored secret
+when the destination is computed at run time. `ZEROH_UNCERTAIN` decides:
+
+- `pass` (the default) never stops ordinary work: the secret is restored as before when its
+  destination can't be proven, and the turn's receipt records what passed unchecked. A destination
+  ZeroH can read and that isn't allowed is still denied.
+- `block` denies such uncertain cases.
+
+Set it with `/zeroh-disclosure:settings uncertain pass|block`, `zeroh-disclosure uncertain
+pass|block`, or `ZEROH_UNCERTAIN` in the environment or `<ZEROH_HOME>/config.env`.
+`/zeroh-disclosure:settings` shows the mode in force. A project's `.zeroh.env` may only set
+`ZEROH_UNCERTAIN=block`, and then it wins over your `pass`.
 
 ## Allow a destination host
 
@@ -271,7 +302,7 @@ unchanged, and the model is told that the value stays masked for that tool and w
 can run to allow it. Hosts named in an allowed call must still be allowed for the value. ZeroH's
 own MCP tools (`request_unmask`, `report_missed_secret`) always receive tokens.
 
-## Manage unmask caps, grants, and the optional status line
+## Manage unmask caps and grants
 
 By default every personal-data kind may be unmasked for 15 minutes, 1 hour or until the session
 ends. Set a smaller cap yourself from a terminal; `0` disables unmasking for that kind:
@@ -309,18 +340,66 @@ To end an unmask early, tell Claude ("stop showing real email addresses"): it ca
 `end_unmask` tool, which ends the grants for that kind (or all) at once, without a dialog. The tool
 can only end grants, never create or extend one.
 
-`UserPromptSubmit` shows a one-line countdown while a grant is active. To put the same text in your
-own Claude Code status line, make the CLI available on `PATH` and add this one line to your own
-settings file:
+`UserPromptSubmit` shows a one-line countdown while a grant is active, and the
+[status line](#show-zeroh-in-the-status-line) shows it all the time (`unmask EMAIL 12m`).
 
-```json
-{
-  "statusLine": { "type": "command", "command": "zeroh-disclosure statusline" }
-}
+## Show ZeroH in the status line
+
+With your first message after the install, ZeroH adds its status line to your Claude Code user
+settings, unless you have one of your own, and says so in one line above that message. Claude Code
+then shows it under the prompt:
+
+```text
+🛡️ ZeroH · 🟢 protected · 4 masked · 0 sent · unmask EMAIL 12m · receipt ↗
+🛡️ ZeroH · 🟡 files only · /zeroh-disclosure:doctor · 4 masked · 0 sent · receipt ↗
+🛡️ ZeroH · 🔴 hooks failing · /zeroh-disclosure:doctor
 ```
 
-The plugin never writes Claude Code settings for this feature. Run `zeroh-disclosure statusline`
-first to verify the command in the same environment that starts Claude Code.
+- 🟢 `protected`: the hooks work and the local proxy masks what you type in this session.
+- 🟡 protected in part, with the fix: `files only` (after `/zeroh-disclosure:proxy off` it points
+  to `/zeroh-disclosure:proxy on`, otherwise to `/zeroh-disclosure:doctor`),
+  `proxy starts with your first prompt`, `proxy on from your next prompt` (the first prompt of
+  the first session switched it to the proxy), `proxy down` (the proxy process is gone),
+  `starting`, or `N not protected this turn` (something passed unchecked).
+- 🔴 not protecting, with the reason: `hooks failing` (a hook crashed; it clears when that hook
+  works again), `hooks stopped` (the conversation moved on and no hook ran for 30 seconds),
+  `hooks never ran`, `vault can't be opened`, `plugin disabled` (in user, project, local or
+  managed settings), `not installed` (the plugin was removed without uninstalling it) or
+  `uninstalled`.
+
+`masked` counts the values the model saw as tokens this session (updated when a turn ends), `sent`
+the real values that reached it anyway (a secret typed while the proxy was not in the route).
+`receipt ↗` is a terminal link (OSC 8) to this session's `receipt.html`; macOS Terminal gets no
+link. `NO_COLOR` and `TERM=dumb` turn the colour off.
+
+**Change how it looks.** Ask Claude ("make ZeroH's status line compact, no emoji"): it edits
+`statusline-style.json` in ZeroH's folder. [The status line](statusline.md) has every key, examples
+and the `--json` data schema for a status line of your own.
+
+**How it works.** The entry (in the [README](../README.md#status-line)) is one `node -e "…"`
+command. It runs `lib/statusline.js` from the plugin copy Claude Code lists as installed
+(`installed_plugins.json`) or keeps in its plugin cache, preferring the version your last session
+started with; any other copy, such as a `--plugin-dir` checkout, only with `ZEROH_STATUSLINE_DEV=1`.
+It works on macOS, Linux and Windows, in Git Bash, PowerShell 7 and Windows PowerShell 5.1.
+Claude Code runs it after each answer and every 10 seconds (`refreshInterval`). It reads only the
+small `status.json` and `hooks.alive` the hooks keep in each session folder, the proxy's pid file,
+the unmask grants and your settings: no network, no proxy call, no values.
+
+**Your own status line.** ZeroH never replaces it. The same command with `segment` at the end
+prints only ZeroH's part, without a line end; pipe it the JSON your script gets on stdin (the
+README has the exact command):
+
+```bash
+input=$(cat)
+zeroh=$(printf '%s' "$input" | node -e "…" segment)
+echo "$(your-line) · $zeroh"
+```
+
+**Turning it off.** `/zeroh-disclosure:settings statusline off`, or deleting it with
+`/statusline`: ZeroH records that and never adds it back. `/zeroh-disclosure:settings statusline
+on` turns it on again. `/zeroh-disclosure:uninstall --yes` removes it from every settings file
+ZeroH wrote it to. Claude cannot add, change or remove any status line: the settings guard stops
+the edit.
 
 ## Report a value that was not masked
 
@@ -576,14 +655,14 @@ Code settings.
   locked-down Windows, Linux without a systemd user session or a desktop, such as SSH, WSL or a
   container), ZeroH says so and leaves your Claude Code settings alone: nothing would keep the
   proxy running after a reboot, and every session would then meet a dead port. Typed secrets are
-  then stopped, not masked.
+  then sent with a "not protected" line, not masked (`uncertain block` stops them).
 - On your first prompt it sets `env.ANTHROPIC_BASE_URL` in `~/.claude/settings.json` (or
   `$CLAUDE_CONFIG_DIR/settings.json`, or `ZEROH_CLAUDE_SETTINGS`) to
   `http://127.0.0.1:<port>/z/<key>`, and keeps a small restore record next to that file with your
   previous `ANTHROPIC_BASE_URL`. It never keeps a copy of the settings file or its other values.
   Claude Code applies a changed settings file to the running session, so that prompt waits about
-  two seconds once and then goes through the proxy. A secret in that prompt is stopped, in case it
-  would still go out directly. The few requests Claude Code sends while it starts, before your
+  two seconds once and then goes through the proxy. A secret in that prompt is sent with a "not
+  protected" line, in case it still went out directly (`uncertain block` stops it). The few requests Claude Code sends while it starts, before your
   first prompt, carry no prompt text and go directly.
 
 ZeroH treats typed text as masked when the session's own environment names this install's proxy
@@ -592,7 +671,8 @@ and the proxy answers, or once the proxy has seen a request of the session.
 If your shell (or a settings file that takes precedence, such as a project's
 `.claude/settings.json`) sets `ANTHROPIC_BASE_URL`, Claude Code ignores ZeroH's entry, so what you
 type cannot be masked in that setup: the session start says so, and a prompt with a secret is
-stopped instead. Files and command output are still masked.
+sent with a "not protected" line (`uncertain block` stops it). Files and command output are still
+masked.
 
 ### Where it forwards
 
@@ -678,8 +758,8 @@ One command removes everything, in this order:
 /zeroh-disclosure:uninstall --yes    # removes it
 ```
 
-In a terminal: `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall` (it asks first; `--yes` skips
-the question). It never deletes a `ZEROH_HOME` that is your home, a system folder or holds none of
+In a terminal outside Claude Code: `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall` shows what
+it removes, and `uninstall --yes` removes it after you type the code it shows. It never deletes a `ZEROH_HOME` that is your home, a system folder or holds none of
 ZeroH's files. It removes:
 
 - the plugin from Claude Code, through Claude Code's own `claude plugin list --json` and

@@ -25,6 +25,7 @@ import {
   unmaskDialog,
   writeCap,
 } from '../lib/unmask.js';
+import { asUser } from './as-user.mjs';
 
 const CLI = fileURLToPath(
   new URL('../bin/zeroh-disclosure.mjs', import.meta.url),
@@ -276,7 +277,11 @@ test('the CLI sets caps, lists grants, prints status, and revokes', () => {
   const run = (...args) =>
     spawnSync(process.execPath, [CLI, ...args], {
       cwd: root,
-      env: { PATH: process.env.PATH, HOME: home, ZEROH_HOME: home },
+      env: asUser(args, {
+        PATH: process.env.PATH,
+        HOME: home,
+        ZEROH_HOME: home,
+      }),
       encoding: 'utf8',
     });
   const cap = run('unmask', 'caps', 'EMAIL', '15m');
@@ -292,7 +297,7 @@ test('the CLI sets caps, lists grants, prints status, and revokes', () => {
     duration: '15m',
   });
   assert.match(run('unmask').stdout, new RegExp(grant.id));
-  assert.match(run('statusline').stdout, /EMAIL unmasked/u);
+  assert.match(run('statusline').stdout, /unmask EMAIL 15m/u);
   const revoke = run('unmask', 'revoke', grant.id);
   assert.equal(revoke.status, 0, revoke.stderr);
   assert.match(revoke.stdout, /Revoked 1 unmask grant/u);

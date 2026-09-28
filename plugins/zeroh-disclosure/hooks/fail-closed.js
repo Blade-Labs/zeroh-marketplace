@@ -15,6 +15,42 @@ export const HOOKS = Object.freeze({
   'session-end': 'SessionEnd',
 });
 
+// Each hook's timeout in hooks.json, in seconds. The loader (run.js) answers
+// fail-closed two seconds before it, so Claude Code never has to kill a hook:
+// a killed hook's answer is lost and the event goes through unchecked.
+export const HOOK_TIMEOUTS = Object.freeze({
+  'session-start': 15,
+  'user-prompt-submit': 10,
+  'pre-tool-use': 10,
+  'post-tool-use': 15,
+  'message-display': 5,
+  stop: 30,
+  'session-end': 10,
+});
+
+// What failing closed means for each hook: what the user is left with when
+// the hook errors or runs out of time.
+export const FAIL_CLOSED = Object.freeze({
+  'session-start':
+    'no banner or setup this time; the other hooks still mask and deny on their own',
+  'user-prompt-submit': 'the prompt is stopped and nothing is sent',
+  'pre-tool-use': 'the tool call is denied',
+  'post-tool-use': 'the tool output is withheld',
+  'message-display': 'tokens stay tokens on screen',
+  stop: 'no receipt is signed for this turn',
+  'session-end': 'the session is tidied up at the next start instead',
+});
+
+// The loader's deadline for hook `name`, in milliseconds: its timeout minus
+// 2 s. ZEROH_HOOK_DEADLINE_MS can only shorten it (tests use it).
+export function hookDeadlineMs(name, env = process.env) {
+  const full = Math.max(1, (HOOK_TIMEOUTS[name] ?? 10) - 2) * 1000;
+  const override = Number.parseInt(env.ZEROH_HOOK_DEADLINE_MS ?? '', 10);
+  return Number.isFinite(override) && override > 0
+    ? Math.min(full, override)
+    : full;
+}
+
 export const ERROR_WITHHELD =
   'ZeroH Disclosure could not check this tool output, so it was withheld. Try again; if it keeps happening, run `/zeroh-disclosure:doctor`.';
 
@@ -35,6 +71,14 @@ export function oldNodeAnswer(name, version) {
       systemMessage: `⚠ ZeroH Disclosure needs Node.js ${MIN_NODE_MAJOR} or later, and this is Node.js ${version}, so it is not protecting this session: nothing is masked or stopped. Install Node.js ${MIN_NODE_MAJOR}+ (https://nodejs.org) and start a new Claude Code session.`,
     })}\n`,
   };
+}
+
+// The error the loader passes when a hook ran out of time.
+export function timeoutError(ms) {
+  return Object.assign(new Error('hook timed out'), {
+    code: 'TIMEOUT',
+    seconds: Math.round(ms / 100) / 10,
+  });
 }
 
 // A short, value-free name for an error: its code or class, never its message.
@@ -97,14 +141,100 @@ function parse(raw) {
   }
 }
 
-// The answer for hook `name` after `error`. `state.emitted` means the hook
-// already wrote its answer; `state.cleared` means a prompt was fully checked.
-// Returns { stdout, stderr, code }.
+// What the notice calls the event: "this prompt", "this command" (a shell
+// tool), "this tool call" or "this tool output". The loader asks lib/unchecked.js
+// for the same subject ('prompt', 'command', 'tool call', 'tool output').
+export function noticeSubject(name, raw) {
+  if (name === 'user-prompt-submit') return 'prompt';
+  if (name === 'post-tool-use') return 'tool output';
+  if (name === 'pre-tool-use') {
+    const tool = parse(raw)?.tool_name;
+    return ['Bash', 'PowerShell', 'Monitor'].includes(tool)
+      ? 'command'
+      : 'tool call';
+  }
+  return 'event';
+}
+
+// The one-line notice when lib/unchecked.js cannot be used (the same words as
+// its uncheckedNotice): `ZeroH Disclosure: this command was not protected
+// (timed out).`
+export function plainNotice(name, raw, why, mode = 'pass') {
+  const what = `this ${noticeSubject(name, raw)}`;
+  return mode === 'block'
+    ? `ZeroH Disclosure: ${what} was stopped because it could not be protected (${why}).`
+    : `ZeroH Disclosure: ${what} was not protected (${why}).`;
+}
+
+// The answer in the default `uncertain` mode, pass: the event goes on
+// unprotected, as Claude Code does itself when a hook times out, and the
+// user is told in one line on screen (a systemMessage, never an instruction
+// to the model). For a timeout the loader passes lib/unchecked.js's `notice`,
+// which is null once the reason was shown this turn: then nothing is said.
+// The hooks that guard nothing (SessionStart, MessageDisplay, Stop,
+// SessionEnd) answer as in block mode: a non-blocking error.
+export function passAnswer(name, raw, state, error, { notice } = {}) {
+  const label = errorLabel(error);
+  const timedOut = error?.code === 'TIMEOUT';
+  const halfDone = state.sideEffect
+    ? ` ZeroH was ${state.sideEffect} when it ${timedOut ? 'ran out of time' : 'failed'}, so that may be half-done: run \`/zeroh-disclosure:doctor\` to check it.`
+    : '';
+  const guards = ['user-prompt-submit', 'pre-tool-use', 'post-tool-use'];
+  if (!guards.includes(name)) return failClosedAnswer(name, raw, state, error);
+  if (state.emitted) return { code: 0 };
+  if (name === 'user-prompt-submit' && state.cleared) {
+    return halfDone
+      ? {
+          code: 0,
+          stdout: `${JSON.stringify({ systemMessage: `🛡${halfDone}` })}\n`,
+        }
+      : { code: 0 };
+  }
+  const line = timedOut
+    ? notice === undefined
+      ? plainNotice(name, raw, 'timed out')
+      : notice
+    : plainNotice(name, raw, `check failed: ${label}`);
+  const message = [line, halfDone.trim()].filter(Boolean).join(' ');
+  if (!message) return { code: 0 };
+  return {
+    code: 0,
+    stdout: `${JSON.stringify({ systemMessage: message })}\n`,
+    stderr: `${message}\n`,
+  };
+}
+
+// The answer in `uncertain` block mode for hook `name` after `error` (a
+// timeoutError when the hook ran
+// out of time). `state.emitted` means the hook already wrote its answer;
+// `state.cleared` means a prompt was fully checked; `state.sideEffect` names
+// a change the hook had started (markSideEffect in lib/hook-io.js), which may
+// now be half-done. Returns { stdout, stderr, code }.
 export function failClosedAnswer(name, raw, state, error) {
   const label = errorLabel(error);
+  const timedOut = error?.code === 'TIMEOUT';
+  const why = timedOut
+    ? `checking it took too long (over ${error.seconds} s)`
+    : `it could not check it (${label})`;
+  const halfDone = state.sideEffect
+    ? ` ZeroH was ${state.sideEffect} when it ${timedOut ? 'ran out of time' : 'failed'}, so that may be half-done: run \`/zeroh-disclosure:doctor\` to check it.`
+    : '';
+  const retry =
+    halfDone ||
+    ' Try again; if it keeps happening, run `/zeroh-disclosure:doctor`.';
   if (name === 'user-prompt-submit') {
-    if (state.cleared) return { code: 0 };
-    const reason = `🛡 ZeroH stopped this prompt: it could not check it (${label}). Try again; if it keeps happening, run \`/zeroh-disclosure:doctor\`.`;
+    if (state.cleared) {
+      // The prompt was checked; only a half-done change is worth saying.
+      return halfDone && !state.emitted
+        ? {
+            code: 0,
+            stdout: `${JSON.stringify({ systemMessage: `🛡${halfDone}` })}\n`,
+          }
+        : { code: 0 };
+    }
+    const reason = timedOut
+      ? `🛡 ${plainNotice(name, raw, 'timed out', 'block')} Nothing was sent.${retry}`
+      : `🛡 ZeroH stopped this prompt: ${why}. Nothing was sent.${retry}`;
     // As lib/hook-io.js stopPrompt: the JSON answer keeps Claude Code from
     // repeating the prompt; exit code 2 stops it even without the JSON.
     return {
@@ -112,6 +242,7 @@ export function failClosedAnswer(name, raw, state, error) {
       stdout: state.emitted
         ? ''
         : `${JSON.stringify({
+            // deny-inventory: watchdog-block
             decision: 'block',
             reason,
             hookSpecificOutput: {
@@ -129,9 +260,11 @@ export function failClosedAnswer(name, raw, state, error) {
       stdout: `${JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
+          // deny-inventory: watchdog-block
           permissionDecision: 'deny',
-          permissionDecisionReason:
-            '🛡  ZeroH Disclosure denied this tool call because its check failed unexpectedly. Try again; if it keeps happening, run `/zeroh-disclosure:doctor`.',
+          permissionDecisionReason: timedOut
+            ? `🛡  ${plainNotice(name, raw, 'timed out', 'block')}${retry}`
+            : `🛡  ZeroH Disclosure denied this tool call because its check failed unexpectedly.${retry}`,
         },
       })}\n`,
     };
@@ -145,25 +278,33 @@ export function failClosedAnswer(name, raw, state, error) {
       event.tool_name === 'Read'
         ? event.tool_input?.file_path || event.tool_input?.path
         : null;
+    const message = timedOut
+      ? `${plainNotice(name, raw, 'timed out', 'block')} Try a smaller read; if it keeps happening, run \`/zeroh-disclosure:doctor\`.`
+      : ERROR_WITHHELD;
     return {
       code: 0,
       stdout: `${JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'PostToolUse',
+          // deny-inventory: watchdog-block
           updatedToolOutput: withheldOutput(
             event.tool_name,
             event.tool_response,
             filePath,
-            ERROR_WITHHELD,
+            message,
           ),
         },
       })}\n`,
     };
   }
   // The other hooks guard nothing that could leak: Claude Code reports the
-  // error and carries on (tokens stay tokens on screen, no receipt is signed).
+  // error and carries on (FAIL_CLOSED says what the user is left with).
+  const hook = HOOKS[name] || name;
+  const what = timedOut
+    ? `the ${hook} hook timed out (over ${error.seconds} s) and was stopped`
+    : `the ${hook} hook failed (${label})`;
   return {
     code: 1,
-    stderr: `ZeroH Disclosure: the ${HOOKS[name] || name} hook failed (${label}).\n`,
+    stderr: `ZeroH Disclosure: ${what}: ${FAIL_CLOSED[name] || 'nothing was changed'}.${halfDone}\n`,
   };
 }

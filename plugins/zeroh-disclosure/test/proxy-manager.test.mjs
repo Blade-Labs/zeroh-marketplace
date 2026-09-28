@@ -187,8 +187,9 @@ test('default install chains to the prior upstream, survives a reboot without th
     existsSync(path.join(paths.runtime, 'bin', 'proxy-daemon.mjs')),
     true,
   );
-  // State: proxy.json and the routes; nothing else.
+  // State: proxy.json, the routes and the daemon's pid; nothing else.
   assert.deepEqual(readdirSync(paths.directory).sort(), [
+    'daemon.pid',
     'proxy.json',
     'routes',
   ]);
@@ -1147,7 +1148,10 @@ test('a login item the OS refuses is a warning, and no settings entry is written
   assert.equal(installed.enabled, false);
   assert.equal(installed.wroteSettings, false);
   assert.match(installed.warning, /login item/u);
-  assert.match(installed.warning, /typed secrets are stopped/u);
+  assert.match(
+    installed.warning,
+    /a typed secret is sent with a 'not protected' line \(stopped with uncertain block\)/u,
+  );
   assert.deepEqual(settingsDoc(isolated), {});
   // The first prompt cannot put the session behind the proxy either.
   const sessionEnv = { ...isolated.env };

@@ -18,6 +18,7 @@ import {
   sessionSlip,
   slipLines,
 } from './report-slip.js';
+import { UNCHECKED_LABELS } from './unchecked.js';
 
 export function renderReportHtml(report) {
   const max = Math.max(1, ...report.per_day.map((entry) => entry.masked));
@@ -39,8 +40,32 @@ export function renderReportHtml(report) {
 <section><h2>Activity by day</h2><svg viewBox="0 0 640 170" role="img" aria-label="Values withheld per day">${bars || '<text x="8" y="30">No activity in this period</text>'}</svg></section>
 <section class="grid"><div><h2>Withheld by type</h2>${htmlTable(report.masked_by_type, 'type')}</div><div><h2>Withheld by channel</h2>${htmlTable(report.masked_by_channel, 'channel')}</div><div><h2>Top files</h2>${htmlTable(report.top_files, 'path')}</div><div><h2>Blocked destinations</h2>${htmlTable(report.destinations_blocked, 'host')}</div></section>
 <section id="unchecked"><h2>Passed unchecked</h2><p class="quiet">These formats are not scanned for values, so the slip does not count them as withheld or sent.</p>${htmlTable(report.formats_passed_unmasked, 'format', true)}</section>
+${passedUncheckedSection(report.passed_unchecked)}
 </div>`,
   );
+}
+
+// What passed without a check (uncertain mode pass), by reason; value-free.
+function passedUncheckedSection(rows = []) {
+  if (!rows?.length) return '';
+  const items = rows
+    .map(
+      (entry) =>
+        `<li>${escapeHtml(entry.label ?? UNCHECKED_LABELS[entry.reason] ?? entry.reason)} ×${Number(entry.count) || 0}</li>`,
+    )
+    .join('');
+  return `<section id="passed-without-check"><h2>Not protected</h2><p class="quiet">ZeroH could not protect these operations, and the uncertain setting is pass, so they went on as they were. Set ZEROH_UNCERTAIN=block to stop them instead.</p><ul>${items}</ul></section>`;
+}
+
+function passedUncheckedList(counts = {}) {
+  const items = Object.entries(counts ?? {})
+    .filter(([, count]) => Number(count) > 0)
+    .map(
+      ([reason, count]) =>
+        `<li>${escapeHtml(UNCHECKED_LABELS[reason] ?? reason)} ×${Number(count)} (not protected)</li>`,
+    )
+    .join('');
+  return items ? `<ul class="passed-without-check">${items}</ul>` : '';
 }
 
 export function renderReceiptHtml({ summaries, tokenMap }) {
@@ -53,7 +78,7 @@ export function renderReceiptHtml({ summaries, tokenMap }) {
 <h3>What the model saw</h3>${tokenMapTable(summary.token_map)}
 <div class="detail-grid"><div><h3>Withheld values</h3>${channelTables(summary.masked_by_channel)}</div>
 <div><h3>Destinations</h3><p><strong>Checked:</strong> ${escapeHtml(formatCounts(summary.destinations_checked))}</p><p><strong>Blocked:</strong> ${escapeHtml(formatCounts(summary.destinations_blocked))}</p></div>
-<div><h3>Passed unchecked</h3>${formatList(summary.formats_passed_unmasked)}</div>
+<div><h3>Passed unchecked</h3>${formatList(summary.formats_passed_unmasked)}${passedUncheckedList(summary.passed_unchecked)}</div>
 <div><h3>Signed receipt</h3><dl><dt>Receipt</dt><dd>${escapeHtml(summary.receipt_id)}</dd><dt>Signed with</dt><dd>${escapeHtml(summary.signing ?? 'local key')}</dd><dt>Policy</dt><dd>${escapeHtml(summary.policy_id)}</dd><dt>Engine</dt><dd>${escapeHtml(summary.engine_id)}</dd><dt>Signature</dt><dd>${summary.signature_ok ? 'Verified' : 'Failed'}</dd><dt>Full verification</dt><dd>${summary.verified ? 'Verified' : 'Failed'}</dd></dl></div></div>
 </details>`,
     )
@@ -67,6 +92,11 @@ export function renderReceiptHtml({ summaries, tokenMap }) {
 <div class="below">
 <p class="quiet">${escapeHtml(LOCAL_SUMMARY_NOTICE)}</p>
 <section><h2>What the model saw this session</h2>${sessionTokenMapTable(tokenMap)}</section>
+${passedUncheckedSection(
+  Object.entries(mergedCounts(summaries.map((item) => item.passed_unchecked)))
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => ({ reason, count })),
+)}
 ${sumCounts(unchecked) > 0 ? `<section id="unchecked"><h2>Passed unchecked</h2><p class="quiet">These formats are not scanned for values, so the slip does not count them as withheld or sent.</p>${formatList(unchecked)}</section>` : ''}
 <main>${details || '<p>No signed turns yet.</p>'}</main>
 </div>`,
