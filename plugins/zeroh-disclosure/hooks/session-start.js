@@ -11,7 +11,7 @@ import {
   pruneCommitmentKeys,
 } from '../lib/session.js';
 import { Vault, vaultProblem, vaultRetention } from '../lib/vault.js';
-import { loadKnownSecrets } from '../lib/secrets.js';
+import { loadKnownSecrets, usersKnownSecrets } from '../lib/secrets.js';
 import { emit, projectDir, proxyState, readStdinJson } from '../lib/hook-io.js';
 import { cleanupStaleRunFiles } from '../lib/late-bind.js';
 import { ALLOW_FILE_NOTICE, readAllowRules } from '../lib/allow-rules.js';
@@ -187,13 +187,21 @@ const lines = [
   '',
   'Work with the tokens as if they were the values:',
   '- Write them into commands, edits and tool calls exactly as shown. ZeroH puts the real',
-  "  value back on the user's machine just before the command runs, and only for hosts that",
-  '  secret is allowed to reach.',
-  '- Prefer reading secrets from environment variables or files in code you write.',
+  "  value back on the user's machine just before the command runs. For a host ZeroH can read",
+  '  that the value may not reach, ZeroH stops the command before anything is sent and tells the',
+  "  user how to allow it, so you don't need to ask first for that reason.",
+  "  Where ZeroH can't tell where a command sends the value (a script, a variable host, git push),",
+  '  the real value is put back and the command runs with a notice: before sending a secret',
+  "  somewhere the user didn't ask for, ask the user.",
+  '- In commands you run, write the token; ZeroH puts the value back and checks the host.',
+  '  Only code you save to files should read secrets from environment variables.',
   '- Never ask the user to paste or reveal a real value, and never try to reconstruct one.',
   '- If a real secret or personal value reached you unmasked, call report_missed_secret; ZeroH masks it from then on.',
   '- When the user asks you to report a value as missed, call report_missed_secret with it; that is their decision, as with unmask.',
-  "- The user's screen shows real values in your answers; your transcript keeps the tokens.",
+  "- The user's screen shows real values in your answers. Tool output and file reads are stored with tokens,",
+  "  but Claude Code's own session file (~/.claude/projects/…/*.jsonl) keeps what the user typed as typed,",
+  '  values shown under an unmask and the real values ZeroH puts back into Edit, Write and MCP inputs:',
+  "  don't copy, upload or share it without telling the user it may hold their real values.",
   '- The user sees plain [API_KEY-3f9a1c] as the real value. To name the token itself, write it as ⟦API_KEY-3f9a1c⟧:',
   '  say "⟦API_KEY-3f9a1c⟧ is a Stripe key", never "[API_KEY-3f9a1c] is a placeholder".',
   "- When the user asks you to unmask a kind of data, call request_unmask for it; they decide in Claude Code's dialog. Keys never unmask.",
@@ -202,10 +210,11 @@ const lines = [
   `  ${path.join(zerohHome(), 'statusline-style.json')}`,
   '  {"version": 1} plus any of: fields (order of shield, name, state, fix, masked, sent,',
   '  notProtected, unmask, receipt), separator, labels, emoji (true/false), wording',
-  '  ("long"/"compact"), colour (true/false), onlyWhenNotProtected. Never change statusLine.',
+  '  ("long"/"compact"), colour (true/false), onlyWhenNotProtected, position ("line": its own',
+  '  line under the user\'s status line, or "end": after it). Never change statusLine.',
   "- If the user says ZeroH isn't working, or ZeroH shows 🟡 or 🔴, suggest /zeroh-disclosure:doctor (then --fix); never run it yourself.",
   '',
-  `Known secrets for this project: ${known.length} (from .env files and secret-named environment variables).`,
+  `Known secrets for this project: ${usersKnownSecrets(known).length} (from .env files and secret-named environment variables).`,
   `Typed prompts: ${
     proxyIsActive
       ? 'masked automatically by the ZeroH proxy'

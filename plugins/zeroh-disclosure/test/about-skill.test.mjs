@@ -23,10 +23,13 @@ const CATALOG_LINE =
 test('the about skill is a valid skill that injects the live catalog', () => {
   assert.match(SKILL, /^---\nname: about\ndescription: .+\n/u);
   assert.ok(SKILL.includes(CATALOG_LINE));
-  // The injected command is exactly the one its allowed-tools permit.
-  assert.match(
-    SKILL,
-    /^allowed-tools: Bash\(node "\$\{CLAUDE_SKILL_DIR\}\/\.\.\/\.\.\/bin\/zeroh-disclosure\.mjs" catalog\), PowerShell\(node "\$\{CLAUDE_SKILL_DIR\}\/\.\.\/\.\.\/bin\/zeroh-disclosure\.mjs" catalog\)$/mu,
+  // The injected commands are exactly the ones its allowed-tools permit.
+  const tools = (sub) =>
+    `Bash(node "\${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" ${sub}), PowerShell(node "\${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" ${sub})`;
+  assert.ok(
+    SKILL.includes(
+      `\nallowed-tools: ${tools('catalog')}, ${tools('statusline segment-command')}\n`,
+    ),
   );
   assert.match(SKILL, /Nothing is sent to Blade Labs/u);
 });
@@ -139,4 +142,26 @@ test('the session briefing and the about skill say when to suggest doctor', asyn
       /zeroh-disclosure:doctor/u,
     );
   }
+});
+
+// 1.0.1: the model gets ZeroH's segment command from the skill, read-only,
+// instead of digging through the plugin's files.
+test('the about skill injects the status line segment command, read-only', async () => {
+  const line =
+    '!`node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command`';
+  assert.ok(SKILL.includes(line));
+  const { SEGMENT_COMMAND } = await import('../lib/statusline-settings.js');
+  const result = spawnSync(
+    process.execPath,
+    [
+      path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs'),
+      'statusline',
+      'segment-command',
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${SEGMENT_COMMAND}\n`);
+  const { managementAction } = await import('../lib/user-authority.js');
+  assert.equal(managementAction(['statusline', 'segment-command']), null);
 });

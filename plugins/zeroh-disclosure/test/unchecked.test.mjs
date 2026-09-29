@@ -98,7 +98,7 @@ test('each reason has its one-line notice, for a command, a tool output or a pro
   }
   assert.equal(
     uncheckedNotice('token-expired', { hint: true }),
-    'ZeroH Disclosure: this command ran with the token, not your key: the value expired (read the file again). To block these instead, run /zeroh-disclosure:settings uncertain block.',
+    'ZeroH Disclosure: this command ran with the token, not your key: the value expired (read the file again). Type /zeroh-disclosure:settings uncertain block to stop these instead.',
   );
   assert.equal(
     uncheckedNotice('dynamic-destination', { valueName: 'STRIPE_KEY' }),
@@ -134,7 +134,7 @@ test('each reason has its one-line notice, for a command, a tool output or a pro
   // With the hint: how to tighten, or for a missed raw secret, how to recover.
   assert.equal(
     uncheckedNotice('unparseable', { hint: true }),
-    "ZeroH Disclosure: this command was not protected (couldn't parse it). To block these instead, run /zeroh-disclosure:settings uncertain block.",
+    "ZeroH Disclosure: this command was not protected (couldn't parse it). Type /zeroh-disclosure:settings uncertain block to stop these instead.",
   );
   assert.equal(
     uncheckedNotice('raw-secret-in-command', {
@@ -272,7 +272,7 @@ test('the hint is shown once per session, per kind; the line once per reason per
       env: s.env,
     });
   const first = await call('unparseable');
-  assert.match(first.notice, /To block these instead/u);
+  assert.match(first.notice, /to stop these instead/u);
   // Another reason in the same turn: its line, without the hint.
   const second = await call('dynamic-destination');
   assert.equal(
@@ -305,7 +305,7 @@ test('the hint is shown once per session, per kind; the line once per reason per
     reasons.map((reason) => call(reason, 'parallel')),
   );
   assert.equal(
-    results.filter((r) => /To block these instead/u.test(r.notice)).length,
+    results.filter((r) => /to stop these instead/u.test(r.notice)).length,
     1,
   );
 });

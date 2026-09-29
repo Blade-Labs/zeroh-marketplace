@@ -31,6 +31,7 @@ import { saveRestorably, UNSAVEABLE_REASON } from '../lib/restorable.js';
 import { activeGrants, recordRevealedUnderGrant } from '../lib/unmask.js';
 import { addSent, updateSessionStatus } from '../lib/session-status.js';
 import { recordMaskedOutput, recordMissReported } from '../lib/report.js';
+import { modelReportNotice } from '../lib/report-miss.js';
 import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
 import { NAMING_REMINDER, namingReminder } from '../lib/token-pattern.js';
 
@@ -75,6 +76,8 @@ let grants = [];
 let unmaskedTypes = [];
 // Known secrets for masking receipt labels, loaded on first use.
 let labelKnown = null;
+// The one-line notice when Claude reported a missed value itself.
+let missNotice = null;
 try {
   cleanupValuesFile();
   if (
@@ -99,6 +102,11 @@ try {
     JSON.stringify(event.tool_response).includes('Masked from now on as ')
   ) {
     await recordMissReported({ cwd: root, sessionId: event.session_id });
+    // Claude reported it itself (a value in the call; the user's own
+    // /zeroh-disclosure:report-miss has none): no dialog, one line. The
+    // place is named once the vault can mask it (below).
+    if (typeof event.tool_input?.value === 'string')
+      missNotice = modelReportNotice(event.tool_input);
   }
   unmaskedTypes = grants.map(({ kind }) => kind);
 
@@ -108,6 +116,8 @@ try {
     vaultFailed = true;
     throw error;
   }
+  if (missNotice)
+    missNotice = modelReportNotice(event.tool_input, { maskPlace: maskLabel });
   readPath =
     event.tool_name === 'Read'
       ? event.tool_input?.file_path || event.tool_input?.path
@@ -142,7 +152,10 @@ try {
   // Image blocks in any other tool's output (an MCP screenshot): their
   // strings were scanned, the picture was not.
   const images = imageBlocks(event.tool_response);
-  const imageLine = images ? await noteUncheckedFormat(images) : null;
+  const imageLine = joinLines(
+    missNotice,
+    images ? await noteUncheckedFormat(images) : null,
+  );
   if (!result.replacements.length) {
     recordReveals(result.revealed);
     emitNotice(imageLine);
@@ -548,7 +561,11 @@ function maskedContext(replacements) {
   const lines = [
     `ZeroH Disclosure masked ${unique.size} value(s) in this ${event.tool_name} output before you saw it.`,
     'Use the tokens exactly as written. When a command runs, ZeroH puts the real value back on the',
-    "user's machine for allowed destinations. Never ask the user to paste the real value.",
+    "user's machine. For a host ZeroH can read that the value may not reach, ZeroH stops the command",
+    "before anything is sent and tells the user how to allow it, so you don't need to ask first for that reason.",
+    "Where ZeroH can't tell where a command sends the value (a script, a variable host, git push), the real",
+    "value is put back and the command runs with a notice: before sending a secret somewhere the user didn't",
+    'ask for, ask the user. Never ask the user to paste the real value.',
   ];
   for (const [token, replacement] of unique) {
     const name = replacement.source?.startsWith('known:')

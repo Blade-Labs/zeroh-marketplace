@@ -1,7 +1,7 @@
 # ZeroH Disclosure for Claude Code
 
 [![Licence: AGPL-3.0-only](https://img.shields.io/badge/licence-AGPL--3.0--only-blue)](LICENSE)
-[![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-green)](CHANGELOG.md)
+[![Version 1.0.1](https://img.shields.io/badge/version-1.0.1-green)](CHANGELOG.md)
 
 ZeroH Disclosure is a Claude Code plugin that lets Claude work with your API keys, passwords and
 personal data without the model receiving them. Before anything reaches the model, it replaces
@@ -93,7 +93,7 @@ Claude Code user settings when you have no `statusLine` yet, and says so in one 
 {
   "statusLine": {
     "type": "command",
-    "command": "node -e \"const f=require('fs'),p=require('path'),e=process.env,h=require('os').homedir();const j=(x)=>{try{return JSON.parse(f.readFileSync(x,'utf8'))}catch{return null}};const c=p.resolve(e.CLAUDE_CONFIG_DIR||p.join(h,'.claude'));const k=p.resolve(e.CLAUDE_CODE_PLUGIN_CACHE_DIR||p.join(c,'plugins','cache'));const z=e.ZEROH_HOME||(process.platform==='win32'?p.join(e.LOCALAPPDATA||p.join(h,'AppData','Local'),'ZeroH'):p.join(h,'.zeroh'));const l=[];for(const[n,v]of Object.entries(j(p.join(c,'plugins','installed_plugins.json'))?.plugins||{}))if(n.startsWith('zeroh-disclosure@'))for(const i of[].concat(v))if(typeof i?.installPath==='string')l.push(p.resolve(i.installPath));const u=(x)=>{const s=p.relative(k,x);return !s.startsWith('..')&&!p.isAbsolute(s)&&s.split(p.sep)[1]==='zeroh-disclosure'};const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));const a=process.argv.slice(1);const w=(m)=>process.stdout.write(a.includes('segment')?'':'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m);d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \\u00b7 remove it with /statusline')\"",
+    "command": "node -e \"const f=require('fs'),p=require('path'),e=process.env,h=require('os').homedir();const j=(x)=>{try{return JSON.parse(f.readFileSync(x,'utf8'))}catch{return null}};const c=p.resolve(e.CLAUDE_CONFIG_DIR||p.join(h,'.claude'));const k=p.resolve(e.CLAUDE_CODE_PLUGIN_CACHE_DIR||p.join(c,'plugins','cache'));const z=e.ZEROH_HOME||(process.platform==='win32'?p.join(e.LOCALAPPDATA||p.join(h,'AppData','Local'),'ZeroH'):p.join(h,'.zeroh'));const l=[];for(const[n,v]of Object.entries(j(p.join(c,'plugins','installed_plugins.json'))?.plugins||{}))if(n.startsWith('zeroh-disclosure@'))for(const i of[].concat(v))if(typeof i?.installPath==='string')l.push(p.resolve(i.installPath));const u=(x)=>{const s=p.relative(k,x);return !s.startsWith('..')&&!p.isAbsolute(s)&&s.split(p.sep)[1]==='zeroh-disclosure'};const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));const a=process.argv.slice(1);const o=()=>new Promise((r)=>{if(a[0]!=='wrap')return r('');const q=require('child_process'),W=process.platform==='win32';let c,s='',n=0,g,i='';try{i=f.readFileSync(0)}catch{}const x=(v)=>{if(n)return;n=1;clearTimeout(g);try{c.stdout.destroy();c.stdin.destroy();c.unref()}catch{}r(v)};try{c=q.spawn(Buffer.from(a[1]||'','base64url').toString(),{shell:true,detached:!W,stdio:['pipe','pipe','ignore'],windowsHide:true})}catch{return r('')}g=setTimeout(()=>{try{W?q.spawn('taskkill',['/pid',String(c.pid),'/T','/F'],{stdio:'ignore',windowsHide:true}).unref():process.kill(-c.pid,'SIGKILL')}catch{}x('')},2000);c.stdout.setEncoding('utf8');c.stdout.on('data',(d)=>{s+=d});c.stdout.on('error',()=>{});c.stdin.on('error',()=>{});c.on('error',()=>x(''));c.on('close',(z)=>x(z===0?s.trimEnd():''));c.stdin.end(i)});const w=(m)=>o().then((t)=>process.stdout.write(a.includes('segment')?'':(t?t+(j(p.join(z,'statusline-style.json'))?.position==='end'?' \\u00b7 ':'\\u000a'):'')+'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m));d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \\u00b7 remove it with /statusline')\"",
     "padding": 0,
     "refreshInterval": 10
   }
@@ -113,18 +113,18 @@ the line says `🛡️ ZeroH · 🔴 not installed · remove it with /statusline
   state as data for a status line script of your own. [The status line](docs/statusline.md) has
   the keys, examples and the JSON schema.
 - It never shows a value, makes no network call and answers in a few milliseconds.
-- **Your own status line stays.** ZeroH never replaces it, and says once how to add ZeroH's part.
-  This command prints only ZeroH's segment, without a line end; pipe it the JSON your script gets
-  on stdin:
+- **Your own status line stays.** ZeroH never replaces it. Type
+  `/zeroh-disclosure:settings statusline on` and ZeroH adds its part on its own line under yours
+  (or after it, with `"position": "end"` in the style file): your script is not changed, and
+  `/zeroh-disclosure:settings statusline off` puts your line back exactly. To compose it yourself
+  instead, [the status line](docs/statusline.md#add-zeroh-to-a-status-line-you-already-have) has
+  the command that prints ZeroH's part.
 
-  ```bash
-  node -e "const f=require('fs'),p=require('path'),e=process.env,h=require('os').homedir();const j=(x)=>{try{return JSON.parse(f.readFileSync(x,'utf8'))}catch{return null}};const c=p.resolve(e.CLAUDE_CONFIG_DIR||p.join(h,'.claude'));const k=p.resolve(e.CLAUDE_CODE_PLUGIN_CACHE_DIR||p.join(c,'plugins','cache'));const z=e.ZEROH_HOME||(process.platform==='win32'?p.join(e.LOCALAPPDATA||p.join(h,'AppData','Local'),'ZeroH'):p.join(h,'.zeroh'));const l=[];for(const[n,v]of Object.entries(j(p.join(c,'plugins','installed_plugins.json'))?.plugins||{}))if(n.startsWith('zeroh-disclosure@'))for(const i of[].concat(v))if(typeof i?.installPath==='string')l.push(p.resolve(i.installPath));const u=(x)=>{const s=p.relative(k,x);return !s.startsWith('..')&&!p.isAbsolute(s)&&s.split(p.sep)[1]==='zeroh-disclosure'};const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));const a=process.argv.slice(1);const w=(m)=>process.stdout.write(a.includes('segment')?'':'\u{1F6E1}\u{FE0F} ZeroH \u00b7 \u{1F534} '+m);d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \u00b7 remove it with /statusline')" segment
-  ```
-
-- `/zeroh-disclosure:settings statusline off` removes it, and so does deleting it with
-  `/statusline`: ZeroH never adds it back. `/zeroh-disclosure:settings statusline on` turns it on
-  again. Uninstall removes it from every settings file it was written to. Claude cannot add,
-  change or remove any status line: the settings guard stops the edit.
+- `/zeroh-disclosure:settings statusline off` removes it (or ZeroH's part of yours), and so does
+  deleting it with `/statusline`: ZeroH never adds it back. `/zeroh-disclosure:settings statusline on` turns it on
+  again. Uninstall removes it from every settings file it was written to, and puts back each
+  status line of yours it added its part to. Claude cannot add, change or remove any status line:
+  the settings guard stops the edit.
 
 ## What it does not do
 
@@ -134,8 +134,11 @@ the line says `🛡️ ZeroH · 🔴 not installed · remove it with /statusline
   shape and no key-like name ([what is detected](docs/detection.md)).
 - **It cannot recall** what the model has already seen. Report a miss with
   `/zeroh-disclosure:report-miss` so it is masked from then on, and rotate the value.
-- **Claude Code's own local transcripts** still hold real values from tool output and edits. They
-  stay on your machine.
+- **Claude Code's own local session files** (`~/.claude/projects/…/*.jsonl`) store what you type
+  as you typed it, values shown under an unmask, and the real values ZeroH put back into edits and
+  MCP calls. The proxy masks
+  what reaches the model, not what Claude Code saves. They stay on your machine; ZeroH says so when
+  a command copies or uploads them.
 
 The full list is under [Guarantees and limits](#guarantees-and-limits).
 
@@ -194,8 +197,8 @@ sequenceDiagram
    the model or the transcript sees. A host that isn't allowed for it stops the call, with the
    one line that allows it. When ZeroH can't put the value back, the call runs with the token and
    ZeroH says so.
-3. **Show.** Your screen shows real values in Claude's answers; the model and the saved
-   conversation keep the tokens. When Claude talks about a token itself, it writes
+3. **Show.** Your screen shows real values in Claude's answers; the model sees tokens, and so do
+   the tool output and file reads Claude Code saves. When Claude talks about a token itself, it writes
    `⟦API_KEY-3f9a1c⟧`, which your screen leaves as it is.
 4. **Receipt.** Every turn gets a [signed receipt](#receipts) in ZeroH's own folder, never in your
    project. ZeroH prints a line only when the turn masked, stopped, blocked or revealed something.
@@ -279,20 +282,20 @@ unmasking per kind; see
 
 Everything is a slash command inside Claude Code:
 
-| Command                                                                            | What it does                                                                   |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `/zeroh-disclosure:status`                                                         | What is protected now, the proxy, unmask grants, receipts and warnings         |
-| `/zeroh-disclosure:mask-show`                                                      | What the model saw this session: tokens, types, sources and counts, no values  |
-| `/zeroh-disclosure:mask-receipt`                                                   | This session's receipt slip and the path to `receipt.html`                     |
-| `/zeroh-disclosure:report [7d\|30d\|90d\|all]`                                     | The receipt slip for a period                                                  |
-| `/zeroh-disclosure:unmask [KIND <why>\|revoke [id\|all]]`                          | Ask to unmask one kind of personal data, or list and end grants                |
-| `/zeroh-disclosure:report-miss`                                                    | Report a value ZeroH did not mask, in a private dialog rather than in chat     |
-| `/zeroh-disclosure:allow [NAME HOST]` (`--remove`)                                 | Let a secret reach a host or MCP server; alone, show where each value may go   |
-| `/zeroh-disclosure:proxy [off\|on]`                                                | Proxy status, or turn the proxy off or back on                                 |
-| `/zeroh-disclosure:doctor [--fix\|--report]`                                       | Check and repair the proxy, its settings entry and the vaults                  |
-| `/zeroh-disclosure:settings [banner\|receipts keep\|uncertain\|statusline\|vault]` | Banner, receipts kept, uncertain cases, status line, vault or `vault clear`    |
-| `/zeroh-disclosure:mask-config`                                                    | Configuration, policy and protection engine                                    |
-| `/zeroh-disclosure:uninstall [--dry-run]`                                          | Remove ZeroH and the plugin completely; `--dry-run` only shows what it removes |
+| Command                                                                            | What it does                                                                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `/zeroh-disclosure:status`                                                         | What is protected now, the proxy, unmask grants, receipts and warnings                      |
+| `/zeroh-disclosure:mask-show`                                                      | What the model saw this session: tokens, types, sources and counts, no values               |
+| `/zeroh-disclosure:mask-receipt`                                                   | This session's receipt slip and the path to `receipt.html`                                  |
+| `/zeroh-disclosure:report [7d\|30d\|90d\|all]`                                     | The receipt slip for a period                                                               |
+| `/zeroh-disclosure:unmask [KIND <why>\|revoke [id\|all]]`                          | Ask to unmask one kind of personal data, or list and end grants                             |
+| `/zeroh-disclosure:report-miss`                                                    | Report a value ZeroH did not mask in a private form; `list` / `delete <id>` the local notes |
+| `/zeroh-disclosure:allow [NAME HOST]` (`--remove`)                                 | Let a secret reach a host or MCP server; alone, show where each value may go                |
+| `/zeroh-disclosure:proxy [off\|on]`                                                | Proxy status, or turn the proxy off or back on                                              |
+| `/zeroh-disclosure:doctor [--fix\|--report]`                                       | Check and repair the proxy, its settings entry and the vaults                               |
+| `/zeroh-disclosure:settings [banner\|receipts keep\|uncertain\|statusline\|vault]` | Banner, receipts kept, uncertain cases, status line, vault or `vault clear`                 |
+| `/zeroh-disclosure:mask-config`                                                    | Configuration, policy and protection engine                                                 |
+| `/zeroh-disclosure:uninstall [--dry-run]`                                          | Remove ZeroH and the plugin completely; `--dry-run` only shows what it removes              |
 
 `allow`, `proxy`, `doctor --fix`, `settings` changes, `unmask caps` and `uninstall` change
 what ZeroH protects, so only you can run them. You type the command and ZeroH applies it on the
@@ -300,8 +303,10 @@ same turn: the result appears at once, under Claude Code's "operation blocked by
 starting with `✓ Done by ZeroH Disclosure`, and nothing is sent to Claude. Claude can't invoke
 these commands (they are marked `disable-model-invocation`, and ZeroH denies any attempt through
 Claude's Skill tool), and if it runs ZeroH's command-line tool itself, under any name or launcher,
-the tool changes nothing and answers `Nothing changed: … only you can do it`. The read-only commands, `unmask` (but not `unmask caps`)
-and `report-miss` stay available to Claude; `unmask` and `report-miss` still need your answer in a dialog. Commands act
+the tool changes nothing and answers `Nothing changed: … only you can do it`. The read-only commands and `unmask` (but not `unmask caps`)
+stay available to Claude; `unmask` still needs your answer in a dialog. `report-miss` is yours to
+type; Claude reports a missed value with ZeroH's `report_missed_secret` tool instead, which masks
+it with no dialog and tells you in one line. Commands act
 on the project Claude Code opened.
 
 Ask Claude anything about ZeroH ("what does ZeroH Disclosure protect?"): the plugin's `about`
@@ -359,7 +364,7 @@ Set these as environment variables before starting Claude Code, or as `KEY=value
   one: an allowed host runs, a host that isn't allowed is stopped. In a Write, an Edit or a
   subagent prompt it is replaced by a token. Private keys, keystores and credential stores can be
   read, with what the detector finds in them masked; only ZeroH's own keys are refused. (With
-  `uncertain block`, raw secrets in commands and credential-file reads are denied.)
+  `/zeroh-disclosure:settings uncertain block`, raw secrets in commands and credential-file reads are denied.)
 
 ## Receipts
 
@@ -412,7 +417,7 @@ that masks every request on its way to the model. It is on by default.
   never stores request or response bodies and leaves responses unchanged.
 - **It never blocks Claude Code.** If it can't be used, what you type is sent as typed, and a
   prompt holding a secret gets a "not protected (proxy not running)" line with the fix. Files and
-  command output are still masked by the hooks. With `uncertain block`, such a prompt is stopped
+  command output are still masked by the hooks. With `/zeroh-disclosure:settings uncertain block`, such a prompt is stopped
   instead, and ZeroH copies a masked version to your clipboard, when it can, for you to paste.
 - **Turn it off** with `/zeroh-disclosure:proxy off`, which restores your setting and stays off
   until `/zeroh-disclosure:proxy on`. `ZEROH_PROXY=off claude` skips it for one session.
@@ -454,9 +459,11 @@ The limits:
 - **Your machine holds real values**: your files, the encrypted vault and the commands that run.
   The vault key sits beside the vault in your home directory, so it protects against accidental
   commits and casual reads, not against other programs running as you.
-- **Claude Code's local transcripts hold real values too.** They record tool output before ZeroH
-  masks it, and the input of Edit, Write, MultiEdit, NotebookEdit and MCP calls, which need the
-  real value to work.
+- **Claude Code's local session files hold real values too.** Claude Code stores what you type as
+  you typed it (the proxy masks it on the way to the model, after Claude Code saved it), and the
+  input of Edit, Write, MultiEdit, NotebookEdit and MCP calls, which need the real value to work,
+  and values shown under an unmask. Other tool output and file reads are saved with tokens. A command that copies, uploads or prints these
+  files runs with a notice; `/zeroh-disclosure:settings uncertain block` stops it.
 - **Destinations built at run time.** The destination check covers every host a command names. It
   cannot see a host that a script computes or reads while it runs. The guard on ZeroH's files
   blocks direct attempts to change them; it is not a sandbox.
@@ -466,24 +473,24 @@ The limits:
   sets `ANTHROPIC_BASE_URL`), a prompt in which you type a
   secret or personal data is sent as typed, with a "not protected (proxy not running)" line, and
   background commands and the `Monitor` tool run with the same line, because nothing can mask
-  them. With `uncertain block` the prompt is stopped and those commands are denied.
+  them. With `/zeroh-disclosure:settings uncertain block` the prompt is stopped and those commands are denied.
 - **Credential files** (SSH keys, kubeconfig, AWS credentials, `.netrc` and similar) can be read;
   what the detector recognises in them is masked, and the read is recorded. With
-  `uncertain block` they are refused. ZeroH's own keys are always refused.
+  `/zeroh-disclosure:settings uncertain block` they are refused. ZeroH's own keys are always refused.
 - **Failing tools.** Claude Code passes the output of a failed tool call to the model through a
   path hooks cannot rewrite. ZeroH makes foreground Bash and PowerShell commands finish with
   status 0 so their output is masked, but a command that times out, is interrupted or uses `exec`,
   and errors from MCP tools and WebFetch, reach the model unmasked when the proxy is off. With the
   proxy on, the proxy masks them.
 - **The first prompt of the first session** switches the session to the proxy; a secret typed in
-  that prompt is sent with a "not protected" line (stopped with `uncertain block`). A session that
+  that prompt is sent with a "not protected" line (stopped with `/zeroh-disclosure:settings uncertain block`). A session that
   starts behind the proxy is masked from its first prompt, `claude -p` included.
 - **Shared multi-user machines.** The proxy listens on a `127.0.0.1` port. If another local user
   takes that port while the ZeroH proxy is down, that program could receive your requests until
   the next Claude Code session start moves the proxy to another port. Use ZeroH on a single-user
   machine, or turn the proxy off on a shared one.
 - **Output over 1 MB** and **prompts over 256 KB** are sent unscanned, with a "not protected (too
-  large to scan)" line; `uncertain block` withholds or stops them.
+  large to scan)" line; `/zeroh-disclosure:settings uncertain block` withholds or stops them.
 - **Values the model has already seen cannot be recalled.** Report a miss with
   `/zeroh-disclosure:report-miss` and rotate the value.
 

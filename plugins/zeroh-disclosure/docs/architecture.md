@@ -18,6 +18,7 @@ the source files, see [Where things live](development.md#where-things-live).
 - [PowerShell late binding](#powershell-late-binding)
 - [Literal restore](#literal-restore)
 - [Exit-status wrapper](#exit-status-wrapper)
+- [What the Stop line may show](#what-the-stop-line-may-show)
 - [Settings guard](#settings-guard)
 - [Status line](#status-line)
 - [Evidence contracts](#evidence-contracts)
@@ -88,6 +89,21 @@ flowchart TB
   milliseconds it exists. Per-turn tamper checks (1.0) are the mitigation.
 - **Hook time limits.** The watchdog answers 2 s before Claude Code's timeout, so a slow scan
   never falls through silently.
+
+**Outside ZeroH: Claude Code's session files.** Claude Code saves each session to
+`<CLAUDE_CONFIG_DIR or ~/.claude>/projects/<project>/<session>.jsonl`. It saves the prompt as the
+user typed it, before the proxy masks the request, so a secret typed into a prompt is in that
+file as it is (1.0.1, Mac /try review C1). Tool output and file reads are saved with tokens,
+because PostToolUse rewrites them before Claude Code stores them; the inputs ZeroH restores into
+Edit, Write, MultiEdit, NotebookEdit and MCP calls are saved with the real value (see
+[Literal restore](#literal-restore)), and so are values shown under an unmask grant. ZeroH does
+not rewrite these files. The session briefing says so, and a shell command that names them
+(`lib/transcript-files.js`) runs with a notice for the user and a note for Claude; `uncertain
+block` stops it. The check is best effort: it matches a `.claude`, `.claude-<name>` or
+`.claude.<name>` folder (not `.claude-plugin`), then its `projects` folder, a project folder or a
+`.jsonl` file below it, and leaves Claude Code's auto-memory (`projects/<project>/memory/`) alone.
+It does not recognise a path it can't see in the command, such as `cd ~/.claude && cp projects/…`
+or `tar -C ~ .claude`.
 
 ### Pass mode and block mode
 
@@ -334,9 +350,10 @@ whether the client advertised MCP elicitation. A missing capability or Claude Co
 headless entrypoint causes an immediate refusal, so print mode and older clients never wait for
 input and never receive a grant. Claude Code advertises elicitation in print mode but auto-declines it,
 so the entrypoint check makes that refusal explicit before a request is sent. `report_missed_secret`
-masks the value first and then asks whether to keep its shape-only report on this computer
-(preselected) or delete it;
-the dialog says that sending to Blade Labs comes in 1.1, and there is no network sender.
+with a value (Claude's own report, or one the user asked for) masks it and keeps a shape-only
+note on this computer with no dialog; the PostToolUse hook shows the user one line. With no value
+(the user's `/zeroh-disclosure:report-miss`) it opens one private form: Submit masks and keeps
+the note, Cancel changes nothing. Reports stay on this computer; there is no network sender.
 
 Personal-data caps in `<ZEROH_HOME>/unmask.json` and per-project grant stores in
 `<ZEROH_HOME>/grants/<project-hash>.json` are HMAC-signed with the allow-list key. Secrets are
@@ -563,6 +580,29 @@ Background commands keep their status: their output bypasses `PostToolUse`, so w
 they run with a "not protected" line (denied in block mode). Timeouts, interrupts and `exec` still end in `PostToolUseFailure`, as does a hook
 process that fails before its error handlers are installed (a module that cannot load); with the
 proxy on, the proxy masks that output.
+
+## What the Stop line may show
+
+The Stop hook's `systemMessage` is not screen-only. Claude Code (checked in 2.1.284) turns it into
+a `hook_system_message` attachment of the conversation, which it writes to the session transcript
+JSONL on disk (and to a file of its own when it is long). The model and the transcript keep the
+tokens, so the Stop line never holds a whole value, and never the start of a secret. A key,
+password, token, private key, connection string or any other secret shows no preview: the token
+and where it came from, plus its last four characters only when the value is 24
+characters or longer (`stopPreview` in lib/report.js). Personal data shows the preview receipt.html
+shows (`previewValue` in lib/report-slip.js: `a…@domain` for an email address, the type and last
+two characters of other personal data; a value of eight characters or fewer shows none).
+receipt.html, a local file under `ZEROH_HOME`, keeps its fuller previews. Only MessageDisplay,
+which changes the screen and never the stored message, shows whole values. Without
+the vault (it can't be opened, or the value expired) an example says where the token came from
+instead.
+
+The places are one table (lib/report-counts.js `SOURCE_WORDS`, `sourcePlace`, `observationFrom`),
+shared by the Stop line, `/zeroh-disclosure:mask-show` and receipt.html: `in your message`, `in
+<file>` (a Read, or a plain `cat`/`head`/`tail`/`grep`/`rg` of one file), `in command output`,
+`in <tool> output`, `for <NAME>` for a value known by its name, and `shown under your unmask` for
+values an unmask grant let through. Receipts keep the stored channel names; only what is shown
+changed (1.0.1).
 
 ## Settings guard
 

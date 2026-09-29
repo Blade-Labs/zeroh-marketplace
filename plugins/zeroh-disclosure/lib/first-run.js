@@ -31,6 +31,7 @@ import {
 import { readJsonOr, writePrivateJson } from './private-fs.js';
 import {
   choiceFor,
+  currentEntry,
   isOurStatusLine,
   isOutdated,
   recordChoice,
@@ -44,11 +45,11 @@ export const FIRST_RUN_LINES = Object.freeze({
   statuslineOn:
     'Status line on · /zeroh-disclosure:settings statusline off to remove',
   statuslineTheirs:
-    'You have your own status line · /zeroh-disclosure:settings statusline on shows how to add ZeroH to it',
+    'You have your own status line · /zeroh-disclosure:settings statusline on adds ZeroH to it',
   autoUpdate: (name) =>
     `Auto-update on for the ${name} marketplace · turn it off in /plugin, Marketplaces`,
   replaced:
-    "Your own status line replaced ZeroH's · /zeroh-disclosure:settings statusline on shows how to add ZeroH's part (or build on `statusline --json`)",
+    "Your own status line replaced ZeroH's · /zeroh-disclosure:settings statusline on adds ZeroH's part to it",
   shadowed: (file) =>
     `${file} sets its own status line, so ZeroH's isn't shown in this project`,
 });
@@ -169,7 +170,8 @@ function statuslineDefault({ document, settingsPath, home }) {
   if (has && isOurStatusLine(entry)) {
     const record = choice !== 'on' ? 'on' : null;
     if (isOutdated(entry)) {
-      document.statusLine = statuslineEntry();
+      // A wrap of the user's own line stays one (lib/statusline-settings.js).
+      document.statusLine = currentEntry(entry);
       return { changed: true, line: null, choice: 'on' };
     }
     return { changed: false, line: null, choice: record };

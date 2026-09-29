@@ -29,7 +29,7 @@ import {
 import { updateSessionStatus } from '../lib/session-status.js';
 import { signTurnSummary } from '../lib/turn-summary.js';
 import { takeDeferredNotices } from '../lib/unchecked.js';
-import { acquireFileLock, releaseFileLock } from '../lib/vault.js';
+import { acquireFileLock, releaseFileLock, Vault } from '../lib/vault.js';
 
 const event = await readStdinJson();
 try {
@@ -128,6 +128,22 @@ for (const t of summaryTurns) {
   }
 }
 
+// The vault's value for a token, for the Stop line's previews (never a
+// whole value, and never the start of a key or password; see stopPreview in
+// lib/report.js). Opened once, only when a turn has tokens to show; a vault
+// that can't be opened gives no previews.
+let stopVault;
+function stopValueOf() {
+  if (stopVault === undefined) {
+    try {
+      stopVault = new Vault(session.root ?? cwd);
+    } catch {
+      stopVault = null;
+    }
+  }
+  return stopVault ? (token) => stopVault.valueOf(token) : null;
+}
+
 // Every turn still gets a signed receipt, receipt.html and the session
 // receipt bundle; the screen hears about a turn only when it has something to
 // say, and only about the turn that just ended (T-31): an earlier stopped
@@ -149,6 +165,7 @@ if (finalizedTurns.length > 0) {
     const seen = formatStopTokenLine(entry.ledger, {
       blocked: entry.blocked,
       sentUnmasked: entry.sentUnmasked,
+      valueOf: stopValueOf(),
     });
     if (seen) outboundLines.push(seen);
   }

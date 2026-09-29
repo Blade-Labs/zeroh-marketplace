@@ -11,12 +11,17 @@ import {
   add,
   dayRows,
   formatNotice,
+  isPersonalType,
   mergeCounts,
   observationFrom,
   plural,
   rows,
+  SOURCE_WORDS,
+  sourcePlace,
   sumCounts,
 } from './report-counts.js';
+import { isSecretType, tokenType } from './data-kinds.js';
+import { kindName } from './stop-message.js';
 import { renderReceiptHtml, renderReportHtml } from './report-html.js';
 import {
   LOCAL_SUMMARY_NOTICE,
@@ -288,7 +293,7 @@ export function stopTurnEvents(
   const revealed = revealedUnderGrantCount(ledger);
   if (revealed > 0) {
     events.push(
-      `${revealed} ${plural(revealed, 'value')} shown under your unmask grant`,
+      `${revealed} ${plural(revealed, 'value')} shown under your unmask`,
     );
   }
   const unchecked = sumCounts(ledger?.format_disclosure?.passed_unmasked);
@@ -349,29 +354,66 @@ export function formatStopReceiptLine(
   return parts.join(' · ');
 }
 
-// What the model saw in a turn (T-20), for a second Stop line: each token in
-// its ⟦⟧ form, which nothing restores, with where it came from (a variable
-// name, a file name, "typed", or the tool). Never a value or a preview. At
-// most three, then how many more and where to see them all. Null when the
+// What the model saw in a turn (T-20), for a second Stop line (1.0.1):
+// up to three examples, one kind each (keys and passwords first), as the
+// token (next to a preview for personal data), then the rest counted by
+// kind and where it came from, in plain words:
+//
+//   Claude saw ⟦API_KEY-3f9a1c⟧ in .env (…c4Q2) · ⟦EMAIL-29c405⟧, not
+//   a…@acme.com · and 10 more: 8 email addresses in signup-errors.log, 2
+//   Stripe test secret keys in .env (receipt ↗ / /zeroh-disclosure:mask-show)
+//
+// Claude Code keeps a Stop hook's systemMessage in the session transcript
+// on disk (a `hook_system_message` attachment), so the line never holds a
+// value and never the start of a secret (stopPreview). Without the vault's
+// value, an example says where the token came from instead. Null when the
 // turn masked nothing the model saw.
-const STOP_TOKEN_LIMIT = 3;
+const STOP_EXAMPLES = 3;
+const STOP_GROUPS = 3;
 
-function seenFrom(entry) {
-  if (entry.name) return entry.name;
-  if (entry.channel === 'typed prompt') return 'typed';
-  if (entry.channel === 'file read') {
-    const parts = entry.source.split(' · ');
-    const last = parts.at(-1);
-    if (parts.length > 1 && !/^line \d+$/u.test(last)) return last;
-    return path.basename(parts[0]);
+function pluralWords(name, count) {
+  if (count === 1) return name;
+  if (name === 'date of birth') return 'dates of birth';
+  const words = name.split(' ');
+  // "Malaysian NRIC (MyKad) number": the noun is the last plain word.
+  const at = words.length - 1;
+  const noun = words[at];
+  words[at] = /(?:s|x|z|ch|sh)$/u.test(noun)
+    ? `${noun}es`
+    : /[^aeiou]y$/u.test(noun)
+      ? `${noun.slice(0, -1)}ies`
+      : `${noun}s`;
+  return words.join(' ');
+}
+
+function stopKindName(type, value) {
+  const name = kindName(type, value ?? '');
+  if (name === 'secret' && String(type).toUpperCase() === 'API_KEY')
+    return 'API key';
+  return name;
+}
+
+// The Stop line is stored in Claude Code's session transcript (docs/
+// architecture.md, "What the Stop line may show"), so a key, password, token,
+// connection string or any other secret shows no part of its start: at most
+// its last four characters, and only when it is 24 characters or longer.
+// Personal data keeps receipt.html's preview (`a…@domain`, `TYPE …NN`).
+const STOP_TAIL_MIN = 24;
+export function stopPreview(type, value) {
+  const text = String(value ?? '');
+  if (isPersonalType(type)) {
+    const preview = previewValue(type, text);
+    return { preview: preview && preview !== '•••' ? preview : null };
   }
-  if (entry.channel === 'command output') return 'command output';
-  return entry.source;
+  return {
+    preview: null,
+    tail: text.length >= STOP_TAIL_MIN ? text.slice(-4) : null,
+  };
 }
 
 export function formatStopTokenLine(
   ledger,
-  { blocked = null, sentUnmasked = null } = {},
+  { blocked = null, sentUnmasked = null, valueOf = null } = {},
 ) {
   if (blocked ?? promptStopped(ledger)) return null;
   // A prompt sent as typed: the model saw the value, not a token.
@@ -379,20 +421,74 @@ export function formatStopTokenLine(
   const seen = new Map();
   for (const entry of tokenObservationsFromLedger(ledger)) {
     if (!typedMasked && entry.channel === 'typed prompt') continue;
-    if (!seen.has(entry.token)) seen.set(entry.token, seenFrom(entry));
+    if (!seen.has(entry.token))
+      seen.set(entry.token, { type: entry.type, place: sourcePlace(entry) });
   }
   for (const replacement of typedMasked ? (ledger?.replacements ?? []) : []) {
     const token = replacement?.replacement;
-    if (token && !seen.has(token)) seen.set(token, 'typed');
+    if (token && !seen.has(token))
+      seen.set(token, {
+        type: replacement.entity_type || tokenType(token),
+        place: SOURCE_WORDS['typed prompt'],
+      });
   }
   if (!seen.size) return null;
-  const listed = [...seen]
-    .slice(0, STOP_TOKEN_LIMIT)
-    .map(([token, from]) => `⟦${token.slice(1, -1)}⟧ for ${from}`);
-  const more = seen.size - listed.length;
-  return `Claude saw ${listed.join(' · ')}${
-    more > 0 ? ` · +${more} more · /zeroh-disclosure:mask-show` : ''
-  }`;
+  const items = [...seen].map(([token, { type, place }]) => {
+    let value = null;
+    try {
+      value = valueOf ? valueOf(token) : null;
+    } catch {
+      value = null;
+    }
+    const preview = value == null ? null : stopPreview(type, value);
+    return {
+      token,
+      type,
+      place,
+      kind: stopKindName(type, value),
+      ...preview,
+    };
+  });
+  // Keys and passwords first, then personal data; one example per kind
+  // before a second of any kind.
+  const ordered = [
+    ...items.filter((item) => isSecretType(item.type)),
+    ...items.filter((item) => !isSecretType(item.type)),
+  ];
+  const examples = [];
+  const kinds = new Set();
+  for (const item of ordered) {
+    if (examples.length >= STOP_EXAMPLES) break;
+    if (kinds.has(item.kind)) continue;
+    kinds.add(item.kind);
+    examples.push(item);
+  }
+  for (const item of ordered) {
+    if (examples.length >= STOP_EXAMPLES) break;
+    if (!examples.includes(item)) examples.push(item);
+  }
+  const shown = examples.map(
+    (item) =>
+      `⟦${item.token.slice(1, -1)}⟧${item.preview ? `, not ${item.preview}` : ` ${item.place}${item.tail ? ` (…${item.tail})` : ''}`}`,
+  );
+  const rest = ordered.filter((item) => !examples.includes(item));
+  if (!rest.length) return `Claude saw ${shown.join(' · ')}`;
+  const groups = new Map();
+  for (const item of rest) {
+    const key = `${item.kind}\u0000${item.place}`;
+    const group = groups.get(key) ?? { ...item, count: 0 };
+    group.count += 1;
+    groups.set(key, group);
+  }
+  const listed = [...groups.values()].sort((a, b) => b.count - a.count);
+  const named = listed
+    .slice(0, STOP_GROUPS)
+    .map((g) => `${g.count} ${pluralWords(g.kind, g.count)} ${g.place}`);
+  const others = listed
+    .slice(STOP_GROUPS)
+    .reduce((sum, group) => sum + group.count, 0);
+  if (others > 0) named.push(`${others} other${others === 1 ? '' : 's'}`);
+  return `Claude saw ${shown.join(' · ')} · and ${rest.length} more: ${named.join(', ')} (receipt ↗ / /zeroh-disclosure:mask-show)`;
 }
 
 // The MCP report_missed_secret tool has no session id; PostToolUse records a

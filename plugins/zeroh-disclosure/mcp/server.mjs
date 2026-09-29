@@ -16,20 +16,17 @@ import {
   durationOptionsForCap,
   durationResultText,
   endGrants,
+  grantEndedNote,
   isPersonalDataType,
   isSecretType,
   normaliseKind,
   unmaskDialog,
 } from '../lib/unmask.js';
-import {
-  deleteReport,
-  reportMiss,
-  validateMissInput,
-} from '../lib/report-miss.js';
+import { reportMiss, validateMissInput } from '../lib/report-miss.js';
 import { envSessionId, projectRootFromEnv } from '../lib/session.js';
 
-const KEEP_REPORT = 'Keep it on this computer';
-const DELETE_REPORT = 'Delete it';
+const USER_FORM_MESSAGE =
+  'Type the value ZeroH missed into this private form. Submit masks it from now on and keeps a local note of its shape (never the value); Cancel changes nothing. Reports stay on this computer.';
 
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 const content = (text) => ({ content: [{ type: 'text', text }] });
@@ -127,7 +124,7 @@ async function handle(message) {
           {
             name: 'report_missed_secret',
             description:
-              'Report a real-looking secret or personal value that was not masked. ZeroH immediately masks that exact value locally and saves a shape-only report. When the user asks you to report a value, call this tool with it: the user owns that decision. Omit the fields only when the user invokes the report-miss slash command; an interactive private form will collect them.',
+              'Report a real-looking secret or personal value that was not masked. ZeroH immediately masks that exact value locally and keeps a shape-only note on this computer; there is no dialog, and the user sees a one-line notice. When the user asks you to report a value, call this tool with it: the user owns that decision. Omit the fields only when the user invokes the report-miss slash command; an interactive private form will collect them.',
             inputSchema: {
               type: 'object',
               additionalProperties: false,
@@ -196,14 +193,16 @@ function elicitation(params) {
   return answer;
 }
 
+// The user's own /zeroh-disclosure:report-miss: one private form, one
+// choice. Submitting masks the value and keeps a local note of its shape;
+// cancelling changes nothing.
 async function collectMissInput(input) {
   if (input.value !== undefined) return input;
   if (!supportsElicitation) {
     return null;
   }
   const response = await elicitation({
-    message:
-      'Enter the value directly into this private ZeroH form. It will be stored only in the encrypted local vault and will not be repeated in the report.',
+    message: USER_FORM_MESSAGE,
     requestedSchema: {
       type: 'object',
       properties: {
@@ -233,6 +232,10 @@ async function collectMissInput(input) {
   return response.result.content ?? {};
 }
 
+// Masking more is restorable and the note holds no value, so a report
+// needs no second question (1.0.1): the value is masked and the note kept.
+// When Claude reports a value on its own, the PostToolUse hook tells the
+// user in one line (lib/report-miss.js modelReportNotice).
 async function reportMissedSecret(input) {
   // A slot is reserved before any dialog so a looping or injected caller
   // cannot keep opening forms, or race past the limit, once it is spent.
@@ -248,7 +251,7 @@ async function reportMissedSecret(input) {
     if (!collected) {
       return content(
         supportsElicitation
-          ? 'The user cancelled; no value was saved or reported.'
+          ? 'The user cancelled; nothing was masked or saved.'
           : 'Report miss needs an interactive value-entry dialog when no value is supplied; no report was created.',
       );
     }
@@ -265,50 +268,17 @@ async function reportMissedSecret(input) {
   } finally {
     if (!result) reportsThisSession -= 1;
   }
-  if (!supportsElicitation) {
-    return content(
-      `${result.resultText} Shape-only report ${result.id} was saved locally because no interactive report dialog is available. Nothing left this machine.`,
-    );
-  }
-
-  // A plain question with the safe answer preselected (T-23): Enter keeps
-  // the report on this computer. 1.0 has no sender, so sending is not a
-  // choice; the message says when it arrives.
-  const response = await elicitation({
-    message: `ZeroH masked the value as ${result.token} from now on.\n${shapeSummary(result.report)}\nNothing leaves this machine: sending reports to Blade Labs comes in 1.1.\nEnter keeps the report; → changes the answer.`,
-    requestedSchema: {
-      type: 'object',
-      properties: {
-        action: {
-          type: 'string',
-          title: 'What should ZeroH do with this report?',
-          enum: [KEEP_REPORT, DELETE_REPORT],
-          default: KEEP_REPORT,
-        },
-      },
-      required: ['action'],
-    },
-  });
-  const action = response?.result?.content?.action;
-  if (response?.result?.action === 'accept' && action === DELETE_REPORT) {
-    deleteReport(result.id);
-    return content(
-      `${result.resultText} The shape-only report was discarded. Nothing left this machine.`,
-    );
-  }
-  // Keep local, cancel, decline and any unexpected answer all keep the report.
   return content(
-    `${result.resultText} Shape-only report ${result.id} is kept locally. Nothing left this machine.`,
+    `${result.resultText} ${shapeSummary(result.report)} Local note ${result.id} kept; reports stay on this computer. The user can list or delete notes with /zeroh-disclosure:report-miss list.`,
   );
 }
 
-// One line saying what the saved report holds: its shape, never the value
-// (`zeroh-disclosure reports show <id>` prints all of it).
+// One sentence saying what the saved note holds: its shape, never the value.
 function shapeSummary(report) {
   const prefix = report.shape.public_prefix
     ? `, starts with ${report.shape.public_prefix}`
     : '';
-  return `The report holds only: type ${report.type}, ${report.shape.length} characters${prefix}, found in ${report.where}; never the value.`;
+  return `The note holds only: type ${report.type}, ${report.shape.length} characters${prefix}, found in ${report.where}; never the value.`;
 }
 
 async function requestUnmask({ kind, reason }) {
@@ -392,8 +362,10 @@ function endUnmask({ kind }) {
         : `No ${value} unmask is active; ${value} is already masked.`,
     );
   }
-  const kinds = [...new Set(ended.map((grant) => grant.kind))].join(', ');
-  return content(`${kinds} masked again: the unmask ended.`);
+  const kinds = [...new Set(ended.map((grant) => grant.kind))];
+  return content(
+    `${kinds.join(', ')} masked again: the unmask ended. ${grantEndedNote(kinds)}`,
+  );
 }
 
 void DURATION_OPTIONS;

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
-// MessageDisplay: show real values on the user's screen. The stored message and
-// what the model sees keep the tokens.
+// MessageDisplay: show real values on the user's screen. The stored answer and
+// what the model sees keep the tokens (what the user typed is stored as typed
+// by Claude Code; see lib/transcript-files.js).
 //
 // Runs once per flush of a streaming message (up to ten a second, three at a
 // time in Claude Code 2.1.283), and a flush whose hook fails or runs past

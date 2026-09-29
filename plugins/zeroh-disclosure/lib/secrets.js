@@ -50,6 +50,16 @@ const IGNORED_ENV = new Set([
   'GPG_AGENT_INFO',
 ]);
 
+// Variables Claude Code sets for itself.
+export function isClaudeCodeOwnEnvName(name) {
+  return /^CLAUDE_CODE_/u.test(String(name).toUpperCase());
+}
+
+// Known values that are the user's: what the allow list and counts show.
+export function usersKnownSecrets(known) {
+  return known.filter((entry) => !entry.own);
+}
+
 export function isAnthropicCredentialEnvName(name) {
   return ANTHROPIC_CREDENTIAL_ENV.has(String(name).toUpperCase());
 }
@@ -381,6 +391,13 @@ export function loadKnownSecrets(
     const value = env[name];
     if (isSecretName(name)) add(name, value, 'env');
   }
+  // Claude Code's own variables (CLAUDE_CODE_MESSAGING_TOKEN, …) are masked
+  // like any secret, but they are not the user's to send anywhere: `own`
+  // keeps them out of the allow list and the known-secrets count (Mac /try
+  // review M2).
+  for (const entry of found.values())
+    if (entry.source === 'env' && isClaudeCodeOwnEnvName(entry.name))
+      entry.own = true;
   return [...found.values()];
 }
 
@@ -658,6 +675,8 @@ export function scrub(
     profile = 'tool',
     unmaskedTypes = [],
     findingSource = 'detected',
+    // Values already counted as shown (scrubDeep shares one across strings).
+    revealedSeen = new Set(),
   } = {},
 ) {
   if (typeof text !== 'string' || text.length === 0)
@@ -665,6 +684,14 @@ export function scrub(
   const replacements = [];
   const revealed = [];
   const unmasked = new Set(unmaskedTypes);
+  // A value shown under an unmask grant counts once however often it
+  // appears, and once when both the vault and the detector find it (H5).
+  const reveal = (type, value) => {
+    const key = `${baseType(type)}\u0000${value}`;
+    if (revealedSeen.has(key)) return;
+    revealedSeen.add(key);
+    revealed.push({ type, count: 1 });
+  };
 
   // Named-form markers (⟦TYPE-xxxxxx⟧) are kept as written. Detection runs on
   // the whole text with each marker replaced by filler of the same length, so a
@@ -689,7 +716,7 @@ export function scrub(
       cursor = end;
       if (unmasked.has(baseType(c.type))) {
         rebuilt += out.slice(start, end);
-        revealed.push({ type: c.type, count: 1 });
+        reveal(c.type, out.slice(start, end));
         continue;
       }
       const token = vault.tokenFor(c.type, c.value, c.source);
@@ -723,7 +750,7 @@ export function scrub(
       if (unmasked.has(f.type)) {
         rebuilt += out.slice(cursor, f.end);
         cursor = f.end;
-        revealed.push({ type: f.type, count: 1 });
+        reveal(f.type, raw);
         continue;
       }
       const token = vault.tokenFor(f.type, raw, findingSource);
@@ -758,6 +785,7 @@ export function scrub(
 
 // Walk any JSON value and scrub every string, keeping the shape.
 export function scrubDeep(value, opts, acc = [], revealedAcc = []) {
+  if (!opts?.revealedSeen) opts = { ...opts, revealedSeen: new Set() };
   if (typeof value === 'string') {
     const r = scrub(value, opts);
     acc.push(...r.replacements);

@@ -24,6 +24,7 @@
 //
 // `receipt ↗` is an OSC 8 hyperlink to the session's receipt.html. Terminals
 // without OSC 8 show the plain text. Colour follows NO_COLOR and TERM=dumb.
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
@@ -473,7 +474,10 @@ export function hyperlink(url, text) {
 //     "emoji": true,              the 🛡️ and the 🟢/🟡/🔴 dot
 //     "wording": "long",          or "compact" (shorter state words)
 //     "colour": true,             colour the state word (NO_COLOR still wins)
-//     "onlyWhenNotProtected": false   print nothing while 🟢
+//     "onlyWhenNotProtected": false,  print nothing while 🟢
+//     "position": "line"          with your own status line (`wrap`): ZeroH's
+//                                 part on its own line under yours, or "end":
+//                                 after your last line, joined with " · "
 //   }
 //
 // Whatever the style says, while ZeroH is not 🟢 the state and its fix are
@@ -511,6 +515,7 @@ export const DEFAULT_STYLE = Object.freeze({
   wording: 'long',
   colour: true,
   onlyWhenNotProtected: false,
+  position: 'line',
 });
 
 // Words and marks only the state may use.
@@ -557,6 +562,9 @@ export function normaliseStyle(raw) {
       : DEFAULT_STYLE.wording,
     colour: typeof raw.colour === 'boolean' ? raw.colour : DEFAULT_STYLE.colour,
     onlyWhenNotProtected: raw.onlyWhenNotProtected === true,
+    position: ['line', 'end'].includes(raw.position)
+      ? raw.position
+      : DEFAULT_STYLE.position,
   };
 }
 
@@ -720,10 +728,15 @@ function argValue(argv, name) {
   return at >= 0 ? argv[at + 1] : undefined;
 }
 
-async function readInput(stdin) {
-  if (!stdin || stdin.isTTY) return {};
+async function readRaw(stdin) {
+  if (typeof stdin === 'string') return stdin;
+  if (!stdin || stdin.isTTY) return '';
   let raw = '';
   for await (const chunk of stdin) raw += chunk;
+  return raw;
+}
+
+function parseInput(raw) {
   try {
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : {};
@@ -732,10 +745,128 @@ async function readInput(stdin) {
   }
 }
 
+// The shell Claude Code runs a statusLine command with: /bin/sh on macOS
+// and Linux; on Windows Git Bash when it is installed, else PowerShell.
+export function statuslineShell(
+  env = process.env,
+  platform = process.platform,
+) {
+  if (platform !== 'win32') return true;
+  const candidates = [
+    env.CLAUDE_CODE_GIT_BASH_PATH,
+    ...[
+      env.ProgramFiles,
+      env['ProgramFiles(x86)'],
+      env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, 'Programs'),
+    ]
+      .filter(Boolean)
+      .map((dir) => path.win32.join(dir, 'Git', 'bin', 'bash.exe')),
+  ].filter(Boolean);
+  return candidates.find((file) => existsSync(file)) ?? 'powershell.exe';
+}
+
+// How long the user's own status line command may take in `wrap` mode. A
+// hard deadline (Astra 1.0.1 A2): spawnSync's timeout only sends SIGTERM and
+// then waits, so a command that ignores it, or leaves a child holding its
+// output open, would hold back ZeroH's part for as long as it runs.
+export const WRAP_DEADLINE_MS = 2000;
+
+// Ends the command and everything it started: its process group on macOS
+// and Linux (it runs detached, as a group leader), `taskkill /T /F` on
+// Windows.
+function killTree(child, platform = process.platform) {
+  try {
+    if (platform === 'win32')
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      }).unref();
+    else process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+// `wrap`: the user's own status line command, run as Claude Code would run
+// it with the same JSON on stdin. Its output without the trailing line end,
+// or '' when it fails, runs past the deadline or prints nothing: ZeroH's
+// part never breaks the user's line, and the user's never hides ZeroH's.
+export function runWrapped(
+  command,
+  raw,
+  { env = process.env, deadlineMs = WRAP_DEADLINE_MS } = {},
+) {
+  return new Promise((resolve) => {
+    let child;
+    let out = '';
+    let done = false;
+    let timer = null;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        child?.stdout?.destroy();
+        child?.stdin?.destroy();
+        child?.unref();
+      } catch {
+        // Nothing left to release.
+      }
+      resolve(value);
+    };
+    try {
+      child = spawn(command, {
+        shell: statuslineShell(env),
+        env,
+        detached: process.platform !== 'win32',
+        stdio: ['pipe', 'pipe', 'ignore'],
+        windowsHide: true,
+      });
+    } catch {
+      finish('');
+      return;
+    }
+    timer = setTimeout(() => {
+      killTree(child);
+      finish('');
+    }, deadlineMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      out += chunk;
+    });
+    child.stdout.on('error', () => {});
+    child.stdin.on('error', () => {});
+    child.on('error', () => finish(''));
+    child.on('close', (status) => finish(status === 0 ? out.trimEnd() : ''));
+    child.stdin.end(raw ?? '');
+  });
+}
+
+// The user's output unchanged, then ZeroH's part: on its own line by
+// default (Claude Code shows each printed line as a row, and truncates a long
+// row with "…", which would hide a part appended to it), or after the user's
+// last line with " · " (`position: "end"`). Either may be empty.
+export function joinWrapped(theirs, line, position = DEFAULT_STYLE.position) {
+  if (!theirs) return line;
+  if (!line) return theirs;
+  return position === 'end' ? `${theirs} · ${line}` : `${theirs}\n${line}`;
+}
+
+function wrappedArgument(argv) {
+  if (argv[0] !== 'wrap' || !/^[A-Za-z0-9_-]+$/u.test(argv[1] ?? ''))
+    return null;
+  return Buffer.from(argv[1], 'base64url').toString('utf8');
+}
+
 // `statusline [segment] [--json] [--session <id>] [--cwd <dir>]`: what
 // Claude Code's statusLine command runs (lib/statusline-settings.js), and
 // the segment a user adds to their own status line script: `segment` (or
-// `--segment`) prints only ZeroH's part, without a line end.
+// `--segment`) prints only ZeroH's part, without a line end. `wrap
+// <base64url command>` prints the user's own line, ` · `, and ZeroH's part.
 export async function statuslineMain(
   argv = [],
   {
@@ -745,7 +876,8 @@ export async function statuslineMain(
     now = Date.now(),
   } = {},
 ) {
-  const input = await readInput(stdin);
+  const raw = await readRaw(stdin);
+  const input = parseInput(raw);
   const session = argValue(argv, '--session');
   const cwd = argValue(argv, '--cwd');
   if (session) input.session_id = session;
@@ -755,7 +887,14 @@ export async function statuslineMain(
     stdout.write(`${JSON.stringify(statuslineData(model))}\n`);
     return model;
   }
-  const line = renderStatusline(model, { env, now, style: readStyle(env) });
+  const style = readStyle(env);
+  const line = renderStatusline(model, { env, now, style });
+  const wrapped = wrappedArgument(argv);
+  if (wrapped !== null) {
+    const theirs = await runWrapped(wrapped, raw, { env });
+    stdout.write(`${joinWrapped(theirs, line, style.position)}\n`);
+    return model;
+  }
   const segment = argv.includes('segment') || argv.includes('--segment');
   stdout.write(segment ? line : `${line}\n`);
   return model;

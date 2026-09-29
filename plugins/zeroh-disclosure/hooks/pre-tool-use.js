@@ -71,6 +71,12 @@ import { shellOf } from '../lib/shell-tools.js';
 import { claimUnmaskMcpSession } from '../lib/unmask.js';
 import { terminalCommand } from '../lib/fix-command.js';
 import { TOKEN_RE } from '../lib/token-pattern.js';
+import {
+  commandUsesSessionFiles,
+  TRANSCRIPT_BLOCK_REASON,
+  TRANSCRIPT_MODEL_NOTE,
+  TRANSCRIPT_NOTICE,
+} from '../lib/transcript-files.js';
 
 const SAVE_LABEL = 'ZeroH Disclosure (PreToolUse)';
 
@@ -247,6 +253,23 @@ if (sensitive) {
     { subject: shell ? 'command' : 'tool call' },
   );
 }
+// Claude Code's own session files keep real values (typed prompts, unmasked
+// values and values put back into edits; 1.0.1,
+// lib/transcript-files.js): a notice for the user and a note for Claude;
+// `block` mode stops the command.
+if (
+  shell &&
+  typeof toolInput.command === 'string' &&
+  commandUsesSessionFiles(toolInput.command, shell)
+) {
+  if (mode === 'block') {
+    // deny-inventory: session-transcript
+    emitDeny(TRANSCRIPT_BLOCK_REASON);
+    process.exit(0);
+  }
+  if (!notices.includes(TRANSCRIPT_NOTICE)) notices.push(TRANSCRIPT_NOTICE);
+  modelNotes.push(TRANSCRIPT_MODEL_NOTE);
+}
 let vault;
 try {
   vault = new Vault(root, { sessionId });
@@ -407,7 +430,7 @@ if (onlyReferences) {
       [
         uncheckedNotice('variable-in-command', { mode: 'block', valueName }),
         '',
-        'ZeroH cannot see what the variable holds or check where it goes. Ask the user to run the command, or to allow it with /zeroh-disclosure:settings uncertain pass.',
+        "ZeroH can't check where a variable the command loads itself goes. Ask the user to run the command, or to allow it with /zeroh-disclosure:settings uncertain pass.",
       ].join('\n'),
     );
     process.exit(0);
@@ -696,7 +719,7 @@ async function finish(baseInput, context, changed = false) {
               valueName,
             }),
             '',
-            'ZeroH cannot see what the variable holds or check where it goes. Ask the user to run the command, or to allow it with /zeroh-disclosure:settings uncertain pass.',
+            "ZeroH can't check where a variable the command loads itself goes. Ask the user to run the command, or to allow it with /zeroh-disclosure:settings uncertain pass.",
           ].join('\n'),
         );
         return;

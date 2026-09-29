@@ -125,11 +125,31 @@ export function bashSuffixPoint(command) {
   return linePoint(command, trimmedEnd);
 }
 
+// True when the character at `index` is escaped: an odd run of backslashes
+// before it (`\;` is find's terminator word, `\\;` a backslash, then `;`).
+function escapedAt(text, index) {
+  let run = 0;
+  for (let k = index - 1; k >= 0 && text[k] === '\\'; k -= 1) run += 1;
+  return run % 2 === 1;
+}
+
 function linePoint(command, end) {
   let at = end;
-  while (at > 0 && /[ \t]/u.test(command[at - 1])) at -= 1;
+  while (
+    at > 0 &&
+    /[ \t]/u.test(command[at - 1]) &&
+    !escapedAt(command, at - 1)
+  )
+    at -= 1;
   const before = command.slice(0, at);
-  if (/(?:\|\||&&|\||\\|;;|[(]|\{)$/u.test(before) || at === 0) return null;
+  if (at === 0) return null;
+  const last = before.length - 1;
+  // A trailing backslash continues the line; an escaped one is text.
+  if (before[last] === '\\')
+    return escapedAt(before, last) ? { at, background: false } : null;
+  // An escaped operator character is part of the last word.
+  if (escapedAt(before, last)) return { at, background: false };
+  if (/(?:\|\||&&|\||;;|[(]|\{)$/u.test(before)) return null;
   if (/(?:^|[^&>])&$/u.test(before)) return { at, background: true };
   if (before.endsWith(';')) at -= 1;
   return { at, background: false };

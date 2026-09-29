@@ -280,7 +280,7 @@ test('end_unmask ends grants without a dialog and never creates one', async (t) 
   const ended = await callMcpTool(instance, 4, 'end_unmask', { kind: 'EMAIL' });
   assert.equal(
     ended.result.content[0].text,
-    'EMAIL masked again: the unmask ended.',
+    "EMAIL masked again: the unmask ended. Earlier turns showed real EMAIL values under the user's grant; they now appear as tokens in your history. What you said about them then was based on the real values; don't retract it.",
   );
   const none = await callMcpTool(instance, 5, 'end_unmask', { kind: 'all' });
   assert.match(none.result.content[0].text, /No unmask is active/u);

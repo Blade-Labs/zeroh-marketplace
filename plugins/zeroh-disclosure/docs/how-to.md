@@ -162,7 +162,7 @@ masked but no hook ever used, and leftovers from a session that crashed, are rem
 fresh start (`claude` or `/clear`) once they have not been used for 24 hours; a fresh start never
 removes values another live session used recently. Two sessions in the same project each keep their
 own values until they end. After a session ends, `claude --resume` cannot restore its values: the
-resumed transcript keeps the tokens, and a tool call that uses one runs with the token text (see
+resumed session's tool output holds tokens, and a tool call that uses one runs with the token text (see
 [An expired token ran as text](troubleshooting.md#an-expired-token-ran-as-text)). Use `7d` or `30d` if
 you resume sessions and need their values.
 
@@ -417,46 +417,52 @@ the edit.
 ## Report a value that was not masked
 
 Run `/zeroh-disclosure:report-miss` and enter the exact value, where it appeared, and why it looks
-sensitive in the private ZeroH dialog. Do not put the value in chat. Claude may also call
-`report_missed_secret {value, type_guess, where, why}` immediately after noticing an unmasked
-value.
+sensitive in ZeroH's private form. Do not put the value in chat. The form is the one choice:
+Submit masks the value from now on and keeps a local note of its shape; Cancel changes nothing.
 
-ZeroH adds the exact value to the encrypted project vault before asking what to do with the
-shape-only report. The dialog says in one line what that report holds (type, length, provider
-prefix if any, where it was found; never the value; `zeroh-disclosure reports show <id>` prints
-the rest). Later tool output and proxy-inspected request text use the returned token. Content
-already sent to the model cannot be recalled; rotate reported credentials promptly. The dialog asks
-"What should ZeroH do with this report?":
+When Claude notices an unmasked value on its own, or you ask it to report one, it calls
+`report_missed_secret {value, type_guess, where, why}`. There is no dialog: masking more is
+restorable and the note holds no value. ZeroH masks the value at once, keeps the note, and shows
+one line:
 
-- `Keep it on this computer` (preselected, so Enter keeps it): retain
-  `<ZEROH_HOME>/reports/<id>.json`.
-- `Delete it`: delete the shape report; the vault mapping remains active.
-
-The dialog also says that sending reports to Blade Labs comes in 1.1. In 1.0 there is no upload
-path at all.
-
-Review or remove local reports from your own terminal. These commands display only report shape
-and context, never vault values:
-
-```bash
-zeroh-disclosure reports list
-zeroh-disclosure reports show <id>
-zeroh-disclosure reports delete <id>
+```text
+ZeroH Disclosure: Claude spotted a value ZeroH missed in config/internal.env; it is masked from now on. `/zeroh-disclosure:report-miss list` shows or deletes these notes.
 ```
 
-If no elicitation capability is available, a direct MCP report is saved locally and returns a
-note without waiting. An empty slash-command request is refused because there is no private input
-form. The limit is 20 reports per MCP session. Values shorter than 8 characters, all whitespace,
-longer than 4096 characters or already containing a ZeroH token are refused.
+The note holds the value's shape only (type, length, provider prefix if any, where it was found;
+never the value) in `<ZEROH_HOME>/reports/<id>.json`. Later tool output and proxy-inspected
+request text use the returned token. Content already sent to the model cannot be recalled; rotate
+reported credentials promptly. Reports stay on this computer: there is no upload path.
+
+List or delete the notes; deleting one is yours to do, and the value stays masked:
+
+```text
+/zeroh-disclosure:report-miss list
+/zeroh-disclosure:report-miss delete <id>
+```
+
+From your own terminal, `zeroh-disclosure reports list`, `reports show <id>` and `reports delete
+<id>` do the same (they display only shape and context, never vault values).
+
+In headless mode an empty `/zeroh-disclosure:report-miss` is refused because there is no private
+input form. The limit is 20 reports per MCP session. Values shorter than 8 characters, all
+whitespace, longer than 4096 characters or already containing a ZeroH token are refused.
 
 ## Read and verify a receipt
 
 End a turn first. The `Stop` hook finalizes the receipt, writes
 `~/.zeroh/projects/<project>/sessions/<session-id>/receipt.html`, and, on a turn where something was masked, stopped or
 blocked, prints one line with its absolute path. When values were masked, a second line says what
-Claude saw instead, with where each came from and never a value, for example `Claude saw
-⟦API_KEY-10a254⟧ for STRIPE_KEY · ⟦EMAIL-3c1f02⟧ for typed` (at most three, then how many more;
-`/zeroh-disclosure:mask-show` lists them all). A quiet turn prints nothing. Open the file locally.
+Claude saw instead: up to three tokens (keys and passwords first), then the rest counted by kind
+and where they came from, for example `Claude saw ⟦API_KEY-3f9a1c⟧ in .env (…c4Q2) ·
+⟦EMAIL-29c405⟧, not a…@acme.com · and 10 more: 8 email
+addresses in signup-errors.log, 2 Stripe test secret keys in .env (receipt ↗ /
+/zeroh-disclosure:mask-show)`. Places are plain words: `in your message`, `in <file>`, `in command
+output`, `in <tool> output`, or `for STRIPE_KEY` for a value known by its name. The line never
+holds a whole value, and never the start of a key or password (at most its last four characters,
+for a value of 24 characters or more): Claude Code keeps it in the session transcript. Personal
+data shows the receipt's short preview. `/zeroh-disclosure:mask-show`
+and the receipt list every token. A quiet turn prints nothing. Open the file locally.
 The page opens with the receipt slip: values withheld per type, the `withheld` total, `values sent
 to Claude`, the latest receipt id, the local signing key (`signed on this laptop · ECDSA P-256`),
 and how many receipts verified. Below it are the session token map, anything that passed
@@ -474,7 +480,7 @@ The slip counts only what ZeroH knows:
 | `no sensitive values`             | Nothing was detected in the session or period; `withheld` is 0.                                                     |
 
 Read the token map at the top as “what the model saw this session.” `The model saw` is the stable
-token, `From` names the channel and source (for example `.env · line 1 · STRIPE_KEY`), `First seen`
+token, `From` says where it came from in plain words (for example `in .env, line 1 (STRIPE_KEY)`, `in your message`, `in command output: cat app.log`), `First seen`
 is the first turn that exposed the token to the model, and `Count` is how often it was exposed.
 Each turn has the same map scoped to that turn. `Your value` is only a preview: secrets of 20
 characters or more show the first seven and last four characters, shorter secrets show only the

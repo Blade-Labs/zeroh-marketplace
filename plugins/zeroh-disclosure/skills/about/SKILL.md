@@ -1,7 +1,7 @@
 ---
 name: about
 description: Answer the user's questions about ZeroH Disclosure itself - what it protects and what it doesn't, how masking, restore, unmask, receipts and the local proxy work, Free vs Premium, its commands, limits and privacy. Use when the user asks "what does ZeroH Disclosure protect?", "does ZeroH catch X?", "how does ZeroH work?" or similar.
-allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog)
+allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command)
 ---
 
 # About ZeroH Disclosure
@@ -28,7 +28,7 @@ counts rather than the whole list unless they ask for it.
 - **Private key and credential stores** (SSH keys, `.p12`/`.pfx`/`.jks`/`.kdbx`/`.ppk`,
   Terraform state, `.netrc`, `.pgpass`, `.git-credentials`, kubeconfig, AWS credentials, Docker
   config): they can be read, and what the detector finds in them is masked, with a one-line
-  notice (`uncertain block` refuses them). ZeroH's own vault and allow-list keys are always
+  notice (`/zeroh-disclosure:settings uncertain block` refuses them). ZeroH's own vault and allow-list keys are always
   refused.
 - **What ZeroH can't check** (a destination it can't work out, a command it can't parse, output
   too large to scan) runs as it would without ZeroH, with a one-line "not protected" notice and a
@@ -48,8 +48,15 @@ counts rather than the whole list unless they ask for it.
   same goes for passport numbers (GB, US, MY) and dates of birth. An Ethereum address in tool
   output is masked only next to a wallet word. Loopback, link-local and documentation IP
   addresses are left as they are.
+- Claude Code's own session files (`~/.claude/projects/…/*.jsonl`) keep what the user typed as
+  typed, values shown under an unmask, and the real values ZeroH puts back into Edit, Write and
+  MCP inputs: the proxy masks the request, not what Claude Code saves. Other tool output and file
+  reads are saved with tokens. ZeroH says so when a command copies or uploads these files.
 - Values the model has already seen can't be recalled; `/zeroh-disclosure:report-miss` masks a
-  missed value from then on.
+  missed value from then on. When you notice an unmasked secret or personal value yourself, call
+  `report_missed_secret` with it: there is no dialog, ZeroH masks it at once, keeps a local note of
+  its shape (never the value) and tells the user in one line. Reports stay on this computer; the
+  user lists or deletes the notes with `/zeroh-disclosure:report-miss list` or `delete <id>`.
 
 ## How it works
 
@@ -71,7 +78,9 @@ counts rather than the whole list unless they ask for it.
   (it names the fix) or 🔴 not protecting (it names why), with the session's masked and sent
   counts, active unmasks and a `receipt ↗` link that opens the receipt.
   `/zeroh-disclosure:settings statusline off` (or deleting it with `/statusline`) removes it for
-  good; `statusline on` turns it on again or shows how to add it to the user's own.
+  good; `statusline on` turns it on again. When the user already has a status line of their own,
+  `statusline on` adds ZeroH's part after it (their script is not changed; `statusline off` puts
+  their line back exactly): tell them to type `/zeroh-disclosure:settings statusline on`.
 - **Changing how the status line looks**: when the user asks ("make it smaller", "no emoji",
   "rename ZeroH to 🔒", "only show it when something is wrong"), edit
   `<ZEROH_HOME>/statusline-style.json` (`~/.zeroh/statusline-style.json`, or
@@ -79,11 +88,18 @@ counts rather than the whole list unless they ask for it.
   one ZeroH file you may change. Keys (`"version": 1` required): `fields` (order and choice of
   `shield`, `name`, `state`, `fix`, `masked`, `sent`, `notProtected`, `unmask`, `receipt`),
   `separator` (≤ 5 characters), `labels` (≤ 24 characters each), `emoji`, `wording`
-  (`"long"`/`"compact"`), `colour`, `onlyWhenNotProtected`. Labels can't contain state words or
+  (`"long"`/`"compact"`), `colour`, `onlyWhenNotProtected`, `position` (`"line"`: ZeroH's part
+  on its own line under the user's own status line; `"end"`: after it). Labels can't contain state words or
   🟢/🟡/🔴; while ZeroH isn't 🟢 its state and fix always show. The line updates within 10 seconds.
   For a status line script of the user's own, use `zeroh-disclosure statusline --json` (schema in
   the plugin's docs/statusline.md); never change `statusLine` in Claude Code's settings yourself:
-  write the script and tell the user the one line to add.
+  write the script and tell the user the one line to add. When the user wants ZeroH's part inside
+  a script of their own (rather than `statusline on`), this is the command that prints it; pipe it
+  the JSON the script gets on stdin (`zeroh=$(printf '%s' "$input" | <command>)`), and don't look
+  for it in the plugin's files:
+
+!`node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command`
+
 - **Session banner**: the first session after the install shows the big ZEROH banner; later
   sessions show one line, for example
   `ZeroH Disclosure ✓ Protected: your secrets are masked · Free · /zeroh-disclosure:status`, or the

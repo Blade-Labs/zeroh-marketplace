@@ -9,6 +9,8 @@ import { canonicalJson, sameSecret } from './crypto.js';
 import { writePrivateJson } from './private-fs.js';
 import { ensurePrivateDirSync, projectDataDir } from './session.js';
 import { createKeyFile, zerohHome } from './vault.js';
+import { detectSensitiveData } from './detector.js';
+import { isToken } from './token-pattern.js';
 
 export const ALLOW_FILE_NOTICE =
   "ZeroH Disclosure: this project's allow list was changed outside `/zeroh-disclosure:allow`, so it is ignored. Add the rules again with /zeroh-disclosure:allow.";
@@ -136,6 +138,32 @@ export function normaliseAllowHost(value) {
     throw new Error(`invalid host: ${value}`);
   }
   return host;
+}
+
+const NAMED_TOKEN_WHOLE_RE = /^⟦([A-Z_]+-[0-9a-f]{6})⟧$/u;
+const RULE_NAME_RE = /^(?:\*|[A-Za-z_][A-Za-z0-9_.-]*)$/u;
+
+// The rule key for what the user typed after `allow` (Mac /try review M1):
+// a token in either form (`[API_KEY-3f9a1c]`, or `⟦API_KEY-3f9a1c⟧` as
+// Claude names it) is the token; a raw value the vault holds is stored as
+// its token; a name, a type or `*` stays as it is. A raw value ZeroH doesn't
+// hold that looks like a secret is refused, so allow.json never holds one.
+// `values` are the vault's [{ token, value }].
+export function allowRuleKey(name, { values = [] } = {}) {
+  const key = String(name ?? '').trim();
+  const named = NAMED_TOKEN_WHOLE_RE.exec(key);
+  if (named) return `[${named[1]}]`;
+  if (isToken(key)) return key;
+  const held = values.find((entry) => entry.value === key);
+  if (held) return held.token;
+  if (
+    !RULE_NAME_RE.test(key) ||
+    detectSensitiveData(key, { profile: 'secrets' }).length
+  )
+    throw new Error(
+      'that looks like a secret value, not a name ZeroH knows. Allow it by its token (⟦TYPE-xxxxxx⟧ as Claude shows it) or its name (STRIPE_KEY).',
+    );
+  return key;
 }
 
 export function updateAllowRule(rules, name, host, { remove = false } = {}) {

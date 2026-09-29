@@ -131,8 +131,8 @@ reasons are:
 | `vault-unavailable`     | ZeroH couldn't open its vault                | a prompt, tool output or tool call passed unmasked: ZeroH could not open its vault                      |
 | `vault-unsaveable`      | ZeroH couldn't save its vault                | new values passed unmasked because ZeroH could not save its vault; values already on disk stayed masked |
 
-The first such line of a session adds how to tighten: "To block these instead, run
-`/zeroh-disclosure:settings uncertain block`." For `raw-secret-in-command` it says instead to run
+The first such line of a session adds how to tighten: "Type
+`/zeroh-disclosure:settings uncertain block` to stop these instead." For `raw-secret-in-command` it says instead to run
 `/zeroh-disclosure:report-miss` and rotate the key. Each hint is shown once per session (a marker
 file `unchecked-hint-<kind>` in the session folder).
 

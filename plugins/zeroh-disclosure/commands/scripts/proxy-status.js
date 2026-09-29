@@ -43,11 +43,11 @@ if (state.reason === 'opted-out') {
   );
 } else if (state.reason === 'turned-off') {
   lines.push(
-    'Local masking proxy: off (you turned it off). What you type is not masked: a typed secret is sent with a "not protected" line (stopped with uncertain block). Turn it back on with /zeroh-disclosure:proxy on.',
+    'Local masking proxy: off (you turned it off). What you type is not masked: a typed secret is sent with a "not protected" line (type /zeroh-disclosure:settings uncertain block to stop these instead). Turn it back on with /zeroh-disclosure:proxy on.',
   );
 } else if (state.reason === 'provider') {
   lines.push(
-    'Local masking proxy: not used (Claude Code talks to Bedrock, Vertex or Foundry directly); a typed secret is sent with a "not protected" line (stopped with uncertain block).',
+    'Local masking proxy: not used (Claude Code talks to Bedrock, Vertex or Foundry directly); a typed secret is sent with a "not protected" line (type /zeroh-disclosure:settings uncertain block to stop these instead).',
   );
 } else if (state.active) {
   lines.push('Local masking proxy: on for this session.');

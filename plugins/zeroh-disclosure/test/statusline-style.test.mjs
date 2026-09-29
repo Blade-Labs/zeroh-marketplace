@@ -193,6 +193,8 @@ test('an invalid or unknown style falls back to the default, and drawing never t
     { version: 1, emoji: 'no', wording: 'tiny', colour: 0, separator: '' },
     { version: 1, labels: 'x' },
     { version: 1, onlyWhenNotProtected: 'yes' },
+    { version: 1, position: 'side' },
+    { version: 1, position: true },
   ]) {
     const style = normaliseStyle(raw);
     assert.deepEqual(
@@ -494,7 +496,7 @@ test("a user who replaces ZeroH's entry with their own script is told once, and 
   writeFileSync(settingsPath, JSON.stringify({ statusLine: mine }));
   const told = apply();
   assert.deepEqual(told, [FIRST_RUN_LINES.replaced]);
-  assert.match(told[0], /statusline --json/u);
+  assert.match(told[0], /statusline on adds ZeroH's part/u);
   assert.deepEqual(apply(), []);
   assert.deepEqual(
     JSON.parse(readFileSync(settingsPath, 'utf8')).statusLine,

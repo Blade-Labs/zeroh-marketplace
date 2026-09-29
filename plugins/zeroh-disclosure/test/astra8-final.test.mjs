@@ -593,11 +593,14 @@ test('PreToolUse: a restored token whose value is a reference is judged as a ref
     assert.ok(pass.hookSpecificOutput?.updatedInput, tool);
     assert.match(
       pass.systemMessage ?? '',
-      /a variable whose value ZeroH cannot see/u,
+      /a variable whose value ZeroH cannot see|couldn't check where \$\w+ went \(it was loaded inside the command or the shell\)/u,
     );
     const block = preToolUse(p, tool, command(token), BLOCK);
     assert.equal(decision(block), 'deny', tool);
-    assert.match(reason(block), /a variable whose value ZeroH cannot see/u);
+    assert.match(
+      reason(block),
+      /a variable whose value ZeroH cannot see|couldn't check where \$\w+ went \(it was loaded inside the command or the shell\)/u,
+    );
     assert.doesNotMatch(reason(block), /may not be sent to/u);
   }
   // A literal value still stops as a secret to a host not allowed for it.

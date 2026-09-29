@@ -11,12 +11,15 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   PUBLIC_PREFIXES,
+  modelReportNotice,
   publicPrefix,
   reportMiss,
   resultText,
   validateMissInput,
 } from '../lib/report-miss.js';
 import { scrubDeep } from '../lib/secrets.js';
+import { slashToCli } from '../lib/user-authority.js';
+import { asUser } from './as-user.mjs';
 import { Vault } from '../lib/vault.js';
 
 const CATALOG = JSON.parse(
@@ -105,7 +108,10 @@ test('report_missed_secret masks the exact value in the next PostToolUse output'
   const text = response.result.content[0].text;
   const token = text.match(/\[SECRET-[0-9a-f]{6}\]/u)?.[0];
   assert.ok(token);
-  assert.match(text, /saved locally/u);
+  assert.match(
+    text,
+    /Local note [0-9a-f-]{36} kept; reports stay on this computer/u,
+  );
 
   const hook = spawnSync(process.execPath, [RUN_HOOK, 'post-tool-use'], {
     cwd: project.root,
@@ -162,11 +168,27 @@ test('shape report and reports CLI never contain the planted value', () => {
     assert.doesNotMatch(cli.stdout, new RegExp(MISSED, 'u'));
   }
 
-  const deleted = spawnSync(
+  // Deleting a note is the user's: without their typed command nothing
+  // changes (lib/user-authority.js).
+  const refused = spawnSync(
     process.execPath,
     [CLI, 'reports', 'delete', result.id],
-    { cwd: project.root, env: project.env, encoding: 'utf8' },
+    {
+      cwd: project.root,
+      env: { ...project.env, CLAUDE_CODE_SESSION_ID: 'model-session' },
+      encoding: 'utf8',
+    },
   );
+  assert.equal(refused.status, 0, refused.stderr);
+  assert.match(refused.stdout, /^Nothing changed/mu);
+  assert.match(refused.stdout, /\/zeroh-disclosure:report-miss delete /u);
+  assert.equal(reportFiles(project).length, 1);
+  const args = ['reports', 'delete', result.id];
+  const deleted = spawnSync(process.execPath, [CLI, ...args], {
+    cwd: project.root,
+    env: asUser(args, project.env),
+    encoding: 'utf8',
+  });
   assert.equal(deleted.status, 0, deleted.stderr);
   assert.equal(reportFiles(project).length, 0);
 });
@@ -217,39 +239,100 @@ test('a reported value is masked in a later proxied request body', () => {
   assert.equal(masked.messages[0].content, `tool said ${token} again`);
 });
 
-test('1.0 asks keep or delete, keep preselected; sending is shown as coming in 1.1', async (t) => {
+test('a report Claude makes itself opens no dialog: masked, note kept, one line for the user', async (t) => {
   const project = fixture();
+  // An interactive client: a dialog would block the answer until answered.
   const instance = client(project);
   t.after(() => instance.stop());
   await instance.ready;
-  const responsePromise = callTool(instance, 2, directInput());
-  const prompt = await instance.next(
-    (message) => message.method === 'elicitation/create',
-  );
-  const field = prompt.params.requestedSchema.properties.action;
-  assert.deepEqual(field.enum, ['Keep it on this computer', 'Delete it']);
-  // T-23: a plain question, the safe answer preselected.
-  assert.equal(field.default, 'Keep it on this computer');
-  assert.equal(field.title, 'What should ZeroH do with this report?');
-  assert.match(prompt.params.message, /→ changes the answer/u);
-  assert.match(
-    prompt.params.message,
-    /sending reports to Blade Labs comes in 1\.1/iu,
-  );
-  assert.equal(JSON.stringify(prompt).includes(MISSED), false);
-  // A client that sends an answer outside the enum still keeps the report local.
-  instance.send({
-    jsonrpc: '2.0',
-    id: prompt.id,
-    result: {
-      action: 'accept',
-      content: { action: 'Send to Blade Labs' },
-    },
-  });
-  const response = await responsePromise;
-  assert.match(response.result.content[0].text, /kept locally/u);
-  assert.match(response.result.content[0].text, /nothing left this machine/iu);
+  const input = {
+    ...directInput(),
+    where:
+      'Bash output from file config/internal.env (WEBHOOK_URL path segment)',
+  };
+  const response = await callTool(instance, 2, input);
+  const text = response.result.content[0].text;
+  const token = text.match(/\[SECRET-[0-9a-f]{6}\]/u)?.[0];
+  assert.ok(token, text);
+  assert.match(text, /reports stay on this computer/u);
+  assert.equal(text.includes(MISSED), false);
   assert.equal(reportFiles(project).length, 1);
+  const vault = new Vault(project.root, { env: project.env });
+  assert.ok(vault.knownValues().some((entry) => entry.value === MISSED));
+
+  // The PostToolUse hook tells the user in one plain line.
+  const hook = spawnSync(process.execPath, [RUN_HOOK, 'post-tool-use'], {
+    cwd: project.root,
+    env: project.env,
+    input: JSON.stringify({
+      session_id: 'report-miss-test-session',
+      cwd: project.root,
+      tool_name:
+        'mcp__plugin_zeroh-disclosure_zeroh-disclosure__report_missed_secret',
+      tool_input: input,
+      tool_response: response.result.content,
+    }),
+    encoding: 'utf8',
+  });
+  assert.equal(hook.status, 0, hook.stderr);
+  const output = JSON.parse(hook.stdout.trim().split('\n').pop());
+  assert.equal(
+    output.systemMessage,
+    'ZeroH Disclosure: Claude spotted a value ZeroH missed in config/internal.env; it is masked from now on. `/zeroh-disclosure:report-miss list` shows or deletes these notes.',
+  );
+  assert.equal(hook.stdout.includes(MISSED), false);
+  assert.equal(
+    modelReportNotice({ value: MISSED, where: 'somewhere' }),
+    'ZeroH Disclosure: Claude spotted a value ZeroH missed; it is masked from now on. `/zeroh-disclosure:report-miss list` shows or deletes these notes.',
+  );
+});
+
+// Astra 1.0.1 A1: `where` comes from Claude and may hold another secret;
+// the notice never prints it.
+test('the report notice never prints another secret from the place Claude gave', async (t) => {
+  const project = fixture();
+  const KNOWN = 'sk_live_ZEROHFAKE0000000000000000';
+  const DETECTED = `ghp_${'ZEROHFAKE'.padEnd(36, '7')}`;
+  const vault = new Vault(project.root, { env: project.env });
+  vault.tokenFor('API_KEY', KNOWN);
+  vault.save();
+  const instance = client(project);
+  t.after(() => instance.stop());
+  await instance.ready;
+  let id = 10;
+  for (const secret of [KNOWN, DETECTED]) {
+    const input = {
+      ...directInput(`${MISSED}${id}`),
+      where: `file logs/${secret}.log`,
+    };
+    const response = await callTool(instance, (id += 1), input);
+    const hook = spawnSync(process.execPath, [RUN_HOOK, 'post-tool-use'], {
+      cwd: project.root,
+      env: project.env,
+      input: JSON.stringify({
+        session_id: 'report-miss-test-session',
+        cwd: project.root,
+        tool_name:
+          'mcp__plugin_zeroh-disclosure_zeroh-disclosure__report_missed_secret',
+        tool_input: input,
+        tool_response: response.result.content,
+      }),
+      encoding: 'utf8',
+    });
+    assert.equal(hook.status, 0, hook.stderr);
+    assert.equal(hook.stdout.includes(secret), false, hook.stdout);
+    assert.equal(hook.stdout.includes(secret.slice(0, 12)), false, hook.stdout);
+    const output = JSON.parse(hook.stdout.trim().split('\n').pop());
+    assert.equal(
+      output.systemMessage,
+      'ZeroH Disclosure: Claude spotted a value ZeroH missed; it is masked from now on. `/zeroh-disclosure:report-miss list` shows or deletes these notes.',
+    );
+  }
+  // Without the hook's masker, no place at all.
+  assert.doesNotMatch(
+    modelReportNotice({ value: MISSED, where: 'file config/internal.env' }),
+    / in config/u,
+  );
 });
 
 test('headless mode saves direct reports and refuses missing private input without hanging', async (t) => {
@@ -261,78 +344,115 @@ test('headless mode saves direct reports and refuses missing private input witho
   t.after(() => instance.stop());
   await instance.ready;
   const saved = await callTool(instance, 2, directInput());
-  assert.match(saved.result.content[0].text, /saved locally/u);
+  assert.match(
+    saved.result.content[0].text,
+    /kept; reports stay on this computer/u,
+  );
   const refused = await callTool(instance, 3, {});
   assert.match(refused.result.content[0].text, /needs an interactive/u);
   assert.equal(reportFiles(project).length, 1);
 });
 
-test('manual report flow collects the value in elicitation and can keep it local', async (t) => {
+test("the user's report-miss is one private form: Submit masks and keeps the note, Cancel changes nothing", async (t) => {
   const project = fixture();
   const instance = client(project);
   t.after(() => instance.stop());
   await instance.ready;
   const responsePromise = callTool(instance, 2, {});
-  const inputPrompt = await instance.next(
+  const form = await instance.next(
     (message) => message.method === 'elicitation/create',
   );
   assert.equal(
-    inputPrompt.params.requestedSchema.properties.value.title,
+    form.params.requestedSchema.properties.value.title,
     'Value to mask',
   );
+  assert.equal(form.params.requestedSchema.properties.action, undefined);
+  assert.match(form.params.message, /Submit masks it from now on/u);
+  assert.match(form.params.message, /Cancel changes nothing/u);
+  assert.match(form.params.message, /Reports stay on this computer\./u);
+  assert.doesNotMatch(form.params.message, /Enter keeps|→|1\.1/u);
   instance.send({
     jsonrpc: '2.0',
-    id: inputPrompt.id,
+    id: form.id,
     result: { action: 'accept', content: directInput() },
   });
-  const actionPrompt = await instance.next(
+  // No second question: the answer comes back at once.
+  const response = await responsePromise;
+  assert.match(response.result.content[0].text, /Local note .* kept/u);
+  assert.equal(reportFiles(project).length, 1);
+
+  const cancelled = callTool(instance, 3, {});
+  const again = await instance.next(
     (message) => message.method === 'elicitation/create',
   );
-  assert.equal(JSON.stringify(actionPrompt).includes(MISSED), false);
-  instance.send({
-    jsonrpc: '2.0',
-    id: actionPrompt.id,
-    result: {
-      action: 'accept',
-      content: { action: 'Keep it on this computer' },
-    },
-  });
-  const response = await responsePromise;
-  assert.match(response.result.content[0].text, /kept locally/u);
+  instance.send({ jsonrpc: '2.0', id: again.id, result: { action: 'cancel' } });
+  assert.match(
+    (await cancelled).result.content[0].text,
+    /nothing was masked or saved/u,
+  );
   assert.equal(reportFiles(project).length, 1);
 });
 
-test('Delete it deletes the shape report but keeps the value masked', async (t) => {
+test('the report-miss command lists notes and maps delete to the user-only CLI', () => {
+  assert.deepEqual(slashToCli('report-miss', ['delete', 'abc']), [
+    'reports',
+    'delete',
+    'abc',
+  ]);
+  assert.equal(slashToCli('report-miss', []), null);
+  assert.equal(slashToCli('report-miss', ['list']), null);
+  const command = readFileSync(
+    new URL('../commands/report-miss.md', import.meta.url),
+    'utf8',
+  );
+  assert.match(command, /^disable-model-invocation: true$/mu);
   const project = fixture();
-  const instance = client(project);
-  t.after(() => instance.stop());
-  await instance.ready;
-  const responsePromise = callTool(instance, 2, directInput());
-  const prompt = await instance.next(
-    (message) => message.method === 'elicitation/create',
+  const script = fileURLToPath(
+    new URL('../commands/scripts/report-miss.js', import.meta.url),
   );
-  // One line saying what the report holds; never the value.
-  assert.match(
-    prompt.params.message,
-    new RegExp(
-      `^The report holds only: type \\w+, ${MISSED.length} characters, found in .+; never the value\\.$`,
-      'mu',
-    ),
-  );
-  assert.equal(prompt.params.message.includes(MISSED), false);
-  instance.send({
-    jsonrpc: '2.0',
-    id: prompt.id,
-    result: { action: 'accept', content: { action: 'Delete it' } },
+  const run = (...args) =>
+    spawnSync(process.execPath, [script, ...args], {
+      cwd: project.root,
+      env: { ...project.env, CLAUDE_PROJECT_DIR: project.root },
+      encoding: 'utf8',
+    }).stdout;
+  assert.match(run(), /^Report a value: /u);
+  assert.match(run('list'), /No local notes/u);
+  const { id } = reportMiss(directInput(), {
+    cwd: project.root,
+    env: project.env,
   });
-  const response = await responsePromise;
-  assert.match(response.result.content[0].text, /discarded/u);
-  assert.equal(reportFiles(project).length, 0);
-  const vault = new Vault(project.root, { env: project.env });
-  assert.ok(
-    vault.knownValues().some((entry) => entry.value === MISSED),
-    'the vault mapping survives a discarded report',
-  );
+  const listed = run('list');
+  assert.match(listed, new RegExp(id, 'u'));
+  assert.equal(listed.includes(MISSED), false);
+  assert.match(run('delete', id), /^Nothing changed/mu);
+  assert.equal(reportFiles(project).length, 1);
+});
+
+test('no shipped string promises sending reports to Blade Labs in 1.1', () => {
+  const plugin = fileURLToPath(new URL('..', import.meta.url));
+  const skip = new Set(['node_modules', 'vendor', 'test', 'internal']);
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(?:m?js|md|json)$/u.test(entry.name)) files.push(full);
+    }
+  };
+  walk(plugin);
+  for (const file of files) {
+    let text = readFileSync(file, 'utf8');
+    // The CHANGELOG keeps what 1.0.0 said, in its own section.
+    if (path.basename(file) === 'CHANGELOG.md')
+      text = text.slice(0, text.search(/^## 1\.0\.0\b/mu) >>> 0);
+    assert.doesNotMatch(
+      text,
+      /(?:send|sending)[^.\n]*(?:Blade Labs)[^.\n]*1\.1|comes in 1\.1/iu,
+      file,
+    );
+  }
 });
 
 test('report_missed_secret rate-limits to 20 reports per MCP session', async (t) => {
@@ -348,7 +468,7 @@ test('report_missed_secret rate-limits to 20 reports per MCP session', async (t)
         `zhmiss_ZEROHFAKE_${String(index).padStart(2, '0')}_abcdefghijk`,
       ),
     );
-    assert.match(response.result.content[0].text, /saved locally/u);
+    assert.match(response.result.content[0].text, /Local note .* kept/u);
   }
   const refused = await callTool(
     instance,

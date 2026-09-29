@@ -56,7 +56,13 @@ const SCRIPT = [
   "const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');",
   "const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));",
   'const a=process.argv.slice(1);',
-  "const w=(m)=>process.stdout.write(a.includes('segment')?'':'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m);",
+  // `wrap <base64url command>` with no plugin to run: the user's own line
+  // still shows, then why ZeroH's part is missing.
+  // A hard deadline (Astra 1.0.1 A2, as lib/statusline.js runWrapped): the
+  // command runs as its own process group and is killed with everything it
+  // started after 2 s, and ZeroH's part prints regardless.
+  "const o=()=>new Promise((r)=>{if(a[0]!=='wrap')return r('');const q=require('child_process'),W=process.platform==='win32';let c,s='',n=0,g,i='';try{i=f.readFileSync(0)}catch{}const x=(v)=>{if(n)return;n=1;clearTimeout(g);try{c.stdout.destroy();c.stdin.destroy();c.unref()}catch{}r(v)};try{c=q.spawn(Buffer.from(a[1]||'','base64url').toString(),{shell:true,detached:!W,stdio:['pipe','pipe','ignore'],windowsHide:true})}catch{return r('')}g=setTimeout(()=>{try{W?q.spawn('taskkill',['/pid',String(c.pid),'/T','/F'],{stdio:'ignore',windowsHide:true}).unref():process.kill(-c.pid,'SIGKILL')}catch{}x('')},2000);c.stdout.setEncoding('utf8');c.stdout.on('data',(d)=>{s+=d});c.stdout.on('error',()=>{});c.stdin.on('error',()=>{});c.on('error',()=>x(''));c.on('close',(z)=>x(z===0?s.trimEnd():''));c.stdin.end(i)});",
+  "const w=(m)=>o().then((t)=>process.stdout.write(a.includes('segment')?'':(t?t+(j(p.join(z,'statusline-style.json'))?.position==='end'?' \\u00b7 ':'\\u000a'):'')+'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m));",
   "d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \\u00b7 remove it with /statusline')",
 ].join('');
 
@@ -64,6 +70,65 @@ const SCRIPT = [
 export const STATUSLINE_COMMAND = `node -e "${SCRIPT}"`;
 // ZeroH's part only, for a status line script of the user's own.
 export const SEGMENT_COMMAND = `${STATUSLINE_COMMAND} segment`;
+
+// The user's own status line with ZeroH's part after it (1.0.1): `statusline
+// on`, typed by the user who already has a status line, sets statusLine to
+// the resolver in `wrap` mode. It runs the user's command with the same
+// JSON on stdin, prints its output, then ` · ` and ZeroH's segment. The
+// user's command rides along as one base64url word: no quoting survives
+// Bash, zsh, PowerShell and cmd alike (cmd expands %VAR% even in quotes),
+// and base64url has no character any of them reads.
+export const WRAP_MODE = 'wrap';
+const WRAP_ARG_RE = /^[A-Za-z0-9_-]+$/u;
+
+export function encodeWrapped(command) {
+  return Buffer.from(String(command), 'utf8').toString('base64url');
+}
+
+export function wrapCommand(command) {
+  return `${STATUSLINE_COMMAND} ${WRAP_MODE} ${encodeWrapped(command)}`;
+}
+
+// The user's command a wrap entry runs, or null for any other entry.
+export function wrappedCommand(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const command = typeof entry.command === 'string' ? entry.command.trim() : '';
+  const match = /^(node -e "[^"]*") wrap (\S+)$/u.exec(command);
+  if (!match || !OUR_COMMANDS[0].test(match[1]) || !WRAP_ARG_RE.test(match[2]))
+    return null;
+  const original = Buffer.from(match[2], 'base64url').toString('utf8');
+  // Only a word that is exactly the encoding of some text.
+  if (!original || encodeWrapped(original) !== match[2]) return null;
+  return original;
+}
+
+// A statusLine entry of the user's that shows ZeroH already: it runs ZeroH's
+// resolver, an older build's script or the CLI's `statusline` somewhere in
+// a command of its own (F7).
+function showsZeroH(entry) {
+  const command = typeof entry?.command === 'string' ? entry.command : '';
+  return (
+    /startsWith\('zeroh-disclosure@'\)[^"]*statuslineMain/u.test(command) ||
+    /zeroh-statusline\.mjs/u.test(command) ||
+    /zeroh-disclosure(?:\.mjs"?)? statusline\b/u.test(command)
+  );
+}
+
+// The entry that wraps the user's `entry`: their keys kept, the command
+// wrapped, refreshed at least every REFRESH_SECONDS so ZeroH's part stays
+// current.
+export function wrapEntry(entry) {
+  const refresh =
+    typeof entry.refreshInterval === 'number' && entry.refreshInterval > 0
+      ? Math.min(entry.refreshInterval, REFRESH_SECONDS)
+      : REFRESH_SECONDS;
+  return {
+    ...entry,
+    type: 'command',
+    command: wrapCommand(entry.command),
+    refreshInterval: refresh,
+  };
+}
 
 export function statuslineEntry() {
   return {
@@ -95,12 +160,26 @@ const OUR_COMMANDS = [
 export function isOurStatusLine(entry) {
   if (!entry || typeof entry !== 'object') return false;
   const command = typeof entry.command === 'string' ? entry.command.trim() : '';
-  return Boolean(command) && OUR_COMMANDS.some((form) => form.test(command));
+  if (!command) return false;
+  return (
+    OUR_COMMANDS.some((form) => form.test(command)) ||
+    wrappedCommand(entry) !== null
+  );
+}
+
+// The current form of one of ZeroH's entries: a wrap entry stays a wrap of
+// the same command, with the user's other keys.
+export function currentEntry(entry) {
+  const wrapped = wrappedCommand(entry);
+  if (wrapped === null) return statuslineEntry();
+  return { ...entry, command: wrapCommand(wrapped) };
 }
 
 // True when the entry is ZeroH's but not the current text (an older form).
 export function isOutdated(entry) {
   if (!isOurStatusLine(entry)) return false;
+  if (wrappedCommand(entry) !== null)
+    return entry.command !== currentEntry(entry).command;
   const current = statuslineEntry();
   return (
     entry.command !== current.command ||
@@ -155,6 +234,8 @@ export function recordedPluginRoot(home, env = process.env) {
 // choice: 'on' | 'off' | 'theirs', at } }, paths: [<every settings path
 // ZeroH's entry was written to>] }.
 
+// `wrapped: { <settings path>: <the user's statusLine entry> }` keeps each
+// status line ZeroH wrapped, to put back exactly (1.0.1).
 export function readRecord(home) {
   const record = readJsonOr(path.join(path.resolve(home), RECORD_FILE));
   return {
@@ -166,6 +247,12 @@ export function readRecord(home) {
     paths: Array.isArray(record?.paths)
       ? record.paths.filter((entry) => typeof entry === 'string')
       : [],
+    wrapped:
+      record?.wrapped &&
+      typeof record.wrapped === 'object' &&
+      !Array.isArray(record.wrapped)
+        ? record.wrapped
+        : {},
   };
 }
 
@@ -206,48 +293,123 @@ function putEntry(settingsPath, document, home) {
   return true;
 }
 
-// `on`: returns { result: 'on' | 'already' | 'theirs', command, segment }.
+// `on`: returns { result: 'on' | 'wrapped' | 'already' | 'theirs' |
+// 'windows', command, segment }. The user who already has a status line
+// typed it, so ZeroH adds its part to theirs ('wrapped'); a line of theirs
+// that shows ZeroH already, or one that isn't a command, is left as it is
+// ('theirs'). On Windows 1.0.1 doesn't wrap ('windows'): which shell Claude
+// Code runs the user's line with there is not verified, and the wrong one
+// would hide it. The user's line is left as it is (wrapping on Windows: 1.1).
 export function turnStatuslineOn({
   settingsPath,
   home = null,
   pluginRoot = null,
   env = process.env,
+  platform = process.platform,
 }) {
   const { document } = readSettings(settingsPath);
   const command = STATUSLINE_COMMAND;
   const segment = SEGMENT_COMMAND;
   if (home && pluginRoot) recordPluginRoot(home, pluginRoot, env);
   if (Object.hasOwn(document, 'statusLine')) {
-    if (!isOurStatusLine(document.statusLine)) {
-      if (home) recordChoice(home, settingsPath, 'theirs');
-      return { result: 'theirs', command, segment };
+    const entry = document.statusLine;
+    if (!isOurStatusLine(entry)) {
+      const wrappable =
+        entry &&
+        typeof entry === 'object' &&
+        !Array.isArray(entry) &&
+        (entry.type === undefined || entry.type === 'command') &&
+        typeof entry.command === 'string' &&
+        entry.command.trim() !== '' &&
+        !showsZeroH(entry);
+      if (!wrappable || platform === 'win32') {
+        if (home) recordChoice(home, settingsPath, 'theirs');
+        return {
+          result: wrappable ? 'windows' : 'theirs',
+          command,
+          segment,
+        };
+      }
+      document.statusLine = wrapEntry(entry);
+      writeDocument(settingsPath, document);
+      if (home) {
+        const record = recordChoice(home, settingsPath, 'on');
+        record.wrapped[path.resolve(settingsPath)] = entry;
+        writeRecord(home, record);
+      }
+      return {
+        result: 'wrapped',
+        command: document.statusLine.command,
+        segment,
+      };
     }
-    if (!isOutdated(document.statusLine)) {
+    if (!isOutdated(entry)) {
       if (home) recordChoice(home, settingsPath, 'on');
-      return { result: 'already', command, segment };
+      return {
+        result: 'already',
+        command: entry.command,
+        segment,
+        wrapped: wrappedCommand(entry) !== null,
+      };
+    }
+    if (wrappedCommand(entry) !== null) {
+      document.statusLine = currentEntry(entry);
+      writeDocument(settingsPath, document);
+      if (home) recordChoice(home, settingsPath, 'on');
+      return {
+        result: 'wrapped',
+        command: document.statusLine.command,
+        segment,
+      };
     }
   }
   putEntry(settingsPath, document, home);
   return { result: 'on', command, segment };
 }
 
-// Removes ZeroH's entry from one settings file. { result: 'off' | 'theirs' |
-// 'none' }.
-function removeEntry(settingsPath) {
+// The user's entry a wrap entry replaced: the one recorded, when it is the
+// same command; else the wrap entry with its command put back.
+function unwrapped(entry, recorded) {
+  const original = wrappedCommand(entry);
+  if (
+    recorded &&
+    typeof recorded === 'object' &&
+    !Array.isArray(recorded) &&
+    recorded.command === original
+  )
+    return recorded;
+  return { ...entry, command: original };
+}
+
+// Removes ZeroH's entry from one settings file, or puts the user's own
+// status line back where ZeroH wrapped it. { result: 'off' | 'unwrapped' |
+// 'theirs' | 'none' }.
+function removeEntry(settingsPath, home = null) {
   const { exists, document } = readSettings(settingsPath);
   if (!exists || !Object.hasOwn(document, 'statusLine')) {
     return { result: 'none' };
   }
   if (!isOurStatusLine(document.statusLine)) return { result: 'theirs' };
+  const key = path.resolve(settingsPath);
+  if (wrappedCommand(document.statusLine) !== null) {
+    const record = home ? readRecord(home) : null;
+    document.statusLine = unwrapped(document.statusLine, record?.wrapped[key]);
+    writeDocument(settingsPath, document);
+    if (record && Object.hasOwn(record.wrapped, key)) {
+      delete record.wrapped[key];
+      writeRecord(home, record);
+    }
+    return { result: 'unwrapped' };
+  }
   delete document.statusLine;
   writeDocument(settingsPath, document);
   return { result: 'off' };
 }
 
-// `off`: removes only ZeroH's entry and records the choice, so nothing puts
-// it back.
+// `off`: removes only ZeroH's entry (or its part of the user's line) and
+// records the choice, so nothing puts it back.
 export function turnStatuslineOff({ settingsPath, home = null }) {
-  const outcome = removeEntry(settingsPath);
+  const outcome = removeEntry(settingsPath, home);
   if (home && outcome.result !== 'theirs') {
     recordChoice(home, settingsPath, 'off');
   }
@@ -255,17 +417,25 @@ export function turnStatuslineOff({ settingsPath, home = null }) {
 }
 
 // Uninstall: ZeroH's entry out of every settings file it was written to (and
-// `settingsPaths`). Returns the files it changed. Never throws.
+// `settingsPaths`), and each status line of the user's it wrapped put back.
+// Returns the files it changed. Never throws.
 export function removeEverywhere({ home, settingsPaths = [] }) {
   const removed = [];
+  let record = { paths: [], wrapped: {} };
+  try {
+    record = readRecord(home);
+  } catch {
+    // No record: the settings files named are still cleaned.
+  }
   const paths = new Set(
-    [...readRecord(home).paths, ...settingsPaths].map((file) =>
-      path.resolve(file),
+    [...record.paths, ...Object.keys(record.wrapped), ...settingsPaths].map(
+      (file) => path.resolve(file),
     ),
   );
   for (const file of paths) {
     try {
-      if (removeEntry(file).result === 'off') removed.push(file);
+      const { result } = removeEntry(file, home);
+      if (result === 'off' || result === 'unwrapped') removed.push(file);
     } catch {
       // An unreadable settings file is left as it is.
     }
@@ -279,6 +449,11 @@ export function migrateEntry(settingsPath, home = null) {
   try {
     const { exists, document } = readSettings(settingsPath);
     if (!exists || !isOutdated(document.statusLine)) return false;
+    if (wrappedCommand(document.statusLine) !== null) {
+      document.statusLine = currentEntry(document.statusLine);
+      writeDocument(settingsPath, document);
+      return true;
+    }
     return putEntry(settingsPath, document, home);
   } catch {
     return false;

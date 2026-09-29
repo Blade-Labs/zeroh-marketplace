@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "platforms": [
     "claude-code",
     "codex",
@@ -588,12 +588,13 @@
       "id": "mask.tool-output",
       "area": "masking",
       "core": true,
-      "description": "Command output, MCP results and web fetches reach the model as tokens. A foreground Bash or PowerShell command that fails still finishes with status 0 and reports the failure in its output, so that output is masked too.",
+      "description": "Command output, MCP results and web fetches reach the model as tokens. A foreground Bash or PowerShell command that fails still finishes with status 0 and reports the failure in its output, so that output is masked too; an escaped `\\;` (`find -exec … \\;`) stays part of the command.",
       "claude_code": "PostToolUse `updatedToolOutput`; PreToolUse wraps foreground commands (`|| echo …`, PowerShell try/finally) because failed-command output goes to PostToolUseFailure, which can't replace it",
       "evidence": [
         "hooks/post-tool-use.js",
         "lib/exit-status.js",
         "test/hooks.test.mjs",
+        "test/exit-status-escapes.test.mjs",
         "test/fail-closed.test.mjs"
       ],
       "platforms": {
@@ -1297,7 +1298,7 @@
       "id": "display.real-values",
       "area": "restoring",
       "core": true,
-      "description": "Your screen shows real values in Claude's answers; the model and the transcript keep the tokens. A token Claude names itself is written ⟦API_KEY-3f9a1c⟧ and shown as written. `ZEROH_DISPLAY_REAL_VALUES=0` keeps tokens on screen too.",
+      "description": "Your screen shows real values in Claude's answers; the model sees tokens, and so do the tool output and file reads Claude Code saves (what you type is saved by Claude Code as typed). A token Claude names itself is written ⟦API_KEY-3f9a1c⟧ and shown as written. `ZEROH_DISPLAY_REAL_VALUES=0` keeps tokens on screen too.",
       "claude_code": "MessageDisplay",
       "evidence": [
         "hooks/message-display.js",
@@ -1424,13 +1425,14 @@
     {
       "id": "allow.user-command",
       "area": "guards",
-      "description": "Only you allow a secret to reach a new host or MCP server (`/zeroh-disclosure:allow NAME HOST`), per project, in a signed allow list; `allow` alone shows where each known value may go and why, never the value.",
+      "description": "Only you allow a secret to reach a new host or MCP server (`/zeroh-disclosure:allow NAME HOST`), per project, in a signed allow list. A value you typed is allowed by its token (`⟦API_KEY-…⟧` or `[API_KEY-…]`); a raw value is stored as its token, never as itself. `allow` alone shows where each known value may go and why (typed keys by token, never the value); Claude Code's own `CLAUDE_CODE_*` variables stay masked but are not offered.",
       "claude_code": "user-only slash command applied on the typed prompt; HMAC-signed allow list under ZEROH_HOME (a hand edit makes ZeroH ignore the file and warn)",
       "evidence": [
         "lib/allow-rules.js",
         "lib/allow-list.js",
         "bin/zeroh-disclosure.mjs",
         "test/allow-rules.test.mjs",
+        "test/allow-typed.test.mjs",
         "test/user-authority.test.mjs"
       ],
       "platforms": {
@@ -1632,6 +1634,54 @@
       }
     },
     {
+      "id": "guard.session-files",
+      "area": "guards",
+      "description": "A command that copies, uploads or prints Claude Code's session files (~/.claude/projects/…/*.jsonl, not its auto-memory), which keep what you typed as typed, values shown under an unmask and the real values ZeroH put back into edits, runs with a notice that they may hold your real values; `/zeroh-disclosure:settings uncertain block` stops it.",
+      "claude_code": "PreToolUse on Bash, PowerShell and Monitor, with the shared shell tokenizer",
+      "evidence": [
+        "lib/transcript-files.js",
+        "hooks/pre-tool-use.js",
+        "test/transcript-files.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the same PreToolUse check on Bash for ~/.codex/sessions",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` on bash for OpenCode's session storage",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L224-L241"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.before\")`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/shell.ts#L3-L13"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
       "id": "guard.host-cli",
       "area": "guards",
       "description": "The model can't disable, uninstall or reconfigure the plugin through the `claude` command line, or add an Elicitation hook that would answer unmask dialogs for you.",
@@ -1676,7 +1726,7 @@
     {
       "id": "pass.uncertain-notice",
       "area": "guards",
-      "description": "What ZeroH can't check (a dynamic destination, a variable whose value it can't see, output over 1 MB, a prompt over 256 KB, a check that failed, …) runs as it would without ZeroH, with one \"not protected\" line per reason per turn, counted by reason in the receipt.",
+      "description": "What ZeroH can't check (a dynamic destination, a variable whose value it can't see, output over 1 MB, a prompt over 256 KB, a check that failed, …) runs as it would without ZeroH, with one \"not protected\" line per reason per turn, counted by reason in the receipt. A variable ZeroH knows is named (\"ZeroH couldn't check where $STRIPE_KEY went\"), and the line says how to stop these instead (`/zeroh-disclosure:settings uncertain block`).",
       "claude_code": "lib/unchecked.js in every hook; size limits in PostToolUse and UserPromptSubmit",
       "evidence": [
         "lib/unchecked.js",
@@ -2113,7 +2163,7 @@
     {
       "id": "unmask.end-status",
       "area": "unmask",
-      "description": "Tell Claude to stop, or run `/zeroh-disclosure:unmask revoke [id|all]`, and that kind is masked again at once. An active unmask is shown when it starts, with five minutes left and when it ends, and on the status line all the time.",
+      "description": "Tell Claude to stop, or run `/zeroh-disclosure:unmask revoke [id|all]`, and that kind is masked again at once. An active unmask is shown when it starts, with five minutes left and when it ends, and on the status line all the time. When it ends, Claude is told its history shows those values as tokens again and that what it said about them stands.",
       "claude_code": "MCP `end_unmask` (no dialog; it can only end grants); CLI `unmask revoke`; UserPromptSubmit systemMessage; status line countdown",
       "evidence": [
         "mcp/server.mjs",
@@ -2224,11 +2274,12 @@
     {
       "id": "receipt.stop-line",
       "area": "receipts",
-      "description": "After a turn that masked, stopped, blocked, sent or revealed something, one line says what happened and links the receipt; a quiet turn prints nothing. \"Sent\" counts each value that reached the model in plain text once, the same on the status line, this line, the receipt slip and `/report`.",
+      "description": "After a turn that masked, stopped, blocked, sent or revealed something, one line says what happened and links the receipt; a quiet turn prints nothing. It shows up to three tokens, personal data next to a short preview and secrets with at most their last four characters (never a whole value, never the start of a secret), then the rest counted by kind and where they came from in plain words (\"in your message\", \"in signup-errors.log\", \"for STRIPE_KEY\"). \"Sent\" and values shown under an unmask count each value once per tool call, the same on the status line, this line, the receipt slip and `/report`.",
       "claude_code": "Stop hook systemMessage",
       "evidence": [
         "hooks/stop.js",
         "lib/report.js",
+        "lib/report-counts.js",
         "test/hooks.test.mjs",
         "test/report.test.mjs",
         "test/rc2-a1-pass.test.mjs"
@@ -2425,12 +2476,14 @@
     {
       "id": "report-miss",
       "area": "receipts",
-      "description": "Report a value ZeroH did not mask in a private dialog rather than in chat; it is masked from then on. Each report is kept on this machine as a shape-only record (type, prefix, length, character classes) that you can list, show or delete.",
-      "claude_code": "MCP `report_missed_secret` with elicitation, slash command; CLI `reports list|show|delete`",
+      "description": "Report a value ZeroH did not mask in a private form rather than in chat; it is masked from then on. Each report is kept on this machine as a shape-only note (type, prefix, length, character classes) that you can list or delete with `/zeroh-disclosure:report-miss list|delete <id>`. Reports stay on this computer.",
+      "claude_code": "MCP `report_missed_secret` (one elicitation form when the user runs the command), user-only slash command with `list`/`delete`; CLI `reports list|show|delete` (delete needs the user)",
       "evidence": [
         "lib/report-miss.js",
         "mcp/server.mjs",
         "bin/zeroh-disclosure.mjs",
+        "commands/scripts/report-miss.js",
+        "hooks/post-tool-use.js",
         "test/report-miss.test.mjs"
       ],
       "platforms": {
@@ -2440,7 +2493,7 @@
         },
         "codex": {
           "status": "planned",
-          "note": "MCP `report_missed_secret` with a form elicitation (a string field plus keep or delete), with the same policy limits as `unmask.dialog`",
+          "note": "MCP `report_missed_secret` with a form elicitation (a string field), with the same policy limits as `unmask.dialog`",
           "sources": [
             "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/codex-mcp/src/elicitation.rs",
             "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/bottom_pane/mcp_server_elicitation.rs"
@@ -2478,11 +2531,12 @@
     {
       "id": "report-miss.on-request",
       "area": "receipts",
-      "description": "When you ask Claude to report a value as missed, it hands the value to ZeroH, which masks it at once, with no dialog.",
+      "description": "When Claude notices an unmasked value, or you ask it to report one, it hands the value to ZeroH, which masks it at once with no dialog and tells you in one line where it was.",
       "claude_code": "MCP `report_missed_secret` with `value`; the model is briefed at SessionStart",
       "evidence": [
         "mcp/server.mjs",
         "lib/report-miss.js",
+        "hooks/post-tool-use.js",
         "test/report-miss.test.mjs"
       ],
       "platforms": {
@@ -2580,14 +2634,15 @@
       "id": "statusline",
       "area": "status",
       "core": true,
-      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt. It is added with the first message unless you have your own, which can show ZeroH's part with the `segment` command; `/zeroh-disclosure:settings statusline off`, or removing it, turns it off for good.",
-      "claude_code": "`statusLine` command (a minimal `node -e` resolver); hooks keep status.json and a heartbeat; choice recorded per settings file",
+      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt. It is added with the first message unless you have your own; then `/zeroh-disclosure:settings statusline on` adds ZeroH's part on its own line under yours in one step (or after it, `position: \"end\"`; not yet on Windows, 1.1), without changing your script, stopping your command after 2 seconds so it never hides ZeroH's part, and `off` or uninstall put your line back exactly. `/zeroh-disclosure:settings statusline off`, or removing it, turns it off for good.",
+      "claude_code": "`statusLine` command (a minimal `node -e` resolver, in `wrap` mode around the user's own command); hooks keep status.json and a heartbeat; choice recorded per settings file",
       "evidence": [
         "lib/statusline.js",
         "lib/statusline-settings.js",
         "lib/session-status.js",
         "lib/first-run.js",
         "test/statusline.test.mjs",
+        "test/statusline-wrap.test.mjs",
         "test/rc2-astra3-lifecycle.test.mjs"
       ],
       "platforms": {

@@ -297,6 +297,36 @@ export function resultText(token, value) {
   return `Masked from now on as ${token}. Anything already sent can't be recalled: rotate this credential.${hint ? ` ${hint.text}` : ''}`;
 }
 
+// The one line the user sees when Claude reported a value on its own
+// (1.0.1, no dialog): where it was, never the value.
+// The place comes from Claude (`where`), so it may hold another secret or
+// personal value: it is shown only when `maskPlace` (the hook's label
+// masker: vault values, known secrets and detectors) leaves it unchanged.
+// Without a masker the notice names no place.
+export function modelReportNotice(input = {}, { maskPlace = null } = {}) {
+  const value = typeof input.value === 'string' ? input.value : '';
+  const where = typeof input.where === 'string' ? input.where : '';
+  const file =
+    /\bfile\s+["'`]?([^\s"'`;,()]+)/iu.exec(where)?.[1] ??
+    /(?:^|\s)((?:[\w.~-]+[\\/])*[\w~-][\w.-]*\.[A-Za-z0-9]{1,10})(?=$|[\s,;:)])/u.exec(
+      where,
+    )?.[1] ??
+    null;
+  let safe = false;
+  if (
+    file &&
+    typeof maskPlace === 'function' &&
+    (!value || !file.includes(value))
+  )
+    try {
+      safe = maskPlace(file) === file;
+    } catch {
+      safe = false;
+    }
+  const place = safe ? ` in ${file}` : '';
+  return `ZeroH Disclosure: Claude spotted a value ZeroH missed${place}; it is masked from now on. \`/zeroh-disclosure:report-miss list\` shows or deletes these notes.`;
+}
+
 export function listReports({ env = process.env } = {}) {
   return store.listReports({ isId: isReportId, env }).map(reportView);
 }

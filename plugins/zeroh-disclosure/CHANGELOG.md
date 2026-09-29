@@ -1,5 +1,74 @@
 # Changelog
 
+## 1.0.1
+
+- The settings guard no longer refuses paths that merely start with ZeroH's folder name (`~/.zeroh-backup`, `<home>-something`): a path counts as ZeroH's only when it is the folder or inside it.
+
+Features: +guard.session-files, ~statusline, ~report-miss, ~report-miss.on-request,
+~receipt.stop-line, ~allow.user-command, ~unmask.end-status, ~mask.tool-output,
+~pass.uncertain-notice, ~display.real-values (see [docs/features.md](docs/features.md))
+
+### Fixes from live use of 1.0.0
+
+- **Add ZeroH to your own status line in one step.** When you already have a status line,
+  `/zeroh-disclosure:settings statusline on` now adds ZeroH's part on its own line under yours
+  instead of printing a long command to paste. Claude Code cuts a long line short with "…", so a
+  part added at the end could not be seen; the style key `"position": "end"` puts it after your
+  last line instead (`<your line> · 🛡️ ZeroH · 🟢 protected · …`). Your
+  script is not changed: ZeroH runs your command with the same input, then shows its part; if your
+  command fails, prints nothing or runs past 2 seconds (ZeroH then stops it and what it started),
+  ZeroH's part shows alone. On Windows ZeroH doesn't add its part to your line yet (1.1); it
+  leaves your status line as it is and points to docs/statusline.md. `statusline off` and uninstall put
+  your status line back exactly. Claude can't do this for you; it is told to ask you to type the
+  command. To compose it by hand, `docs/statusline.md` has the command, and Claude can read it
+  from the about skill (`zeroh-disclosure statusline segment-command`) instead of searching the
+  plugin's files.
+- **The Stop line says what Claude got in plain words.** Up to three tokens (keys and passwords
+  first), then the rest counted by kind and where they came from ("in your message", "in
+  signup-errors.log", "in command output", "in <tool> output", "for STRIPE_KEY") instead of "⟦…⟧
+  for typed". Personal data shows a short preview (`a…@domain`); a key, password or other secret
+  shows no part of its start, only its last four characters when it is 24 characters or longer,
+  because Claude Code keeps the line in the session transcript. `/zeroh-disclosure:mask-show` and receipt.html use the same
+  plain-English sources.
+- **Values shown under an unmask are counted once per tool call.** Three addresses read under a
+  grant were counted as 6 on the Stop line and in the status line's `sent` count. Reading the same
+  values again in a later tool call still counts them again.
+- **Reporting a missed value no longer interrupts you.** When Claude spots an unmasked value
+  itself, ZeroH masks it, keeps a local note and says so in one line, with no dialog.
+  `/zeroh-disclosure:report-miss` is one private form: Submit masks the value and keeps a
+  shape-only note, Cancel changes nothing. `/zeroh-disclosure:report-miss list` and
+  `delete <id>` show and remove the notes; only you can delete. Reports stay on this computer; the
+  dialog no longer promises sending in 1.1.
+- **The briefing no longer says your transcript keeps only tokens.** Claude Code's own session
+  file keeps what you type as you typed it (the proxy masks it on the way to the model), values
+  shown under an unmask, and the real values ZeroH puts back into Edit, Write and MCP inputs; other
+  tool output and file reads are saved with tokens. A command that copies, uploads or prints Claude
+  Code's session files now runs with a notice, and `/zeroh-disclosure:settings uncertain block`
+  stops it.
+- **Claude writes the token in commands instead of reading secrets from environment variables**,
+  so ZeroH checks the host. When a command still uses a variable ZeroH knows, the notice names it
+  ("ZeroH couldn't check where $STRIPE_KEY went (it was loaded inside the command or the
+  shell)…") and ends with "Type
+  /zeroh-disclosure:settings uncertain block to stop these instead."
+- **Claude no longer stalls before a host a value may not reach.** It is told that for a host
+  ZeroH can read, ZeroH stops such a command before anything is sent, so it need not ask first for
+  that reason. Where ZeroH can't tell the destination (a script, a variable host, git push), the
+  real value is put back and the command runs with a notice, so Claude still asks you before
+  sending a secret somewhere you didn't ask for.
+- **When an unmask ends, Claude no longer takes back what it said.** `end_unmask` and the next
+  prompt tell Claude that the values it saw during the grant now appear as tokens in its history,
+  and that what it said about them was based on the real values.
+- **`find … -exec … \;` works again.** ZeroH's exit-status wrapper put its `|| echo` between the
+  `\` and the `;`, so find failed with "Expected '... ;'".
+- **Allow a value you typed.** `/zeroh-disclosure:allow ⟦API_KEY-384bb5⟧ <host>` (or
+  `[API_KEY-…]`, or `--remove`) targets the key you typed, the one a stop names. A raw value is
+  stored as its token and one ZeroH doesn't know is refused, so the allow list never holds a
+  secret. `/zeroh-disclosure:allow` lists typed keys by token, and "allowed:" now says "Ask Claude
+  to try again."
+- **Claude Code's own variables are not offered for allowing.** `CLAUDE_CODE_MESSAGING_TOKEN` and
+  other `CLAUDE_CODE_*` values stay masked, but no longer appear in the allow list or the
+  known-secrets count.
+
 ## 1.0.0
 
 Features: +install.auto-update, +install.first-run, +runtime.node, +hooks.watchdog,

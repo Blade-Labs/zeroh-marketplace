@@ -211,9 +211,6 @@ export function textReferencesZeroHSettings(
   if (ALLOW_COMMAND_RE.test(value)) return true;
   if (UNMASK_COMMAND_RE.test(value)) return true;
 
-  const resolvedHome = comparisonKey(pathImpl.resolve(home), platform);
-  if (comparisonKey(value, platform).includes(resolvedHome)) return true;
-
   for (const raw of value.split(/[\s'"=<>|;&(){}]+/)) {
     const word = raw.replace(/\\([ .])/g, '$1');
     if (word && isZeroHSettingsPath(word, root, { platform, pathImpl, home }))

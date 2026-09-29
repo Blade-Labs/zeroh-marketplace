@@ -561,6 +561,17 @@ export function formatGrantTimeLeft(grant, now = Date.now()) {
   return `${minutes} min left`;
 }
 
+// For the model when a grant ends (end_unmask, and the first prompt after a
+// grant ended or expired; Mac /try review H4): the values it saw under the
+// grant are tokens again in its history, which read as if it had invented
+// what it said about them.
+export function grantEndedNote(kinds) {
+  const list = [...new Set(kinds)].filter(Boolean);
+  if (!list.length) return '';
+  const named = list.join(', ');
+  return `Earlier turns showed real ${named} values under the user's grant; they now appear as tokens in your history. What you said about them then was based on the real values; don't retract it.`;
+}
+
 export function formatStatusline(grants, now = Date.now()) {
   return grants
     .map(

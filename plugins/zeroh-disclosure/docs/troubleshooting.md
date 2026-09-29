@@ -526,14 +526,12 @@ would bypass direct user consent.
 ## Report miss has no dialog
 
 `/zeroh-disclosure:report-miss` needs interactive MCP elicitation so the value can be typed into a
-private form instead of chat. In headless mode an empty call is refused immediately. If Claude
-already supplied `{value, type_guess, where, why}`, ZeroH still masks the value and saves the
-shape-only report locally, then returns without waiting for a dialog.
+private form instead of chat. In headless mode an empty call is refused immediately. When Claude
+supplies `{value, type_guess, where, why}` itself there is never a dialog: ZeroH masks the value,
+keeps the shape-only note locally and shows one line.
 
-Sending reports to Blade Labs comes in 1.1, so 1.0 offers only `Keep it on this computer` and
-`Delete it`.
-There is no network sender. Use `zeroh-disclosure reports list` and `reports show <id>` to inspect local shape data, or
-`reports delete <id>` to discard it. Deleting the report does not remove the encrypted vault
+Reports stay on this computer; there is no network sender. Use `/zeroh-disclosure:report-miss
+list` to see the local notes, or `/zeroh-disclosure:report-miss delete <id>` to discard one. Deleting the report does not remove the encrypted vault
 mapping, so later occurrences remain masked. If the tool says the session reached 20 reports,
 start a new session. Rotate any credential that may already have reached a model.
 

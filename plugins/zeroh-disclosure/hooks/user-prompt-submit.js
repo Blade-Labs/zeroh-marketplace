@@ -44,6 +44,7 @@ import {
 import {
   activeGrants,
   formatStatusline,
+  grantEndedNote,
   initializeRevealReceiptExtension,
   REVEAL_EXTENSION_MARKER,
 } from '../lib/unmask.js';
@@ -238,7 +239,11 @@ try {
 // The notices shown above this prompt, each only when it is news (T-25): an
 // unmask grant on the first prompt after it starts, again when 5 minutes or
 // less remain, and once when it ends; the routing problem once.
+// Kinds whose grant ended since the last prompt: the model is told its
+// history shows them as tokens again (grantEndedNote).
+const endedGrantKinds = [];
 const grantStatus = promptNotices(session.state);
+const grantEndedContext = grantEndedNote(endedGrantKinds);
 
 const turn = await bumpTurn(session);
 // The status line (lib/statusline.js): this turn, and whether the proxy masks
@@ -620,7 +625,9 @@ emit({
   ...(grantStatus ? { systemMessage: grantStatus } : {}),
   hookSpecificOutput: {
     hookEventName: 'UserPromptSubmit',
-    additionalContext: ctxLines.join('\n'),
+    additionalContext: [ctxLines.join('\n'), grantEndedContext]
+      .filter(Boolean)
+      .join('\n\n'),
   },
 });
 process.exit(0);
@@ -694,6 +701,7 @@ function promptNotices(state) {
   for (const [id, { kind }] of Object.entries(seen)) {
     if (grants.some((grant) => grant.id === id)) continue;
     lines.push(`${kind} is masked again: the unmask ended.`);
+    endedGrantKinds.push(kind);
     delete seen[id];
   }
   state.grantNotices = seen;
@@ -712,6 +720,8 @@ function emitEntropyWarning(warning) {
 }
 
 function emitPromptNotice({ additionalContext = null, systemMessage = null }) {
+  additionalContext =
+    [additionalContext, grantEndedContext].filter(Boolean).join('\n\n') || null;
   if (!additionalContext && !systemMessage) return;
   emit({
     ...(systemMessage ? { systemMessage } : {}),

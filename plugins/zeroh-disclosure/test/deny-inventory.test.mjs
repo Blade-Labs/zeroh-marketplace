@@ -68,6 +68,10 @@ const INVENTORY = {
   'vault-unavailable-prompt': ['block-mode', 'owner decision 2026-09-27'],
   'vault-unsaveable-prompt': ['block-mode', 'owner decision 2026-09-27'],
   'typed-secret-no-proxy': ['block-mode', 'A1, owner decision 2026-09-27'],
+  'session-transcript': [
+    'block-mode',
+    "a command using Claude Code's session files, which keep typed values as-is (1.0.1)",
+  ],
   'watchdog-block': [
     'block-mode',
     'the loader passes with a notice by default',

@@ -275,11 +275,14 @@ test('uninstall in a terminal without --yes shows what it removes and removes no
 
 // UO-1: commands that widen where a value may go or change how ZeroH
 // protects the user are for the user only. Claude Code refuses a Skill call
-// of a command with `disable-model-invocation: true`.
+// of a command with `disable-model-invocation: true`. `report-miss` is the
+// user's to type since 1.0.1 (its `delete` removes a note); Claude reports a
+// missed value with the MCP tool instead.
 const USER_ONLY_FILES = [
   'allow.md',
   'doctor.md',
   'proxy.md',
+  'report-miss.md',
   'settings.md',
   'uninstall.md',
 ];

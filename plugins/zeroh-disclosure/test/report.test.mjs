@@ -173,7 +173,7 @@ test('Stop line names each kind of event and stays quiet otherwise', () => {
   };
   assert.equal(
     formatStopReceiptLine(3, busy, RECEIPT),
-    `ZeroH Disclosure · turn 3 · prompt stopped, 1 destination blocked, 2 values shown under your unmask grant, 1 file passed unchecked, 1 missed value reported · receipt: ${RECEIPT}`,
+    `ZeroH Disclosure · turn 3 · prompt stopped, 1 destination blocked, 2 values shown under your unmask, 1 file passed unchecked, 1 missed value reported · receipt: ${RECEIPT}`,
   );
   assert.deepEqual(
     stopTurnEvents({ ...busy, phase: 'finalized' }, { blocked: false })[0],
@@ -222,7 +222,7 @@ test('session receipt HTML expands verified turns without rendering fixture valu
     const output = await writeSessionReceiptHtml({ session, env });
     const html = readFileSync(output.path, 'utf8');
     assert.match(html, /<details open>/);
-    assert.match(html, /file read/);
+    assert.match(html, /files read/);
     assert.match(html, /blocked\.example\.test/);
     assert.match(html, /Signature<\/dt><dd>Verified/);
     assert.match(html, /class="slip"/);
@@ -237,7 +237,7 @@ test('session receipt HTML expands verified turns without rendering fixture valu
     assert.match(html, /print-color-adjust:exact/);
     assertNoForbiddenNames(html);
     assert.match(html, /What the model saw this session/);
-    assert.match(html, /\.env · line 1 · STRIPE_KEY/);
+    assert.match(html, /in \.env, line 1 \(STRIPE_KEY\)/);
     assert.match(html, /sk_live…0000/);
     assert.match(html, /Turn 1/);
     assert.doesNotMatch(html, new RegExp(escapeRegExp(FAKE_VALUE)));
@@ -742,7 +742,7 @@ function escapeRegExp(value) {
 }
 
 // T-20: the second Stop line names what the model saw, never a value.
-test('the Stop token line lists at most three tokens with their source', () => {
+test('the Stop token line shows three examples, then the rest by kind and source', () => {
   const entry = (token, channel, source, extra = {}) => ({
     token,
     type: token.slice(1, token.lastIndexOf('-')),
@@ -769,11 +769,206 @@ test('the Stop token line lists at most three tokens with their source', () => {
   };
   assert.equal(
     formatStopTokenLine(ledger),
-    'Claude saw ⟦API_KEY-000001⟧ for STRIPE_KEY · ⟦EMAIL-000002⟧ for team.md · ⟦SECRET-000005⟧ for mcp__vault__read · +2 more · /zeroh-disclosure:mask-show',
+    'Claude saw ⟦API_KEY-000001⟧ for STRIPE_KEY · ⟦SECRET-000005⟧ in mcp__vault__read output · ⟦TOKEN-000003⟧ for GITHUB_TOKEN · and 2 more: 1 email address in team.md, 1 email address in your message (receipt ↗ / /zeroh-disclosure:mask-show)',
   );
   assert.equal(formatStopTokenLine({ phase: 'finalized' }), null);
   assert.equal(
     formatStopTokenLine({ ...ledger, phase: 'blocked_pending_user_resubmit' }),
     null,
   );
+});
+
+// 1.0.1: the Stop line in plain words. Fake values only.
+function stopLedger(entries) {
+  return {
+    phase: 'finalized',
+    audit: { masked: { token_map: entries.map((e) => ({ count: 1, ...e })) } },
+  };
+}
+const FAKE_KEY = `sk_test_${'51Fake'.padEnd(24, 'x')}c4Q2`;
+function stopValues(n, { keys = 0 } = {}) {
+  const entries = [];
+  const values = new Map();
+  for (let i = 0; i < n; i += 1) {
+    const key = i < keys;
+    const token = key
+      ? `[API_KEY-${String(i).padStart(6, '0')}]`
+      : `[EMAIL-${String(i).padStart(6, '0')}]`;
+    values.set(token, key ? FAKE_KEY : `user${i}@acme.example`);
+    entries.push(
+      key
+        ? {
+            token,
+            type: 'API_KEY',
+            channel: 'file read',
+            source: '.env · line 2',
+          }
+        : {
+            token,
+            type: 'EMAIL',
+            channel: 'command output',
+            source: 'cat signup-errors.log',
+          },
+    );
+  }
+  return {
+    ledger: stopLedger(entries),
+    valueOf: (token) => values.get(token) ?? null,
+  };
+}
+
+test('the Stop line: 1, 3, 12 and 50 values, previews only, one line', () => {
+  const one = stopValues(1);
+  assert.equal(
+    formatStopTokenLine(one.ledger, { valueOf: one.valueOf }),
+    'Claude saw ⟦EMAIL-000000⟧, not u…@acme.example',
+  );
+  const three = stopValues(3, { keys: 1 });
+  assert.equal(
+    formatStopTokenLine(three.ledger, { valueOf: three.valueOf }),
+    `Claude saw ⟦API_KEY-000000⟧ in .env (…c4Q2) · ⟦EMAIL-000001⟧, not u…@acme.example · ⟦EMAIL-000002⟧, not u…@acme.example`,
+  );
+  const twelve = stopValues(12, { keys: 2 });
+  assert.equal(
+    formatStopTokenLine(twelve.ledger, { valueOf: twelve.valueOf }),
+    'Claude saw ⟦API_KEY-000000⟧ in .env (…c4Q2) · ⟦EMAIL-000002⟧, not u…@acme.example · ⟦API_KEY-000001⟧ in .env (…c4Q2) · and 9 more: 9 email addresses in signup-errors.log (receipt ↗ / /zeroh-disclosure:mask-show)',
+  );
+  const fifty = stopValues(50, { keys: 5 });
+  const line = formatStopTokenLine(fifty.ledger, { valueOf: fifty.valueOf });
+  assert.match(
+    line,
+    / · and 47 more: 44 email addresses in signup-errors\.log, 3 Stripe test secret keys in \.env \(receipt ↗ \/ \/zeroh-disclosure:mask-show\)$/u,
+  );
+  for (const { ledger, valueOf } of [one, three, twelve, fifty]) {
+    const text = formatStopTokenLine(ledger, { valueOf });
+    assert.ok(!text.includes(FAKE_KEY), 'no full key');
+    assert.doesNotMatch(text, /user\d+@/u, 'no full email address');
+    assert.doesNotMatch(text, /\n/u, 'one line');
+    assert.doesNotMatch(text, /for typed|command output ·/u);
+  }
+  // Without the vault's values: where each example came from.
+  assert.equal(
+    formatStopTokenLine(twelve.ledger),
+    'Claude saw ⟦API_KEY-000000⟧ in .env · ⟦EMAIL-000002⟧ in signup-errors.log · ⟦API_KEY-000001⟧ in .env · and 9 more: 9 email addresses in signup-errors.log (receipt ↗ / /zeroh-disclosure:mask-show)',
+  );
+});
+
+test('the Stop line never shows the start of a typed password or key (B2)', () => {
+  const password = 'HuntERZEROHF4ke!';
+  const shortKey = 'sk_ZEROHFAKEshort01';
+  const longKey = `ghp_${'ZEROHFAKE'.padEnd(32, 'q')}W9z1`;
+  const connection = `postgres://app:ZEROHFAKEpw@db.example:5432/app`;
+  const values = new Map([
+    ['[PASSWORD-000003]', password],
+    ['[API_KEY-000004]', shortKey],
+    ['[TOKEN-000005]', longKey],
+    ['[CONNECTION_STRING-000006]', connection],
+  ]);
+  const ledger = stopLedger(
+    [...values.keys()].map((token) => ({
+      token,
+      type: token.slice(1).split('-')[0],
+      channel: 'typed prompt',
+      source: 'typed prompt',
+    })),
+  );
+  const line = formatStopTokenLine(ledger, {
+    valueOf: (token) => values.get(token) ?? null,
+  });
+  for (const value of [password, shortKey, longKey, connection]) {
+    for (const size of [3, 4, 7])
+      assert.ok(
+        !line.includes(value.slice(0, size)),
+        `no ${size}-character prefix of ${value.slice(0, 2)}… in: ${line}`,
+      );
+  }
+  assert.match(line, /⟦PASSWORD-000003⟧ in your message(?! \()/u);
+  assert.match(line, /⟦API_KEY-000004⟧ in your message(?! \()/u);
+  assert.match(line, /⟦TOKEN-000005⟧ in your message \(…W9z1\)/u);
+  assert.match(line, /1 connection string in your message/u);
+});
+
+test('the Stop line groups mixed sources in plain words', () => {
+  const entries = [
+    ['[EMAIL-00000a]', 'EMAIL', 'typed prompt', 'typed prompt'],
+    ['[EMAIL-00000b]', 'EMAIL', 'typed prompt', 'typed prompt'],
+    ['[EMAIL-00000c]', 'EMAIL', 'file read', 'docs/team.md · line 4'],
+    ['[EMAIL-00000d]', 'EMAIL', 'file read', 'docs/team.md · line 5'],
+    ['[PHONE_NUMBER-00000e]', 'PHONE_NUMBER', 'MCP result', 'mcp__crm__lookup'],
+    [
+      '[IP_ADDRESS-00000f]',
+      'IP_ADDRESS',
+      'command output',
+      'kubectl get pods -o wide',
+    ],
+    [
+      '[IP_ADDRESS-000010]',
+      'IP_ADDRESS',
+      'command output',
+      'kubectl get pods -o wide',
+    ],
+    [
+      '[PASSWORD-000011]',
+      'PASSWORD',
+      'file read',
+      '.env · line 3 · DB_PASSWORD',
+    ],
+  ].map(([token, type, channel, source]) => ({ token, type, channel, source }));
+  assert.equal(
+    formatStopTokenLine(stopLedger(entries)),
+    'Claude saw ⟦PASSWORD-000011⟧ for DB_PASSWORD · ⟦EMAIL-00000a⟧ in your message · ⟦IP_ADDRESS-00000f⟧ in command output · and 5 more: 2 email addresses in team.md, 1 email address in your message, 1 IP address in command output, 1 other (receipt ↗ / /zeroh-disclosure:mask-show)',
+  );
+});
+
+test('one table of plain-English sources for the Stop line, mask-show and receipt.html', async () => {
+  const { observationFrom, sourcePlace, channelWords } =
+    await import('../lib/report-counts.js');
+  const cases = [
+    [
+      { channel: 'typed prompt', source: 'typed prompt' },
+      'in your message',
+      'in your message',
+    ],
+    [
+      { channel: 'file read', source: 'docs/team.md · line 4' },
+      'in team.md',
+      'in docs/team.md, line 4',
+    ],
+    [
+      { channel: 'file read', source: '.env · line 1 · STRIPE_KEY' },
+      'for STRIPE_KEY',
+      'in .env, line 1 (STRIPE_KEY)',
+    ],
+    [
+      { channel: 'command output', source: 'head -n 5 signup-errors.log' },
+      'in signup-errors.log',
+      'in command output: head -n 5 signup-errors.log',
+    ],
+    [
+      { channel: 'command output', source: 'grep -n @ users.csv' },
+      'in users.csv',
+      'in command output: grep -n @ users.csv',
+    ],
+    [
+      { channel: 'command output', source: 'cat a.log | grep x' },
+      'in command output',
+      'in command output: cat a.log | grep x',
+    ],
+    [
+      { channel: 'MCP result', source: 'mcp__vault__read' },
+      'in mcp__vault__read output',
+      'in mcp__vault__read output',
+    ],
+    [
+      { channel: 'command output', source: 'env', name: 'GITHUB_TOKEN' },
+      'for GITHUB_TOKEN',
+      'in command output: env, for GITHUB_TOKEN',
+    ],
+  ];
+  for (const [entry, place, full] of cases) {
+    assert.equal(sourcePlace(entry), place, JSON.stringify(entry));
+    assert.equal(observationFrom(entry), full, JSON.stringify(entry));
+  }
+  assert.equal(channelWords('typed prompt'), 'your messages');
+  assert.equal(channelWords('file read'), 'files read');
 });

@@ -126,6 +126,8 @@ export function managementAction(argv) {
   if (command === 'banner' && words[0]) return `set the banner to ${words[0]}`;
   if (command === 'uncertain' && words[0])
     return `set uncertain cases to ${words[0]}`;
+  if (command === 'reports' && words[0] === 'delete' && words[1])
+    return `delete the local report ${words[1]}`;
   if (command === 'statusline' && (words[0] === 'on' || words[0] === 'off'))
     return `turn the ZeroH status line ${words[0]} in your Claude Code settings`;
   return null;
@@ -154,6 +156,10 @@ export function slashToCli(name, args) {
     // `uninstall --yes $ARGUMENTS` (commands/uninstall.md); --dry-run only
     // shows the plan.
     argv = ['uninstall', '--yes', ...args];
+  } else if (name === 'report-miss') {
+    // `/zeroh-disclosure:report-miss delete <id>` (commands/report-miss.md).
+    if (String(args[0] || '').toLowerCase() === 'delete' && args.length === 2)
+      argv = ['reports', 'delete', args[1]];
   } else if (['allow', 'doctor', 'unmask'].includes(name)) {
     argv = [name, ...args];
   }
@@ -167,6 +173,8 @@ export function slashFor(argv) {
     ['banner', 'receipts', 'vault', 'uncertain', 'statusline'].includes(command)
   )
     return `/zeroh-disclosure:settings ${[command, ...rest].join(' ')}`;
+  if (command === 'reports')
+    return `/zeroh-disclosure:report-miss ${rest.join(' ')}`;
   return `/zeroh-disclosure:${[command, ...rest].join(' ')}`;
 }
 
@@ -455,7 +463,7 @@ function oneTimeCode() {
 
 function refusal(argv) {
   const action = managementAction(argv) || canonicalArgv(argv).join(' ');
-  return `Nothing changed: ${action} changes what ZeroH Disclosure protects, so only you can do it. Type ${slashFor(argv)} in Claude Code, or run ${terminalCommand(canonicalArgv(argv))} in your own terminal outside Claude Code.`;
+  return `Nothing changed: ${action} changes what ZeroH Disclosure protects, so only you can do it. Type ${slashFor(argv)} in Claude Code, or run ${terminalCommand(canonicalArgv(argv))} in your own terminal outside Claude Code. (Claude: don't retry or look for another way; ask the user to type ${slashFor(argv)}.)`;
 }
 
 // { ok: true, via: 'prompt' | 'terminal' } when the user asked for `argv`,

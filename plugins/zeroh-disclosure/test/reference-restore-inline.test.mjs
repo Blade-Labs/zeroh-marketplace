@@ -70,7 +70,10 @@ test('a restored reference is written inline, in its expanding position', () => 
     assert.ok(command.includes(make('curl', braced)), `${tool}: ${command}`);
     assert.ok(!command.includes(token), command);
     assert.ok(!/ZH_TOKEN_/u.test(command), command);
-    assert.match(json.systemMessage ?? '', /a variable whose value/u);
+    assert.match(
+      json.systemMessage ?? '',
+      /a variable whose value|couldn't check where \$\w+ went \(it was loaded inside the command or the shell\)/u,
+    );
   }
 });
 

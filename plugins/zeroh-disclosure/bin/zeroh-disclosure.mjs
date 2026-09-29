@@ -31,6 +31,7 @@ import {
 import {
   ALLOW_FILE_NOTICE,
   readAllowRules,
+  allowRuleKey,
   updateAllowRule,
   writeAllowRules,
 } from '../lib/allow-rules.js';
@@ -264,6 +265,9 @@ async function cmdReports(args) {
   }
   const id = args._[2];
   if (!id) throw new Error(`reports ${action} requires <id>`);
+  // Deleting a local report is the user's (/zeroh-disclosure:report-miss
+  // delete <id>).
+  if (action === 'delete' && !(await authorized())) return;
   if (isProxyReportId(id)) {
     if (action === 'show') {
       print(readProxyReport(id), args.json, [
@@ -298,9 +302,20 @@ async function cmdAllow(args, cwd) {
   const loaded = readAllowRules(cwd);
   const remove = typeof args.remove === 'string';
   // `/zeroh-disclosure:allow` with no arguments lists, like --list.
+  // The vault's values, for a typed value's token (Mac /try review M1).
+  let held = [];
+  try {
+    const vault = new Vault(cwd);
+    vault.load();
+    held = vault.knownValues();
+  } catch {
+    // No vault (or a locked one): names, types and tokens still work.
+  }
   if (args.list || (!remove && args._.length === 1)) {
     if (loaded.ignored) console.error(ALLOW_FILE_NOTICE);
-    const summary = destinationSummary(loadKnownSecrets(cwd), loaded.rules);
+    const summary = destinationSummary(loadKnownSecrets(cwd), loaded.rules, {
+      typed: held.filter((entry) => entry.source === 'prompt'),
+    });
     print({ rules: loaded.rules, ...summary }, args.json, [
       ...formatDestinationSummary(summary),
     ]);
@@ -316,12 +331,14 @@ async function cmdAllow(args, cwd) {
         : 'allow requires <NAME|TOKEN|TYPE> <host|mcp:SERVER>',
     );
   }
-  const rules = updateAllowRule(loaded.rules, name, host, { remove });
+  const key = allowRuleKey(name, { values: held });
+  const rules = updateAllowRule(loaded.rules, key, host, { remove });
   if (!(await authorized())) return;
   writeAllowRules(cwd, rules);
   const action = remove ? 'removed' : 'allowed';
-  print({ action, name, host, rules }, args.json, [
-    `${action}: ${name} → ${host}`,
+  print({ action, name: key, host, rules }, args.json, [
+    `${action}: ${key} → ${host}`,
+    ...(remove ? [] : ['Ask Claude to try again.']),
   ]);
 }
 
@@ -434,6 +451,13 @@ async function cmdStatusline(args, cwd) {
     await cmdStatuslineSetting(args, action);
     return;
   }
+  if (action === 'segment-command') {
+    // Read-only: the command that prints ZeroH's part, for a status line
+    // script of the user's own (docs/statusline.md).
+    const { SEGMENT_COMMAND } = await import('../lib/statusline-settings.js');
+    print({ command: SEGMENT_COMMAND }, args.json, [SEGMENT_COMMAND]);
+    return;
+  }
   if (action === 'style') {
     const { readStyle, styleFilePath } = await import('../lib/statusline.js');
     const file = styleFilePath();
@@ -460,7 +484,7 @@ async function cmdStatusline(args, cwd) {
   }
   if (action && action !== 'segment') {
     throw new Error(
-      'statusline takes on, off, style or segment, or nothing to print the status line',
+      'statusline takes on, off, style, segment or segment-command, or nothing to print the status line',
     );
   }
   const { statuslineMain } = await import('../lib/statusline.js');
@@ -485,6 +509,7 @@ async function cmdStatuslineSetting(args, action) {
     print({ statusline: result, settings: settingsPath }, args.json, [
       {
         off: `Status line off: ZeroH's statusLine entry was removed from ${settingsPath}.`,
+        unwrapped: `Status line off: ZeroH's part was taken out of your status line; your own command is back as it was (${settingsPath}).`,
         theirs:
           "Your status line is your own, so ZeroH left it as it is. If your script adds ZeroH's segment, remove that line to hide it.",
         none: 'The ZeroH status line was not on.',
@@ -492,7 +517,7 @@ async function cmdStatuslineSetting(args, action) {
     ]);
     return;
   }
-  const { result, command, segment } = turnStatuslineOn({
+  const { result, command, wrapped } = turnStatuslineOn({
     settingsPath,
     home,
     pluginRoot: PLUGIN_ROOT,
@@ -502,18 +527,27 @@ async function cmdStatuslineSetting(args, action) {
       `Status line on: Claude Code shows "🛡 ZeroH · 🟢 protected · …" under the prompt (${settingsPath}).`,
       "If it doesn't appear within a few seconds, restart Claude Code. /zeroh-disclosure:settings statusline off removes it.",
     ],
+    // The user's own line, with ZeroH's part after it (1.0.1): no command
+    // to copy, nothing in their script changed.
+    wrapped: [
+      'Added ZeroH\'s part on its own line under your status line (🛡 ZeroH · 🟢 protected · …). To keep it on your line instead, set "position": "end" in the style file (/zeroh-disclosure:settings statusline style). To undo: /zeroh-disclosure:settings statusline off',
+    ],
     already: [
-      'The ZeroH status line is already on. /zeroh-disclosure:settings statusline off removes it.',
+      wrapped
+        ? "ZeroH's part is already in your status line. To undo: /zeroh-disclosure:settings statusline off"
+        : 'The ZeroH status line is already on. /zeroh-disclosure:settings statusline off removes it.',
     ],
     theirs: [
-      `You already have a status line in ${settingsPath}, so ZeroH left it as it is.`,
-      "To show ZeroH in it, add ZeroH's segment to your status line script. It reads the same JSON your script gets on stdin, for example:",
-      '  input=$(cat)',
-      `  zeroh=$(printf '%s' "$input" | ${segment})`,
-      '  echo "<your line> · $zeroh"',
-      'The README section "Status line" has the same command to copy.',
+      `Your status line in ${settingsPath} already shows ZeroH's part, or isn't a command ZeroH can add to, so ZeroH left it as it is.`,
+      "To add ZeroH's part by hand, see docs/statusline.md in the plugin.",
+    ],
+    // 1.0.1 doesn't wrap a status line on Windows (1.1 will).
+    windows: [
+      `On Windows ZeroH doesn't add its part to your own status line yet, so your status line in ${settingsPath} is left as it is.`,
+      "To add ZeroH's part by hand, see docs/statusline.md in the plugin.",
     ],
   }[result];
+  // The command stays out of the reply; --json callers get it.
   print(
     { statusline: result, settings: settingsPath, command },
     args.json,
@@ -1410,6 +1444,7 @@ function help(exit) {
   zeroh-disclosure reports show <id>
   zeroh-disclosure reports delete <id>
   zeroh-disclosure statusline [segment] [--json]
+  zeroh-disclosure statusline segment-command [--json]
   zeroh-disclosure statusline on|off|style
   zeroh-disclosure vault status
   zeroh-disclosure vault clear [--yes]

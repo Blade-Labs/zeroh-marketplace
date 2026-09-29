@@ -15,9 +15,13 @@ function ruleLabel(key, name) {
 
 // One row per known name, then the rules no known name uses.
 // `known` is loadKnownSecrets() output: [{ name, value, type }].
-export function destinationSummary(known, rules = {}) {
+// `typed` are vault entries the user typed ([{ token, type, value }]):
+// they have no name, so each is listed by its token (Mac /try review M1).
+// Claude Code's own variables (`own`) are masked but never offered (M2).
+export function destinationSummary(known, rules = {}, { typed = [] } = {}) {
   const byName = new Map();
   for (const entry of known) {
+    if (entry.own) continue;
     const row = byName.get(entry.name) ?? {
       name: entry.name,
       provider: null,
@@ -55,6 +59,32 @@ export function destinationSummary(known, rules = {}) {
         rules: ruled,
       };
     });
+  const typedRows = [];
+  for (const entry of typed) {
+    if (!entry?.token || byName.has(entry.token)) continue;
+    const builtIn = builtInDestinations(entry.value);
+    const seen = new Set(builtIn?.hosts ?? []);
+    const ruled = [];
+    for (const key of [entry.token]) {
+      if (!Array.isArray(rules[key])) continue;
+      used.add(key);
+      for (const host of rules[key]) {
+        if (seen.has(host)) continue;
+        seen.add(host);
+        ruled.push({ host, rule: key, why: 'your rule' });
+      }
+    }
+    typedRows.push({
+      name: entry.token,
+      typed: true,
+      kind: /KEY|TOKEN|SECRET/u.test(String(entry.type)) ? 'key' : 'value',
+      builtIn: builtIn
+        ? { provider: builtIn.provider, hosts: builtIn.hosts }
+        : null,
+      rules: ruled,
+    });
+  }
+  values.push(...typedRows.sort((a, b) => a.name.localeCompare(b.name)));
   const otherRules = Object.entries(rules)
     .filter(([key]) => !used.has(key) && !byName.has(key))
     .map(([rule, hosts]) => ({ rule, hosts: [...hosts] }));
@@ -93,10 +123,16 @@ export function formatDestinationSummary({ values, otherRules }) {
         );
       }
       parts.push(...rulesPart(row.rules));
+      // A typed value shows as its token in the form Claude names it, so
+      // the screen doesn't turn it back into the value.
+      const label = row.typed
+        ? `typed ${row.kind} ⟦${row.name.slice(1, -1)}⟧`
+        : row.name;
+      const argument = row.typed ? `⟦${row.name.slice(1, -1)}⟧` : row.name;
       lines.push(
         parts.length
-          ? `  ${row.name} → ${parts.join(' + ')}`
-          : `  ${row.name} → nowhere yet · allow with /zeroh-disclosure:allow ${row.name} <host>`,
+          ? `  ${label} → ${parts.join(' + ')}`
+          : `  ${label} → nowhere yet · allow with /zeroh-disclosure:allow ${argument} <host>`,
       );
     }
   }

@@ -135,7 +135,7 @@ const FIX_SUFFIX = Object.freeze({
 // rotate the key; every other reason can be blocked instead.
 export const UNCHECKED_HINTS = Object.freeze({
   uncertain:
-    'To block these instead, run /zeroh-disclosure:settings uncertain block.',
+    'Type /zeroh-disclosure:settings uncertain block to stop these instead.',
   'report-miss':
     'ZeroH missed this value earlier: run /zeroh-disclosure:report-miss so it is masked from now on, and rotate the key.',
 });
@@ -178,9 +178,15 @@ export function uncheckedNotice(
     ? mode === 'block'
       ? `ZeroH Disclosure: ${what} was stopped: it would run with the token, not your key (${text}).`
       : `ZeroH Disclosure: ${what} ran with the token, not your key: ${text}`
-    : mode === 'block'
-      ? `ZeroH Disclosure: ${what} was stopped because it could not be protected (${text})${name ? `; it used ${name}` : ''}.`
-      : `ZeroH Disclosure: ${what} was not protected (${text})${name ? `; ${name} was used without ${CHECK_TEXT[reason] ?? 'a check'}` : ''}${FIX_SUFFIX[reason] ?? '.'}`;
+    : reason === 'variable-in-command' && name
+      ? // A variable ZeroH knows by name (a .env key): ZeroH may well know
+        // its value, so the notice says what it couldn't do (1.0.1, B4.3).
+        mode === 'block'
+        ? `ZeroH Disclosure: ${what} was stopped because ZeroH couldn't check where $${name} went (it was loaded inside the command or the shell).`
+        : `ZeroH Disclosure: ZeroH couldn't check where $${name} went (it was loaded inside the command or the shell), so ${what} ran unchecked.`
+      : mode === 'block'
+        ? `ZeroH Disclosure: ${what} was stopped because it could not be protected (${text})${name ? `; it used ${name}` : ''}.`
+        : `ZeroH Disclosure: ${what} was not protected (${text})${name ? `; ${name} was used without ${CHECK_TEXT[reason] ?? 'a check'}` : ''}${FIX_SUFFIX[reason] ?? '.'}`;
   // In block mode only the missed-secret hint still applies.
   const kind = hintKind(reason);
   const separator =

@@ -255,11 +255,15 @@ test('UserPromptSubmit shows an unmask countdown only when it is news', () => {
   assert.match(prompt().systemMessage, /^EMAIL unmasked · \d+ min left$/u);
   assert.equal(prompt()?.systemMessage, undefined);
   revokeGrants(p.dir, 'all', { home: p.home });
+  const ended = prompt();
+  assert.equal(ended.systemMessage, 'EMAIL is masked again: the unmask ended.');
+  // The model is told its history shows the grant's values as tokens again
+  // (Mac /try review H4), once.
   assert.equal(
-    prompt().systemMessage,
-    'EMAIL is masked again: the unmask ended.',
+    ended.hookSpecificOutput.additionalContext,
+    "Earlier turns showed real EMAIL values under the user's grant; they now appear as tokens in your history. What you said about them then was based on the real values; don't retract it.",
   );
-  assert.equal(prompt()?.systemMessage, undefined);
+  assert.equal(prompt(), null);
   // In its last five minutes the countdown shows on every prompt.
   createGrant({
     root: p.dir,
@@ -365,8 +369,15 @@ test('Stop reports what the model saw and links one receipt line', () => {
     lines[0],
     /^ZeroH Disclosure · turn 1 · 1 value masked · receipt: .*[\\/]receipt\.html$/u,
   );
-  // T-20: what Claude saw, as tokens nothing restores, with their source.
-  assert.match(lines[1], /^Claude saw ⟦API_KEY-[0-9a-f]{6}⟧ for STRIPE_KEY$/u);
+  // T-20: what Claude saw, as tokens nothing restores; a key shows at most
+  // its last four characters, never its start (B2: the line is kept in
+  // Claude Code's transcript).
+  assert.match(
+    lines[1],
+    /^Claude saw ⟦API_KEY-[0-9a-f]{6}⟧ for STRIPE_KEY \(…\S{4}\)$/u,
+  );
+  assert.ok(!lines[1].includes(FAKE_STRIPE));
+  assert.ok(!lines[1].includes(FAKE_STRIPE.slice(0, 7)));
   assert.equal(lines.length, 2, 'no separate bundle line');
   assert.ok(!stop.stdout.includes(FAKE_STRIPE));
   assert.doesNotMatch(stop.stdout + stop.stderr, /signed receipts|bundle/u);
@@ -2585,4 +2596,61 @@ test('the token map masks raw sources left in older receipts (Astra 9)', async (
   }
   const html = readFileSync(path.join(dir, 'receipt.html'), 'utf8');
   assert.ok(!html.includes(FAKE_STRIPE));
+});
+
+// H5 (1.0.1): three addresses read once under an unmask grant are three
+// values shown, on the Stop line and in the status line's sent count, also
+// when the vault already holds them (rc.2 counted each twice: once as a
+// known value, once as a detector finding).
+test('values shown under an unmask grant are counted once each', () => {
+  const p = tempProject();
+  const sessionId = 'grant-distinct';
+  const addresses = ['ada', 'grace', 'alan'].map((name) =>
+    [`${name}.zerohfake`, 'example.com'].join('@'),
+  );
+  const cat = (id) =>
+    runHook(
+      'post-tool-use',
+      {
+        session_id: sessionId,
+        tool_use_id: id,
+        tool_name: 'Bash',
+        tool_input: { command: 'cat signup-errors.log' },
+        tool_response: {
+          stdout: addresses.map((a) => `rejected: ${a}`).join('\n'),
+          stderr: '',
+          interrupted: false,
+        },
+      },
+      { project: p },
+    );
+  runHook(
+    'user-prompt-submit',
+    { session_id: sessionId, prompt: 'Why are these rejected?' },
+    { project: p },
+  );
+  // Masked first: the vault now holds all three.
+  assert.equal(cat('first').code, 0);
+  createGrant({
+    root: p.dir,
+    home: p.home,
+    kind: 'EMAIL',
+    reason: 'Check why validateEmail rejects them',
+    duration: '15m',
+  });
+  const shown = cat('second');
+  assert.equal(shown.code, 0, shown.stderr);
+  const stop = runHook(
+    'stop',
+    { session_id: sessionId, stop_hook_active: false },
+    { project: p },
+  );
+  assert.match(stop.json.systemMessage, /3 values shown under your unmask/u);
+  const status = JSON.parse(
+    readFileSync(
+      path.join(stateDirOf(p), 'sessions', sessionId, 'status.json'),
+      'utf8',
+    ),
+  );
+  assert.equal(status.sent, 3);
 });

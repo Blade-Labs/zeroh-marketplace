@@ -933,13 +933,16 @@ test('the command is the same text for every shell Claude Code uses', () => {
   }
 });
 
-test('the README shows the exact statusLine entry and the segment command', () => {
+test('the README shows the exact statusLine entry; docs/statusline.md the segment command', () => {
   const readme = readFileSync(path.join(PLUGIN, 'README.md'), 'utf8');
   assert.ok(
     readme.includes(JSON.stringify({ statusLine: statuslineEntry() }, null, 2)),
     'README "Status line" has the entry ZeroH writes',
   );
-  assert.ok(readme.includes(SEGMENT_COMMAND));
+  // 1.0.1: the segment command lives in one place, for composing by hand.
+  assert.ok(!readme.includes(SEGMENT_COMMAND));
+  const doc = readFileSync(path.join(PLUGIN, 'docs', 'statusline.md'), 'utf8');
+  assert.ok(doc.includes(SEGMENT_COMMAND));
 });
 
 // --- recognising, turning on and off ------------------------------------------------
@@ -1005,15 +1008,29 @@ test('on writes the entry and records it; off removes only it and records the ch
   );
 });
 
-test("on never replaces the user's own status line, and off leaves it", () => {
+test("on adds ZeroH's part to the user's own status line, and off puts it back exactly (1.0.1)", () => {
   const theirs = { type: 'command', command: '~/.claude/my-line.sh' };
   const s = settingsFixture({ statusLine: theirs });
-  const on = turnStatuslineOn({ ...s, pluginRoot: PLUGIN });
-  assert.equal(on.result, 'theirs');
+  // 1.0.1 wraps on macOS and Linux only; the platform is injected so the
+  // logic is covered on every OS (Windows: statusline-wrap.test.mjs).
+  const on = turnStatuslineOn({ ...s, pluginRoot: PLUGIN, platform: 'linux' });
+  assert.equal(on.result, 'wrapped');
   assert.equal(on.segment, SEGMENT_COMMAND);
+  const wrapped = readSettings(s.settingsPath).statusLine;
+  assert.ok(isOurStatusLine(wrapped));
+  assert.equal(turnStatuslineOff(s).result, 'unwrapped');
   assert.deepEqual(readSettings(s.settingsPath).statusLine, theirs);
-  assert.equal(turnStatuslineOff(s).result, 'theirs');
-  assert.deepEqual(readSettings(s.settingsPath).statusLine, theirs);
+  // A line of theirs that isn't a command is left as it is.
+  const odd = { type: 'static', text: 'hi' };
+  const t = settingsFixture({ statusLine: odd });
+  for (const platform of ['linux', 'win32'])
+    assert.equal(
+      turnStatuslineOn({ ...t, pluginRoot: PLUGIN, platform }).result,
+      'theirs',
+      platform,
+    );
+  assert.deepEqual(readSettings(t.settingsPath).statusLine, odd);
+  assert.equal(turnStatuslineOff(t).result, 'theirs');
 });
 
 test('an older form of the entry is rewritten, and removed from every recorded file', () => {
@@ -1266,8 +1283,50 @@ test("statusline on|off is the user's: the CLI needs the user, the slash command
     JSON.stringify({ statusLine: { type: 'command', command: 'mine.sh' } }),
   );
   const theirs = cli(['statusline', 'on'], asUser(['statusline', 'on'], env));
-  assert.match(theirs.stdout, /left it as it is/u);
-  assert.match(theirs.stdout, / segment\)/u);
+  if (process.platform === 'win32') {
+    // 1.0.1 doesn't wrap on Windows: the user's line stays exactly as it
+    // is, and the reply says so and where the by-hand steps are.
+    assert.equal(
+      theirs.stdout,
+      `On Windows ZeroH doesn't add its part to your own status line yet, so your status line in ${s.settingsPath} is left as it is.\nTo add ZeroH's part by hand, see docs/statusline.md in the plugin.\n`,
+    );
+    assert.deepEqual(readSettings(s.settingsPath), {
+      statusLine: { type: 'command', command: 'mine.sh' },
+    });
+    assert.match(
+      cli(['statusline', 'off'], asUser(['statusline', 'off'], env)).stdout,
+      /Your status line is your own, so ZeroH left it as it is/u,
+    );
+    assert.deepEqual(readSettings(s.settingsPath), {
+      statusLine: { type: 'command', command: 'mine.sh' },
+    });
+    const byModel = cli(['statusline', 'on'], env);
+    assert.match(
+      byModel.stdout,
+      /ask the user to type \/zeroh-disclosure:settings statusline on/u,
+    );
+    return;
+  }
+  assert.equal(
+    theirs.stdout,
+    'Added ZeroH\'s part on its own line under your status line (🛡 ZeroH · 🟢 protected · …). To keep it on your line instead, set "position": "end" in the style file (/zeroh-disclosure:settings statusline style). To undo: /zeroh-disclosure:settings statusline off\n',
+  );
+  assert.doesNotMatch(theirs.stdout, /node -e/u);
+  assert.notEqual(readSettings(s.settingsPath).statusLine.command, 'mine.sh');
+  assert.match(
+    cli(['statusline', 'off'], asUser(['statusline', 'off'], env)).stdout,
+    /your own command is back as it was/u,
+  );
+  assert.deepEqual(readSettings(s.settingsPath).statusLine, {
+    type: 'command',
+    command: 'mine.sh',
+  });
+  // The model asking is refused, and told to ask the user.
+  const byModel = cli(['statusline', 'on'], env);
+  assert.match(
+    byModel.stdout,
+    /ask the user to type \/zeroh-disclosure:settings statusline on/u,
+  );
   assert.equal(readSettings(s.settingsPath).statusLine.command, 'mine.sh');
 });
 

@@ -84,7 +84,7 @@ test('Windows re-test 6: a pure reference runs in pass mode, with a notice, not 
     );
     assert.match(
       json.systemMessage ?? '',
-      /a variable whose value ZeroH cannot see/u,
+      /ZeroH couldn't check where \$STRIPE_KEY went \(it was loaded inside the command or the shell\)/u,
       `${tool}: ${command}`,
     );
     assert.doesNotMatch(JSON.stringify(json), /known secret|raw secret/iu);
@@ -126,7 +126,7 @@ test('a pure reference stops in block mode as an uncertain destination, not a ra
     assert.equal(decision(json), 'deny', `${tool}: ${command}`);
     assert.match(
       reason(json),
-      /was stopped because it could not be protected \(a variable whose value ZeroH cannot see\); it used STRIPE_KEY/u,
+      /was stopped because ZeroH couldn't check where \$STRIPE_KEY went \(it was loaded inside the command or the shell\)/u,
     );
     assert.doesNotMatch(reason(json), /sensitive data detected/u);
   }

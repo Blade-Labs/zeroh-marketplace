@@ -316,7 +316,7 @@ test('pass mode (the default): a stuck hook lets the event through, says so once
       // The session's first notice says how to tighten.
       assert.equal(
         r.json.systemMessage,
-        `${lines[name]} To block these instead, run /zeroh-disclosure:settings uncertain block.`,
+        `${lines[name]} Type /zeroh-disclosure:settings uncertain block to stop these instead.`,
       );
     } else {
       // The hooks that guard nothing: a non-blocking error, not counted.
@@ -332,7 +332,7 @@ test('pass mode (the default): a stuck hook lets the event through, says so once
   const first = run(pre, 'pre-tool-use', EVENTS['pre-tool-use'], p, FAST);
   assert.match(
     first.json.systemMessage,
-    /^ZeroH Disclosure: this command was not protected \(timed out\)\. To block/u,
+    /^ZeroH Disclosure: this command was not protected \(timed out\)\. Type \/zeroh-disclosure:settings uncertain block/u,
   );
   const second = run(pre, 'pre-tool-use', EVENTS['pre-tool-use'], p, FAST);
   assert.equal(second.code, 0);

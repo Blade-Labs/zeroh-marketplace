@@ -295,7 +295,10 @@ test('Windows re-test 6: curl -u with a shell or PowerShell variable reference i
       blocked.json?.hookSpecificOutput?.permissionDecisionReason ?? '';
     assert.doesNotMatch(reason, /sensitive data detected|not allowed to/u);
     if (blocked.json?.hookSpecificOutput?.permissionDecision === 'deny')
-      assert.match(reason, /a variable whose value ZeroH cannot see/u);
+      assert.match(
+        reason,
+        /a variable whose value ZeroH cannot see|couldn't check where \$\w+ went \(it was loaded inside the command or the shell\)/u,
+      );
   }
 });
 

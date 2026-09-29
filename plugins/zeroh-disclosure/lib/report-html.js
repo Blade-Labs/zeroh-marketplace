@@ -7,6 +7,7 @@ import {
   formatCounts,
   formatNotice,
   mergedCounts,
+  channelWords,
   observationFrom,
   rows,
   sumCounts,
@@ -193,7 +194,7 @@ function channelTables(channels) {
   return entries
     .map(
       ([channel, counts]) =>
-        `<p><strong>${escapeHtml(channel)}:</strong> ${escapeHtml(formatCounts(counts))}</p>`,
+        `<p><strong>${escapeHtml(channelWords(channel))}:</strong> ${escapeHtml(formatCounts(counts))}</p>`,
     )
     .join('');
 }
