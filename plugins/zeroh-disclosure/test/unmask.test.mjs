@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import {
   activeGrants,
   capFor,
@@ -30,9 +30,7 @@ import { asUser } from './as-user.mjs';
 const CLI = fileURLToPath(
   new URL('../bin/zeroh-disclosure.mjs', import.meta.url),
 );
-const UNMASK_URL = pathToFileURL(
-  new URL('../lib/unmask.js', import.meta.url).pathname,
-).href;
+const UNMASK_URL = new URL('../lib/unmask.js', import.meta.url).href;
 
 function fixture() {
   return {

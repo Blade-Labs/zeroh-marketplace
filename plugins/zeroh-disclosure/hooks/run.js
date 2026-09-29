@@ -133,16 +133,47 @@ async function countTimeout() {
 // counted as an unprotected pass instead (countTimeout). Best effort, and
 // within a short budget: the answer has already been written.
 async function recordRun(ok) {
-  const [{ recordHookRun }, { projectRootFromEnv }] = await Promise.all([
-    import('../lib/session-status.js'),
-    import('../lib/session.js'),
-  ]);
+  const [{ recordHookRun }, { projectRootFromEnv }, { isUninstalled }] =
+    await Promise.all([
+      import('../lib/session-status.js'),
+      import('../lib/session.js'),
+      import('../lib/uninstall-marker.js'),
+    ]);
+  // This very hook ran `/zeroh-disclosure:uninstall`: ZEROH_HOME keeps
+  // only the tombstone.
+  if (isUninstalled()) return;
   recordHookRun({
     cwd: projectRootFromEnv(event?.cwd),
     sessionId: event?.session_id,
     name,
     ok,
   });
+  await sweepRunFiles();
+}
+
+// Late-binding values files of commands that never ran (refused by Claude
+// Code, denied, cancelled) must not wait for the next session: every hook
+// removes any older than RUN_FILE_MAX_AGE_MS, a turn boundary removes the
+// session's own older than TURN_END_GRACE_MS, and SessionEnd all of them.
+async function sweepRunFiles() {
+  const { cleanupSessionRunFiles, cleanupStaleRunFiles, TURN_END_GRACE_MS } =
+    await import('../lib/late-bind.js');
+  try {
+    cleanupStaleRunFiles();
+  } catch {
+    // A file held open (Windows antivirus) goes at a later hook.
+  }
+  const minAgeMs = {
+    stop: TURN_END_GRACE_MS,
+    'user-prompt-submit': TURN_END_GRACE_MS,
+    'session-end': 0,
+  }[name];
+  if (minAgeMs === undefined) return;
+  try {
+    cleanupSessionRunFiles({ sessionId: event?.session_id, minAgeMs });
+  } catch {
+    // As above.
+  }
 }
 
 async function fail(error) {

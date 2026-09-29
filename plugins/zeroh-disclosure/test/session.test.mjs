@@ -4,11 +4,12 @@
 // used to disagree: loadSession skipped CLAUDE_CODE_SESSION_ID, and a turn
 // audit update ignored CLAUDE_PROJECT_DIR).
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import './helpers.mjs';
+import { projectKey } from '../lib/vault.js';
 import {
   encodeProjectPath,
   envSessionId,
@@ -73,14 +74,57 @@ test('sessions resolve their id and project root the same way everywhere', async
 
 // D-15: project folders under ZEROH_HOME/projects are named as Claude Code
 // 2.1.283 names ~/.claude/projects folders, so the two line up.
+// The examples are absolute on the system under test: on Windows an absolute
+// path starts with a drive, and Claude Code's folder then starts "C--".
 test('project folders are encoded as Claude Code encodes them', () => {
-  assert.equal(encodeProjectPath('/srv/projects/zeroh'), '-srv-projects-zeroh');
+  const windows = process.platform === 'win32';
   assert.equal(
-    encodeProjectPath('/Users/jürgen/my app.v2'),
-    '-Users-j-rgen-my-app-v2',
+    encodeProjectPath(
+      windows ? 'C:\\srv\\projects\\zeroh' : '/srv/projects/zeroh',
+    ),
+    windows ? 'C--srv-projects-zeroh' : '-srv-projects-zeroh',
   );
-  const long = `/${'a'.repeat(250)}`;
+  assert.equal(
+    encodeProjectPath(
+      windows ? 'C:\\Users\\jürgen\\my app.v2' : '/Users/jürgen/my app.v2',
+    ),
+    windows ? 'C--Users-j-rgen-my-app-v2' : '-Users-j-rgen-my-app-v2',
+  );
+  const long = windows ? `C:\\${'a'.repeat(250)}` : `/${'a'.repeat(250)}`;
   const encoded = encodeProjectPath(long);
-  assert.equal(encoded.slice(0, 200), `-${'a'.repeat(199)}`);
+  assert.equal(
+    encoded.slice(0, 200),
+    windows ? `C--${'a'.repeat(197)}` : `-${'a'.repeat(199)}`,
+  );
   assert.match(encoded.slice(200), /^-[0-9a-z]+$/u);
+});
+
+// macOS reports a folder under /var or /tmp as /private/var or /private/tmp
+// to a process's working directory, and a project may sit under a linked
+// folder anywhere. The CLI in a terminal, Claude Code and the hooks may then
+// spell one project two ways; both spellings must reach the same vault,
+// allow list and sessions.
+test('a project reached through a linked folder keys the same as its real path', () => {
+  const base = mkdtempSync(path.join(os.tmpdir(), 'zeroh-linked-'));
+  const real = path.join(base, 'real');
+  mkdirSync(path.join(real, 'src', 'deep'), { recursive: true });
+  const link = path.join(base, 'link');
+  symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+
+  assert.equal(projectKey(link), projectKey(real));
+  assert.equal(encodeProjectPath(link), encodeProjectPath(real));
+  // A folder that doesn't exist yet keeps its tail under the resolved parent.
+  assert.equal(
+    encodeProjectPath(path.join(link, 'not-yet')),
+    encodeProjectPath(path.join(real, 'not-yet')),
+  );
+
+  const env = { ZEROH_HOME: path.join(base, 'home') };
+  mkdirSync(path.join(env.ZEROH_HOME, 'projects', encodeProjectPath(real)), {
+    recursive: true,
+  });
+  assert.equal(
+    projectKey(projectRootFromEnv(path.join(link, 'src', 'deep'), env)),
+    projectKey(real),
+  );
 });

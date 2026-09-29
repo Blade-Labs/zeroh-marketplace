@@ -90,7 +90,7 @@ function argvHash(argv) {
 
 // What a state-changing argv does, in plain words, or null for a read-only
 // one (status, lists, catalog, verify, receipts views, doctor without --fix,
-// uninstall without --yes, which only shows its plan).
+// uninstall without --yes or with --dry-run, which only shows its plan).
 export function managementAction(argv) {
   const [command, ...rest] = canonicalArgv(argv);
   const flags = new Set(rest.filter((arg) => arg.startsWith('--')));
@@ -99,7 +99,7 @@ export function managementAction(argv) {
     return `turn the local masking proxy ${words[0]}`;
   if (command === 'doctor' && flags.has('--fix'))
     return 'repair ZeroH Disclosure (doctor --fix): reset the local proxy and any vault that cannot be read';
-  if (command === 'uninstall' && flags.has('--yes'))
+  if (command === 'uninstall' && flags.has('--yes') && !flags.has('--dry-run'))
     return 'remove ZeroH Disclosure from this computer (plugin, proxy, vault, keys and receipts)';
   if (command === 'allow' && !flags.has('--list')) {
     const removeAt = rest.indexOf('--remove');
@@ -149,7 +149,12 @@ export function slashToCli(name, args) {
       )
     )
       argv = [...args];
-  } else if (['allow', 'doctor', 'uninstall', 'unmask'].includes(name)) {
+  } else if (name === 'uninstall') {
+    // Typing the user-only command is the confirmation: its `!` block runs
+    // `uninstall --yes $ARGUMENTS` (commands/uninstall.md); --dry-run only
+    // shows the plan.
+    argv = ['uninstall', '--yes', ...args];
+  } else if (['allow', 'doctor', 'unmask'].includes(name)) {
     argv = [name, ...args];
   }
   return argv && managementAction(argv) ? argv : null;

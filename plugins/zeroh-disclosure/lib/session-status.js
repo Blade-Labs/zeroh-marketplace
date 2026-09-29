@@ -143,8 +143,9 @@ export function addUnchecked(status, turn, count = 1) {
 }
 
 // Real values sent to the model unmasked (a typed secret without the proxy).
+// `count` is distinct values (a count of 0 adds nothing).
 export function addSent(status, count = 1) {
-  const n = Number.isInteger(count) && count > 0 ? count : 1;
-  status.sent = (Number(status.sent) || 0) + n;
+  const n = Number.isInteger(count) && count > 0 ? count : 0;
+  if (n) status.sent = (Number(status.sent) || 0) + n;
   return status;
 }

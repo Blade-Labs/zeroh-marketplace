@@ -1,20 +1,41 @@
 {
-  "version": "1.0.0-rc.2",
-  "platforms": ["claude-code", "codex", "opencode"],
+  "version": "1.0.0",
+  "platforms": [
+    "claude-code",
+    "codex",
+    "opencode",
+    "opencode-v2",
+    "copilot",
+    "cursor",
+    "gemini-cli"
+  ],
+  "next_platforms": ["copilot", "cursor", "gemini-cli"],
   "statuses": ["shipped", "partial", "planned", "not possible", "unknown"],
   "sources": {
-    "codex": "Codex CLI 0.156, the 2026-09-25 Codex and OpenCode research (internal/release-1.0.md)",
-    "opencode": "opencode-ai 1.18.32, the 2026-09-25 Codex and OpenCode research (internal/release-1.0.md)"
+    "codex": "Codex CLI 0.158.0 (tag rust-v0.158.0), research on 2026-09-28: source, https://learn.chatgpt.com/docs (formerly developers.openai.com/codex), local runs of 0.156.0 without model turns",
+    "opencode": "opencode-ai 1.18.33 (OpenCode v1), research on 2026-09-28: source at tag v1.18.33 (github.com/anomalyco/opencode), https://opencode.ai/docs, local runs L1-L13 against a fake provider",
+    "opencode-v2": "@opencode/cli 2.0.18 (OpenCode v2, a separate package with a new plugin API), research on 2026-09-28: source at tag v2.0.18, https://opencode.ai/v2/docs, local run L14",
+    "copilot": "GitHub Copilot CLI and coding agent, documentation scan on 2026-09-28 (core features only)",
+    "cursor": "Cursor editor and CLI, documentation scan on 2026-09-28 (core features only)",
+    "gemini-cli": "Gemini CLI, documentation scan on 2026-09-28 (core features only)"
   },
   "features": [
     {
       "id": "install.plugin",
-      "description": "One plugin from the zeroh marketplace brings the hooks, the local proxy, the MCP server and the slash commands; its first message turns on auto-update for its marketplace.",
-      "claude_code": "plugin manifest and hooks.json",
+      "area": "install",
+      "core": true,
+      "description": "One plugin from the zeroh marketplace brings the hooks, the local proxy, the MCP server, the slash commands and the about skill (ask Claude what ZeroH protects). A profile that added the marketplace before its rename to `zeroh` is told, with the commands that re-add it.",
+      "claude_code": "plugin manifest, hooks.json, .mcp.json, commands/ and skills/",
       "evidence": [
         ".claude-plugin/plugin.json",
         "hooks/hooks.json",
-        "lib/first-run.js"
+        ".mcp.json",
+        "skills/about/SKILL.md",
+        "test/commands.test.mjs",
+        "test/mcp-unmask.test.mjs",
+        "test/about-skill.test.mjs",
+        "lib/first-run.js",
+        "test/marketplace-name.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -23,22 +44,378 @@
         },
         "codex": {
           "status": "planned",
-          "note": "one plugin bundling hooks/hooks.json; the user must trust its hooks once in the TUI. Codex also reads .claude-plugin/plugin.json and sets CLAUDE_PLUGIN_ROOT"
+          "note": "Codex reads .claude-plugin/plugin.json and marketplace.json and loads hooks/hooks.json, .mcp.json and skills/ by default; it needs a Codex manifest whose .mcp.json uses a relative path (MCP args don't expand `${CLAUDE_PLUGIN_ROOT}`), commands using `!` or `$ARGUMENTS` are dropped, and the user trusts the hooks once in /hooks",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/exec-server-protocol/src/protocol.rs#L49",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/marketplace.rs#L20",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/loader.rs#L67-L69",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/command_migration.rs#L418",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/discovery.rs#L263-L270",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
         },
         "opencode": {
           "status": "planned",
-          "note": "one npm package exporting ./server (masking) and ./tui (banner); `opencode plugin <pkg>` updates opencode.json and tui.json"
+          "note": "one npm package exporting ./server (hooks, custom tools) and ./tui (banner, status, commands); `opencode plugin <pkg>` writes opencode.json and tui.json; no marketplace",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/install.ts#L156-L162",
+            "https://opencode.ai/docs/plugins"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the `plugins` array or .opencode/plugins/, installed with `opencode plugin add`; the package must bundle its dependencies or export a plain `{id, setup}` (a local file importing @opencode/plugin failed to load); one package can also export v1's `server()`",
+          "sources": [
+            "https://opencode.ai/v2/docs/plugins",
+            "https://opencode.ai/v2/docs/build/plugins",
+            "OpenCode local run L14, 2026-09-28"
+          ]
+        },
+        "copilot": {
+          "status": "planned",
+          "note": "CLI plugins, with two official marketplaces (copilot-plugins, awesome-copilot)",
+          "sources": [
+            "https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-cli-plugins"
+          ]
+        },
+        "cursor": {
+          "status": "partial",
+          "note": "editor extensions come from Open VSX; no agent-plugin marketplace beyond `.cursor/rules`",
+          "sources": [
+            "https://cursor.com/help/customization/extensions",
+            "https://cursor.com/docs/hooks"
+          ]
+        },
+        "gemini-cli": {
+          "status": "planned",
+          "note": "extensions, with an official gallery at geminicli.com/extensions",
+          "sources": ["https://geminicli.com/docs/extensions/"]
+        }
+      }
+    },
+    {
+      "id": "install.auto-update",
+      "area": "install",
+      "description": "With your first message ZeroH turns on auto-update for the marketplace it came from, once, unless you have set it either way.",
+      "claude_code": "UserPromptSubmit writes `autoUpdate` on the marketplace in the user settings (first-run defaults)",
+      "evidence": [
+        "lib/first-run.js",
+        "hooks/user-prompt-submit.js",
+        "test/statusline.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "built in: Codex upgrades Git marketplaces at every start and reinstalls plugins; hook trust is keyed to each handler's hash, so a release that changes hooks.json turns ZeroH off silently until re-trusted: keep hooks.json byte-stable",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/manager.rs#L2797-L2860",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/discovery.rs#L775-L812"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "a cached npm plugin is never refreshed; ZeroH would have to pin versions and re-pin itself (a user-authorized `opencode plugin <pkg>@x --force`) or clear its cache entry",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/core/src/npm.ts#L123-L135",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/shared.ts#L27-L33"
+          ]
+        },
+        "opencode-v2": {
+          "status": "partial",
+          "note": "`opencode plugin check` and `update` exist, but an unpinned plugin is only checked, not updated",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "install.first-run",
+      "area": "install",
+      "description": "The first prompt of a session not yet behind the local proxy sets it up: it writes ZeroH's ANTHROPIC_BASE_URL entry and waits about two seconds so it applies at once, and adds the status line unless you have your own. A secret typed in that prompt is sent with a notice (stopped with `uncertain block`).",
+      "claude_code": "UserPromptSubmit routeSession (Claude Code re-reads the settings `env` in the running session); first-run defaults",
+      "evidence": [
+        "lib/proxy-manager.js",
+        "lib/first-run.js",
+        "hooks/user-prompt-submit.js",
+        "test/hooks.test.mjs",
+        "test/proxy-manager.test.mjs",
+        "test/statusline.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "partial",
+          "note": "nothing runs until the user trusts the hooks in /hooks; then the first UserPromptSubmit can write `openai_base_url`, which applies from the next session (the provider is fixed per session); managed deployments can ship trusted hooks in requirements.toml",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/discovery.rs#L794-L812",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/client.rs#L258",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the server plugin runs at load and masks in-process, so no proxy setup is needed; the `config` hook can set a provider baseURL for the running process (to verify live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L243-L252"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the plugin's `setup()` runs at load and its session hooks mask in-process, so no proxy setup is needed",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L14-L45"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "runtime.node",
+      "area": "install",
+      "description": "The hooks need Node.js 20 or later; on an older Node.js the session start says so once and ZeroH steps aside without stopping Claude Code.",
+      "claude_code": "hooks/run.js checks process.versions.node before loading a hook",
+      "evidence": ["hooks/run.js", "test/fail-closed.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "hooks need `node` on PATH: npm installs of Codex have it, standalone and Homebrew binaries may not",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the plugin runs in OpenCode's Bun runtime, so no Node.js is needed; the detection engine's Bun compatibility still needs a test",
+          "sources": ["https://opencode.ai/docs/plugins"]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the plugin runs in OpenCode's own runtime; the detection engine's compatibility still needs a test",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "hooks.watchdog",
+      "area": "install",
+      "description": "Every hook answers two seconds before Claude Code's own timeout: a hook that is stuck or crashes lets the event through with a \"timed out\" or \"check failed\" line (stops it with `uncertain block`), and a broken install never stops Claude Code.",
+      "claude_code": "hooks/run.js worker-thread loader with deadlines from hooks.json",
+      "evidence": [
+        "hooks/run.js",
+        "hooks/worker.js",
+        "hooks/fail-closed.js",
+        "test/watchdog.test.mjs",
+        "test/fail-closed.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "Codex fails open: a hook that crashes, times out, exits with a code other than 0 or 2 or returns invalid JSON is marked failed and the tool runs, so the loader must answer before the `timeout` and write the blocking JSON itself for `uncertain block`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/events/post_tool_use.rs#L270-L290",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/output_parser.rs#L441-L487"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "a throw in a hook stops that prompt or call; a plugin that fails to load is only logged, and the session runs unprotected without a notice",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L284-L297",
+            "OpenCode local run L6, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "partial",
+          "note": "a plugin that fails to load leaves the session unprotected while work goes on (seen live with a local file importing @opencode/plugin)",
+          "sources": ["OpenCode local run L14, 2026-09-28"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "proxy.lifecycle",
+      "area": "install",
+      "description": "The local proxy runs as you on 127.0.0.1 and starts at login. A proxy that stopped is restarted within the prompt's budget, restarts with new code after a plugin update, and removes itself 24 hours after the plugin is gone. Where the system refuses the login item, the proxy still runs for each session, so what you type is masked, and takes its settings entry out once no ZeroH session is open; the banner, status and doctor say why the login item failed and how to fix it.",
+      "claude_code": "LaunchAgent, systemd user unit, XDG autostart or per-user scheduled task (task XML written as UTF-16 with a byte order mark); checkSessionProxy, code-hash restart, orphan cleanup, session-only daemon without a login item",
+      "evidence": [
+        "lib/service-manager.js",
+        "lib/proxy-manager.js",
+        "bin/proxy-daemon.mjs",
+        "test/service-manager.test.mjs",
+        "test/proxy-recovery.test.mjs",
+        "test/proxy-lifecycle.test.mjs",
+        "test/proxy-manager.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the same daemon and login item; Codex reaches it through `openai_base_url` in ~/.codex/config.toml",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/model-provider-info/src/lib.rs#L414-L430"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "optional: masking runs in-process, so the proxy is only a provider baseURL route",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L225"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "optional: `session.hook(\"http.request\")` is an in-process proxy",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L58-L120"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "proxy.upstream",
+      "area": "install",
+      "description": "The proxy forwards only to the ANTHROPIC_BASE_URL you had before, or api.anthropic.com, through your HTTPS_PROXY, NO_PROXY and CA settings; it keeps no request or response bodies, leaves responses unchanged and reports its own errors plainly. While a ZeroH session runs it also masks Claude Code sessions where the plugin is disabled. It is not used with Bedrock, Vertex or Foundry, or when your shell sets ANTHROPIC_BASE_URL.",
+      "claude_code": "restore record next to the settings file; network settings recorded in proxy.json; 4xx for proxy errors, 502 for network failures",
+      "evidence": [
+        "lib/proxy.js",
+        "lib/proxy-manager.js",
+        "lib/network.js",
+        "bin/proxy-daemon.mjs",
+        "test/proxy.test.mjs",
+        "test/proxy-network.test.mjs",
+        "test/proxy-manager.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "`openai_base_url` in the user config.toml (project config ignores it); the upstream is chatgpt.com/backend-api/codex with a ChatGPT login, api.openai.com/v1 with an API key, or the user's own base URL or provider; the proxy must refuse the WebSocket upgrade, decode zstd, handle the Responses API shapes and route by `session-id` or `thread-id`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/model-provider-info/src/lib.rs#L414-L430",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/loader/mod.rs#L88",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/codex-api/src/requests/headers.rs#L5-L13",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/client.rs#L1627",
+            "https://learn.chatgpt.com/docs/config-file/config-advanced"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "optional: provider `options.baseURL` (or the `config` hook) routes providers that take a baseURL and `chat.headers` tags the session (verified live); OAuth and custom-fetch providers (openai-oauth, copilot, bedrock) may not honour it",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L225",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L257-L260",
+            "OpenCode local run L9, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`session.hook(\"http.request\")` and `\"http.response\"` see the real request of every native-HTTP provider; `model.request` exposes baseURL and headers; WebSocket frames through `experimental.ws.*`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L58-L120"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
       "id": "mask.prompt",
-      "description": "What you type reaches the model with tokens in place of secrets and personal data.",
-      "claude_code": "local proxy (ANTHROPIC_BASE_URL) and UserPromptSubmit",
+      "area": "masking",
+      "core": true,
+      "description": "What you type reaches the model with tokens in place of secrets and personal data, through the local proxy. The first prompt that sets the proxy up, and any prompt while it isn't running, is sent as typed with a notice.",
+      "claude_code": "local proxy (ANTHROPIC_BASE_URL); UserPromptSubmit routes the session and records the turn",
       "evidence": [
         "lib/proxy.js",
         "hooks/user-prompt-submit.js",
-        "test/proxy.test.mjs"
+        "test/proxy.test.mjs",
+        "test/hooks.test.mjs",
+        "test/rc2-a1-pass.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -46,23 +423,118 @@
           "note": ""
         },
         "codex": {
-          "status": "partial",
-          "note": "UserPromptSubmit can only block, not rewrite; the local proxy with a ChatGPT login masked typed prompts in a 2026-09-24 test"
+          "status": "planned",
+          "note": "the local proxy masks typed text once `openai_base_url` points at it (verified with a ChatGPT login on 2026-09-24), from the session after the one that writes the setting; it must decode zstd bodies and refuse the WebSocket upgrade",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/client.rs#L1627",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/client.rs#L258",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/schema.rs#L444"
+          ]
         },
         "opencode": {
           "status": "planned",
-          "note": "`chat.message` rewrites the parts, and `experimental.chat.messages.transform` rewrites everything sent"
+          "note": "`chat.message` rewrites the typed text parts (and @file and command-template text) before they are saved, so the prompt is stored and sent masked (verified live); `experimental.chat.messages.transform` is the per-request safety net",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L234-L243",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/prompt.ts#L999-L1009",
+            "OpenCode local run L1, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`session.hook(\"prompt\")` edits the prompt text and files before admission (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L14-L20",
+            "OpenCode local run L14, 2026-09-28"
+          ]
+        },
+        "copilot": {
+          "status": "partial",
+          "note": "`userPromptTransformed.modifiedTransformedPrompt` rewrites what the model sees in local and CLI sessions, not in hosted cloud coding-agent runs; `userPromptSubmitted.modifiedPrompt` is honoured only by SDK hooks",
+          "sources": [
+            "https://docs.github.com/en/copilot/reference/hooks-reference"
+          ]
+        },
+        "cursor": {
+          "status": "not possible",
+          "note": "`beforeSubmitPrompt` can only block; the base-URL override is called from Cursor's servers, so a local proxy can't serve it, and it doesn't cover Tab or Composer",
+          "sources": ["https://cursor.com/docs/hooks"]
+        },
+        "gemini-cli": {
+          "status": "planned",
+          "note": "`BeforeModel` returns `llm_request`, which overrides the outgoing request",
+          "sources": [
+            "https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "mask.prompt-hook",
+      "area": "masking",
+      "description": "Without the proxy ZeroH still checks what you type: a secret is sent with a \"not protected (proxy not running)\" line, and with `uncertain block` the prompt is stopped in at most three plain lines, with a masked copy on your clipboard.",
+      "claude_code": "UserPromptSubmit, which can't rewrite a prompt: a notice, or exit 2 with a clipboard copy (pbcopy, wl-copy, xclip, xsel or clip)",
+      "evidence": [
+        "hooks/user-prompt-submit.js",
+        "lib/stop-message.js",
+        "lib/clipboard.js",
+        "test/hooks.test.mjs",
+        "test/stop-message.test.mjs",
+        "test/rc2-a1-pass.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "UserPromptSubmit gets the raw prompt and can block with a `reason` or add `additionalContext`, but has no rewrite field; the notice goes in `systemMessage`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/schema.rs#L444",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`chat.message` masks the prompt itself, and a throw in it stops the prompt",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L234-L243"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`session.hook(\"prompt\")` masks the prompt itself",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L14-L20"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
       "id": "mask.context",
-      "description": "CLAUDE.md, memory and earlier tool results in each request are masked; the session start names files that hold secrets.",
-      "claude_code": "local proxy; SessionStart context scan",
+      "area": "masking",
+      "description": "CLAUDE.md, memory, the system prompt, earlier turns and tool results in each request are masked by the local proxy, the same way every time so prompt caching keeps working. The session start names the files that hold secrets; without the proxy they are only named.",
+      "claude_code": "local proxy (system prompt, messages and text documents; thinking blocks and images pass); SessionStart context scan",
       "evidence": [
         "lib/context-scan.js",
         "lib/proxy.js",
-        "test/proxy.test.mjs"
+        "hooks/session-start.js",
+        "test/proxy.test.mjs",
+        "test/hooks.test.mjs",
+        "test/context-token-restore.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -70,20 +542,60 @@
           "note": ""
         },
         "codex": {
-          "status": "unknown",
-          "note": "not researched yet"
+          "status": "planned",
+          "note": "only the proxy can: no hook rewrites AGENTS.md, memories, skills, hook context, earlier tool results or the user's `!cmd` output; SessionStart can name the AGENTS.md files holding secrets",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tasks/user_shell.rs#L226",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/user_shell_command.rs",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
         },
         "opencode": {
           "status": "planned",
-          "note": "`experimental.chat.messages.transform` rewrites everything sent"
+          "note": "both hooks are needed: `experimental.chat.system.transform` masks the system prompt (AGENTS.md, CLAUDE.md, instructions, skills) and `experimental.chat.messages.transform` masks history per request, the user's `!` shell output included (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/llm/request.ts#L57-L77",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/prompt.ts#L1255",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/compaction.ts#L379",
+            "OpenCode local run L2, 2026-09-28",
+            "OpenCode local run L3, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`session.hook(\"context\")` edits system, messages and tools before dispatch; the `compaction`, `title` and `generate` hooks cover side requests (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L22-L45",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L138-L151",
+            "OpenCode local run L14, 2026-09-28"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
       "id": "mask.tool-output",
-      "description": "Command output, MCP results and web fetches reach the model as tokens.",
-      "claude_code": "PostToolUse `updatedToolOutput`",
-      "evidence": ["hooks/post-tool-use.js", "test/hooks.test.mjs"],
+      "area": "masking",
+      "core": true,
+      "description": "Command output, MCP results and web fetches reach the model as tokens. A foreground Bash or PowerShell command that fails still finishes with status 0 and reports the failure in its output, so that output is masked too.",
+      "claude_code": "PostToolUse `updatedToolOutput`; PreToolUse wraps foreground commands (`|| echo …`, PowerShell try/finally) because failed-command output goes to PostToolUseFailure, which can't replace it",
+      "evidence": [
+        "hooks/post-tool-use.js",
+        "lib/exit-status.js",
+        "test/hooks.test.mjs",
+        "test/fail-closed.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
@@ -91,22 +603,112 @@
         },
         "codex": {
           "status": "partial",
-          "note": "no replace field; only `decision: \"block\"` with the masked text in `reason`, so the tool's side effects stay"
+          "note": "PostToolUse `continue:false` with the masked text in `reason` replaces what the model sees and keeps the call successful, after Bash (non-zero exits too, so no wrapper), apply_patch, MCP and local tools; missing: MCP structure (text only) and code-mode JS, which gets the original result",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/registry.rs#L223",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/registry.rs#L742-L770",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/events/post_tool_use.rs#L212",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/output_parser.rs#L431",
+            "https://github.com/openai/codex/issues/34895",
+            "https://github.com/openai/codex/issues/38135"
+          ]
         },
         "opencode": {
+          "status": "partial",
+          "note": "`tool.execute.after` rewrites `output` and `metadata` in place (bash keeps a raw copy in `metadata.output`, so both are masked), and MCP results arrive as `content[]`; missing: bash's live streamed metadata is stored raw in opencode.db before the hook runs",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/tools.ts#L103-L126",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/tools.ts#L403-L425",
+            "OpenCode local run L7, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
           "status": "planned",
-          "note": "`tool.execute.after` rewrites `output` (stored masked)"
+          "note": "`tool.hook(\"execute.after\")` replaces `result` (output, content, metadata), the error branch too (verified live); raw shell capture files (`shell/*.out`) stay on disk",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L46",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/core/src/tool.ts#L103-L152",
+            "OpenCode local run L14, 2026-09-28"
+          ]
+        },
+        "copilot": {
+          "status": "planned",
+          "note": "`postToolUse.modifiedResult` replaces the result",
+          "sources": [
+            "https://docs.github.com/en/copilot/reference/hooks-reference"
+          ]
+        },
+        "cursor": {
+          "status": "partial",
+          "note": "`postToolUse.updated_mcp_tool_output` replaces MCP output only; built-in shell and file tool output can only be appended to",
+          "sources": ["https://cursor.com/docs/hooks"]
+        },
+        "gemini-cli": {
+          "status": "planned",
+          "note": "`AfterTool` replaces the result sent back to the model",
+          "sources": [
+            "https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "mask.background-output",
+      "area": "masking",
+      "description": "Background commands and Monitor stream output that only the local proxy can mask; without the proxy they run with a \"not protected\" line, and `uncertain block` stops them.",
+      "claude_code": "PreToolUse checks the proxy for run_in_background and Monitor; the proxy masks the streamed output",
+      "evidence": [
+        "hooks/pre-tool-use.js",
+        "lib/proxy.js",
+        "test/rc2-pass-default.test.mjs",
+        "test/fail-closed.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "partial",
+          "note": "the output of a still-running `exec_command`, polled through `write_stdin`, gets no PostToolUse until the command ends, and `write_stdin` has no PreToolUse; only the proxy masks it",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/context.rs#L439",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/unified_exec/write_stdin.rs#L129"
+          ]
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode-v2": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
       "id": "mask.file-read",
-      "description": "Files Claude reads are masked, including a PDF's text layer and notebook outputs; images and scans pass with a notice.",
-      "claude_code": "PostToolUse on Read",
+      "area": "masking",
+      "description": "Files Claude reads, and Grep results, are masked. Credential files (SSH keys, kubeconfig, AWS credentials, .netrc, Terraform state, …) can be read too, with what the detector finds masked and a one-line notice; ZeroH's own keys are always refused.",
+      "claude_code": "PostToolUse on Read and Grep; PreToolUse notice for credential files",
       "evidence": [
         "hooks/post-tool-use.js",
-        "lib/pdf-text.js",
-        "test/format-hooks.test.mjs"
+        "hooks/pre-tool-use.js",
+        "lib/secrets.js",
+        "test/hooks.test.mjs",
+        "test/rc2-pass-default.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -115,22 +717,103 @@
         },
         "codex": {
           "status": "partial",
-          "note": "no replace field; only `decision: \"block\"` with the masked text in `reason`"
+          "note": "no Read tool: files are read with shell commands and masked by the Bash PostToolUse replacement (see `mask.tool-output`)",
+          "sources": [
+            "https://learn.chatgpt.com/docs/hooks",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/registry.rs#L99"
+          ]
         },
         "opencode": {
           "status": "planned",
-          "note": "`tool.execute.after` rewrites `output` (stored masked)"
+          "note": "`tool.execute.after` on `read` masks the text",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/tool/read.ts#L306-L323"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.after\")` replaces the read result",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L46"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
-      "id": "restore.allowed-host",
-      "description": "A token in a command becomes the real value on this machine, only for hosts allowed for it, bound through a private file and never written into the command text.",
-      "claude_code": "PreToolUse `updatedInput` with Bash and PowerShell late binding",
+      "id": "mask.documents",
+      "area": "masking",
+      "description": "A PDF with a text layer reaches the model as masked text (through pdftotext when installed, or a built-in extractor), and notebook cells and text outputs are masked. Images, scanned PDFs and image blocks in MCP results pass unmasked with a one-line notice and count as \"passed unchecked\".",
+      "claude_code": "PostToolUse on Read with a `pdf`, `notebook` or `image` response",
       "evidence": [
-        "lib/late-bind.js",
+        "lib/pdf-text.js",
+        "hooks/post-tool-use.js",
+        "lib/format-audit.js",
+        "test/format-hooks.test.mjs",
+        "test/pdf-text.test.mjs",
+        "test/unchecked-report.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "the pdftotext path is skipped in tests when pdftotext is not installed"
+        },
+        "codex": {
+          "status": "partial",
+          "note": "no typed PDF or notebook response: the model runs pdftotext itself and a notebook is JSON text, both masked as command output; images go through `view_image`, which gets PostToolUse, so the image notice is possible",
+          "sources": [
+            "https://learn.chatgpt.com/docs/hooks",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/registry.rs#L99"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.after` on `read` can replace a PDF's base64 attachment with masked extracted text; notebooks are read as text; images pass with a notice",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/tool/read.ts#L306-L323"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.after\")` replaces the result's `content`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L46"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "mask.write-input",
+      "area": "masking",
+      "description": "A raw secret the model writes into a Write, Edit or subagent prompt is replaced by a token before the tool runs.",
+      "claude_code": "PreToolUse `updatedInput` (tool policy `rewrite`); the tokens are registered so they can be restored later",
+      "evidence": [
+        "lib/tool-policies.js",
         "hooks/pre-tool-use.js",
-        "test/late-bind.test.mjs"
+        "test/detection-correctness.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -139,49 +822,472 @@
         },
         "codex": {
           "status": "planned",
-          "note": "PreToolUse `updatedInput` (Bash, apply_patch, MCP)"
+          "note": "PreToolUse `updatedInput` with `permissionDecision:\"allow\"` rewrites the `apply_patch` command and local tool arguments such as `spawn_agent`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/output_parser.rs#L441",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/apply_patch.rs#L422"
+          ]
         },
         "opencode": {
           "status": "planned",
-          "note": "`tool.execute.before` rewrites the args"
-        }
-      }
-    },
-    {
-      "id": "stop.disallowed-host",
-      "description": "A secret heading to a host that isn't allowed for it is stopped, with the one command that allows it.",
-      "claude_code": "PreToolUse deny",
-      "evidence": ["lib/secrets.js", "test/rc2-destinations.test.mjs"],
-      "platforms": {
-        "claude-code": {
-          "status": "shipped",
-          "note": ""
+          "note": "`tool.execute.before` mutates `output.args` in place (a reassignment is ignored); the rewrite is stored and resent",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L266-L273",
+            "OpenCode local run L4, 2026-09-28"
+          ]
         },
-        "codex": {
+        "opencode-v2": {
           "status": "planned",
-          "note": "PreToolUse deny (Bash, apply_patch, MCP)"
+          "note": "`tool.hook(\"execute.before\")` replaces the input (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51",
+            "OpenCode local run L14, 2026-09-28"
+          ]
         },
-        "opencode": {
-          "status": "planned",
-          "note": "`tool.execute.before` throws to block"
-        }
-      }
-    },
-    {
-      "id": "allow.user-command",
-      "description": "Only the user allows a secret to reach a new host or MCP server (`/zeroh-disclosure:allow`), in a signed allow list.",
-      "claude_code": "slash command and HMAC-signed allow list",
-      "evidence": ["lib/allow-rules.js", "test/allow-rules.test.mjs"],
-      "platforms": {
-        "claude-code": {
-          "status": "shipped",
-          "note": ""
-        },
-        "codex": {
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "token.format",
+      "area": "masking",
+      "description": "Each value becomes a token such as [API_KEY-3f9a1c], keyed to this install so it reveals nothing about the value; the same value always gets the same token, and an expired token is never given to another value. At the session start Claude is told how to work with tokens, and reminded after /compact.",
+      "claude_code": "HMAC-SHA256 token names under a per-install key; value-free tombstones; SessionStart briefing",
+      "evidence": [
+        "lib/tokens.js",
+        "lib/vault.js",
+        "hooks/session-start.js",
+        "test/detection-correctness.test.mjs",
+        "test/vault.test.mjs",
+        "test/hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent; the briefing goes in SessionStart `additionalContext`, which Codex runs at the first turn",
+          "sources": [
+            "https://learn.chatgpt.com/docs/hooks",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/session/turn.rs#L320"
+          ]
+        },
         "opencode": {
+          "status": "planned",
+          "note": "host-independent; the briefing goes through `experimental.chat.system.transform`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/llm/request.ts#L57-L77"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent; the briefing goes through `session.hook(\"context\")`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L22-L45"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "restore.bash",
+      "area": "restoring",
+      "core": true,
+      "description": "A token in a Bash command becomes the real value on this machine, bound through a short-lived private file and never written into the command text, in a form Claude Code's own shell checks accept; the file goes as soon as the command ran, failed or was refused, at the latest when the turn ends. A host that isn't allowed for the value stops the command; a destination ZeroH can't read is restored with a notice.",
+      "claude_code": "PreToolUse `updatedInput` with Bash late binding (a values file sourced by an `if` wrapper, no `{ … }` group); PostToolUseFailure and PermissionDenied remove it",
+      "evidence": [
+        "lib/late-bind.js",
+        "hooks/pre-tool-use.js",
+        "test/late-bind.test.mjs",
+        "test/late-bind-differential.test.mjs",
+        "test/hooks.test.mjs",
+        "test/claude-code-shell-check.test.mjs",
+        "test/values-file-cleanup.test.mjs",
+        "hooks/tool-not-run.js",
+        "test/context-token-restore.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "PreToolUse `updatedInput` with `permissionDecision:\"allow\"`, as `{command}` (only the command string changes); approval and the sandbox still check the rewritten command; matching hooks run in parallel and the last rewrite wins",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/output_parser.rs#L441",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/unified_exec/exec_command.rs#L533",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/events/pre_tool_use.rs#L153"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` turns the token in `output.args` into an environment reference (in place), and `shell.env`, which gets `callID`, supplies the real value, so no values file is needed (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L266-L273",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/tool/shell.ts#L416-L425",
+            "OpenCode local run L4, 2026-09-28",
+            "OpenCode local run L5, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`shell.hook(\"create.before\")` edits the command and env, and `tool.hook(\"execute.before\")` replaces the input (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/shell.ts#L3-L13",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51",
+            "OpenCode local run L14, 2026-09-28"
+          ]
+        },
+        "copilot": {
+          "status": "planned",
+          "note": "`preToolUse.modifiedArgs` substitutes the value before the tool runs",
+          "sources": [
+            "https://docs.github.com/en/copilot/reference/hooks-reference"
+          ]
+        },
+        "cursor": {
+          "status": "partial",
+          "note": "`preToolUse.updated_input` exists, but Cursor's docs say parts of preToolUse aren't enforced yet; needs a verification pass",
+          "sources": ["https://cursor.com/docs/hooks"]
+        },
+        "gemini-cli": {
+          "status": "planned",
+          "note": "`BeforeTool` `tool_input` overrides the model's arguments",
+          "sources": [
+            "https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "restore.powershell",
+      "area": "restoring",
+      "description": "A token in a PowerShell command becomes the real value on this machine, bound through a short-lived private file read with Import-Csv (no .NET call, no execution policy needed) and never written into the command text, in PowerShell 7 and Windows PowerShell 5.1.",
+      "claude_code": "PreToolUse `updatedInput` with PowerShell late binding (a CSV values file); PostToolUseFailure and PermissionDenied remove it",
+      "evidence": [
+        "lib/late-bind.js",
+        "hooks/pre-tool-use.js",
+        "test/late-bind.test.mjs",
+        "test/late-bind-differential.test.mjs",
+        "test/hooks.test.mjs",
+        "test/claude-code-shell-check.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "unit tests run PowerShell under pwsh 7 only; 5.1 relies on the Windows live suite"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "on Windows, PowerShell commands reach PreToolUse as `Bash` with only `{command}`, so the hook picks the PowerShell parser from the platform",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/unified_exec/exec_command.rs#L520-L531",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/shell-command/src/shell_detect.rs#L352"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the shell tool (id `bash`) runs pwsh or powershell on Windows, and `shell.env` late binding works there (`$env:X`); the hook input doesn't name the shell, so the plugin resolves it the same way",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/core/src/shell.ts#L98-L106",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/tool/shell/id.ts"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`shell.hook(\"create.before\")` names the shell and edits its env",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/shell.ts#L3-L13"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "restore.file-tools",
+      "area": "restoring",
+      "description": "A token in a Read, Edit, Write, NotebookEdit or Grep call becomes the real value on this machine, so an edit matches the file on disk; Claude Code's local transcript then holds that value.",
+      "claude_code": "PreToolUse literal restore (`updatedInput`) for local tools",
+      "evidence": [
+        "lib/tool-policies.js",
+        "hooks/pre-tool-use.js",
+        "test/hooks.test.mjs",
+        "test/detection-correctness.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "`apply_patch` gets `updatedInput` as `{command}`, so the patch text carries the real value",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/apply_patch.rs#L422"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` restores edit and write args in place; they are then stored and resent, so `messages.transform` must mask tool inputs again",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L266-L273",
+            "OpenCode local run L4, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.before\")` replaces the input; `session.hook(\"context\")` masks it again in later requests",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "restore.mcp-server",
+      "area": "restoring",
+      "description": "An MCP tool gets a real value only when you allowed that server for it (`mcp:<server>`); a host named in its input never counts.",
+      "claude_code": "PreToolUse restore scope `mcp` with signed `mcp:` allow rules; other tokens pass as tokens with a note",
+      "evidence": [
+        "lib/tool-policies.js",
+        "lib/secrets.js",
+        "hooks/pre-tool-use.js",
+        "test/hooks.test.mjs",
+        "test/rc2-pass-default.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "PreToolUse `updatedInput` replaces an MCP tool's arguments object",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/mcp.rs#L454"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` mutates MCP tool args in place; they are stored and resent, so they are masked again per request",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L266-L273"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.before\")` replaces the input",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "restore.scope",
+      "area": "restoring",
+      "description": "Real values go only where a tool needs them: a WebFetch URL gets one only for a host allowed for it, and a subagent prompt, a skill or slash command, or a WebFetch prompt never gets one, because those go to a model.",
+      "claude_code": "PreToolUse restore scopes `fields` (the WebFetch URL) and `none` (Agent, Task, Skill, SlashCommand)",
+      "evidence": [
+        "lib/tool-policies.js",
+        "hooks/pre-tool-use.js",
+        "test/rc2-last-stops.test.mjs",
+        "test/detection-correctness.test.mjs",
+        "test/hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the PreToolUse rewrite is per tool, so `spawn_agent` keeps tokens; there is no local web fetch tool, and hosted `web_search` only ever sees tokens",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/output_parser.rs#L441",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` restores per tool, so `task` and webfetch prompts keep tokens",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L266-L273"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.before\")` restores per tool",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "restore.uncertain-destination",
+      "area": "restoring",
+      "description": "When ZeroH can't read where a command sends a value (a $HOST variable, a script, git push, gh without a host), it still puts the value back and says so in one line; `uncertain block` refuses before restoring.",
+      "claude_code": "PreToolUse shell destination check: restore with a notice, or deny in block mode",
+      "evidence": [
+        "lib/shell-destinations.js",
+        "hooks/pre-tool-use.js",
+        "test/rc2-destinations.test.mjs",
+        "test/rc2-astra3-shell.test.mjs",
+        "test/rc2-astra4.test.mjs",
+        "test/rc2-astra3-followup.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the same PreToolUse path: `updatedInput` with a `systemMessage` line, or a deny for `uncertain block`",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`tool.execute.before` restores, with the notice as a toast and in the tool output; a throw for `uncertain block`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L284-L297"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.before\")` restores with a toast, or rejects the call for `uncertain block`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "pass.ran-with-token",
+      "area": "restoring",
+      "description": "When ZeroH can't put a value back (its vault is closed, the value expired, a Monitor command, a command it can't prepare), the call runs with the token, you see \"ran with the token, not your key\" and Claude is told why.",
+      "claude_code": "PreToolUse token-* reasons plus additionalContext; counted apart on the Stop line",
+      "evidence": [
+        "hooks/pre-tool-use.js",
+        "lib/unchecked.js",
+        "test/rc2-last-stops.test.mjs",
+        "test/hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the call runs unchanged; the line goes in `systemMessage`, the model's note in `additionalContext`",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the note is appended to the tool output for the model and shown as a toast",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L226-L231"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the same, with TUI `ui.toast`",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
@@ -189,29 +1295,1243 @@
     },
     {
       "id": "display.real-values",
-      "description": "Your screen shows real values in Claude's answers; the model and the transcript keep the tokens.",
+      "area": "restoring",
+      "core": true,
+      "description": "Your screen shows real values in Claude's answers; the model and the transcript keep the tokens. A token Claude names itself is written ⟦API_KEY-3f9a1c⟧ and shown as written. `ZEROH_DISPLAY_REAL_VALUES=0` keeps tokens on screen too.",
       "claude_code": "MessageDisplay",
-      "evidence": ["hooks/message-display.js", "test/named-display.test.mjs"],
+      "evidence": [
+        "hooks/message-display.js",
+        "lib/token-pattern.js",
+        "lib/config.js",
+        "test/named-display.test.mjs",
+        "test/hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "`ZEROH_DISPLAY_REAL_VALUES=0` has no test; checked by an audit probe on 2026-09-28"
+        },
+        "codex": {
+          "status": "partial",
+          "note": "no display hook (request #33420); only the proxy could rewrite `output_text` in the response stream, which also puts real values into the local rollout and history; off by default on Codex",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/hook_config.rs#L36",
+            "https://github.com/openai/codex/issues/33420"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "no display-only hook or TUI slot for message text; `experimental.text.complete` can restore the final text but stores the real value in the transcript and share, and streaming shows tokens first",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L327-L330",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/session/processor.ts#L529-L541",
+            "OpenCode local run L8, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "partial",
+          "note": "no hook for message text; `markdown.registerCodeBlockRenderer` works per fenced language only, and rewriting `http.response` would store the real values",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L526-L528"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "no display-only rewrite of answers found in the documented hooks (`userPromptTransformed` does the reverse: the model's copy changes, not the screen); not verified in source",
+          "sources": [
+            "https://docs.github.com/en/copilot/reference/hooks-reference"
+          ]
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "no display-only rewrite of answers found in the documented hooks; not verified in source",
+          "sources": ["https://cursor.com/docs/hooks"]
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "no display-only rewrite of answers found in the documented hooks; not verified in source",
+          "sources": [
+            "https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "stop.disallowed-host",
+      "area": "guards",
+      "core": true,
+      "description": "A secret heading to a host that isn't allowed for it is stopped, with the one command that allows it: a token Claude would restore, and a known secret it writes straight into a command, an MCP call or a WebFetch URL.",
+      "claude_code": "PreToolUse deny with the `/zeroh-disclosure:allow NAME HOST` line",
+      "evidence": [
+        "lib/secrets.js",
+        "lib/shell-destinations.js",
+        "hooks/pre-tool-use.js",
+        "test/rc2-destinations.test.mjs",
+        "test/hooks.test.mjs",
+        "test/rc2-pass-default.test.mjs",
+        "test/rc2-last-stops.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "PreToolUse `permissionDecision:\"deny\"` with a reason (or exit 2), shown as \"Command blocked by PreToolUse hook: …\"; covers Bash, apply_patch, MCP and local tools, not hosted `web_search`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/hook_runtime.rs#L188-L243",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a throw in `tool.execute.before` blocks the call, and the model gets the message with the allow command (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L284-L297",
+            "OpenCode local run L6, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a `Tool.Error` (or any throw) in `tool.hook(\"execute.before\")` rejects the call (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51",
+            "OpenCode local run L14, 2026-09-28"
+          ]
+        },
+        "copilot": {
+          "status": "planned",
+          "note": "`preToolUse` `permissionDecision:\"deny\"` with a reason",
+          "sources": [
+            "https://docs.github.com/en/copilot/reference/hooks-reference"
+          ]
+        },
+        "cursor": {
+          "status": "planned",
+          "note": "`beforeShellExecution` and `beforeMCPExecution` deny with a message",
+          "sources": ["https://cursor.com/docs/hooks"]
+        },
+        "gemini-cli": {
+          "status": "planned",
+          "note": "`BeforeTool` denies (`decision:\"deny\"` or exit 2)",
+          "sources": [
+            "https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "allow.user-command",
+      "area": "guards",
+      "description": "Only you allow a secret to reach a new host or MCP server (`/zeroh-disclosure:allow NAME HOST`), per project, in a signed allow list; `allow` alone shows where each known value may go and why, never the value.",
+      "claude_code": "user-only slash command applied on the typed prompt; HMAC-signed allow list under ZEROH_HOME (a hand edit makes ZeroH ignore the file and warn)",
+      "evidence": [
+        "lib/allow-rules.js",
+        "lib/allow-list.js",
+        "bin/zeroh-disclosure.mjs",
+        "test/allow-rules.test.mjs",
+        "test/user-authority.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "no plugin slash commands (custom prompts were removed in 0.117 and `!`-block commands aren't migrated): UserPromptSubmit recognises a typed management line (for example `zeroh allow …`), writes the signed rule and blocks the prompt so it never reaches the model",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/slash_command.rs#L15-L85",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/command_migration.rs#L418",
+            "https://github.com/openai/codex/issues/15941"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a TUI slash command (`keymap.registerLayer` with `slashName`) runs in the TUI with no model turn (verified live), and a dialog collects the host; TUI only, not `run`, web or desktop",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L100-L103",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L600-L609",
+            "OpenCode local run L12, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "code-defined commands (`ctx.command.transform`) and TUI `keymap.layer` commands run without the model",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L384-L425"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
-          "note": "none found in the research"
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "allow.builtin-hosts",
+      "area": "guards",
+      "description": "Keys with a known provider prefix (Stripe, Anthropic, OpenAI, OpenRouter, GitHub, GitLab, AWS, Google, Slack, Hugging Face, npm, ZeroH) may reach their provider's hosts with no setup, and this machine (localhost, 127.0.0.0/8, 0.0.0.0 and ::1) is always allowed.",
+      "claude_code": "built-in destination table by prefix; one loopback rule",
+      "evidence": [
+        "lib/secrets.js",
+        "lib/loopback.js",
+        "test/secrets.test.mjs",
+        "test/allow-rules.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "guard.file-tools",
+      "area": "guards",
+      "description": "The model can't use Write, Edit or other file tools to change ZeroH's settings, keys, vault, allow list or plugin files, or the Claude Code settings that route through the proxy, turn hooks or the plugin off, or change the status line.",
+      "claude_code": "PreToolUse settings guard; Claude Code settings judged on the parsed result",
+      "evidence": [
+        "lib/settings-guard.js",
+        "test/settings-guard.test.mjs",
+        "test/hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "a PreToolUse guard on `apply_patch` (the Edit and Write matchers work too), backed by the default workspace-write sandbox: ~/.codex/config.toml, ZEROH_HOME and the plugin cache are outside the writable roots; weak only in danger-full-access or after an approved escalation",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/protocol/src/permissions.rs#L852-L854",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/discovery.rs#L713",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/hook_config.rs#L30-L32"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "`tool.execute.before` can throw for edit, write and apply_patch on opencode.json(c), tui.json, .opencode/plugins, the plugin cache and ZEROH_HOME (`permission.ask` never fires); out of a hook's reach: `--pure`, `OPENCODE_CONFIG*` and a plugin that fails to load",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L224-L241",
+            "OpenCode local run L10, 2026-09-28",
+            "https://github.com/anomalyco/opencode/issues/7006"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`permission.hook(\"evaluate\")` sets allow, ask or deny, plus `tool.hook(\"execute.before\")`; plugin tools skip permission prompts (#50652)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/permission.ts#L9-L20",
+            "https://github.com/anomalyco/opencode/issues/50652"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "guard.shell",
+      "area": "guards",
+      "description": "A shell command the model runs that clearly writes, deletes or runs against those files is stopped, whatever the quoting or launcher; one whose effect ZeroH can't read runs with a \"not protected\" line (stopped with `uncertain block`). ZeroH's own keys, vault and allow list stay closed to shell commands in both modes.",
+      "claude_code": "shared shell tokenizer and per-program grammars (sed, awk, Perl, Python, Node, git, gh, openssl, …)",
+      "evidence": [
+        "lib/settings-guard.js",
+        "lib/shell-scan.js",
+        "lib/shell-programs.js",
+        "test/rc2-protected-paths.test.mjs",
+        "test/rc2-astra3-shell.test.mjs",
+        "test/rc2-astra4.test.mjs",
+        "test/shell-tokenizer.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the same PreToolUse guard on Bash, backed by the sandbox, where ~/.codex, ZEROH_HOME and the project .codex, .agents and .git aren't writable by default",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/protocol/src/permissions.rs#L852-L854"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "`tool.execute.before` on bash, with the same gaps as for file tools (`--pure`, `OPENCODE_CONFIG*`, a plugin that fails to load)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L224-L241"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`tool.hook(\"execute.before\")` and `shell.hook(\"create.before\")`, plus `permission.hook(\"evaluate\")`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/shell.ts#L3-L13",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/permission.ts#L9-L20"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "guard.host-cli",
+      "area": "guards",
+      "description": "The model can't disable, uninstall or reconfigure the plugin through the `claude` command line, or add an Elicitation hook that would answer unmask dialogs for you.",
+      "claude_code": "PreToolUse settings guard (`claude` arguments; Elicitation hook edits in files and shell)",
+      "evidence": ["lib/settings-guard.js", "test/settings-guard.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the guard covers `codex plugin …` and the config keys that switch ZeroH off (`openai_base_url`, `model_provider(s)`, `[features].hooks`, `hooks.state.*`, `plugins.*.enabled`, `approval_policy`, `sandbox_mode`); a nested `codex exec` from the model's shell must be told apart (to verify)",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/hook_config.rs#L30-L32",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/discovery.rs#L713"
+          ]
         },
         "opencode": {
           "status": "unknown",
-          "note": "unverified: a TUI plugin may render it"
+          "note": "not researched yet"
+        },
+        "opencode-v2": {
+          "status": "unknown",
+          "note": "`opencode api` from the model's shell may answer forms and permissions through the background service; needs a live check",
+          "sources": ["`opencode api --help`, OpenCode local run, 2026-09-28"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "pass.uncertain-notice",
+      "area": "guards",
+      "description": "What ZeroH can't check (a dynamic destination, a variable whose value it can't see, output over 1 MB, a prompt over 256 KB, a check that failed, …) runs as it would without ZeroH, with one \"not protected\" line per reason per turn, counted by reason in the receipt.",
+      "claude_code": "lib/unchecked.js in every hook; size limits in PostToolUse and UserPromptSubmit",
+      "evidence": [
+        "lib/unchecked.js",
+        "lib/shell-destinations.js",
+        "hooks/post-tool-use.js",
+        "hooks/user-prompt-submit.js",
+        "test/unchecked.test.mjs",
+        "test/unchecked-report.test.mjs",
+        "test/rc2-pass-default.test.mjs",
+        "test/rc2-last-stops.test.mjs",
+        "test/rc2-ups-pass.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the line goes in `systemMessage` (shown as a hook warning) on PreToolUse and PostToolUse, the model's note in `additionalContext`",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a note appended to the tool output for the model, a toast for the user (TUI only) and a count in the receipt",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L226-L231",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/sdk/js/src/gen/sdk.gen.ts#L1118"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the same, with TUI `ui.toast`",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "settings.uncertain-block",
+      "area": "guards",
+      "description": "`/zeroh-disclosure:settings uncertain block` stops the uncertain cases instead of passing them; a repository's .zeroh.env may set `block` too, and that wins over your `pass`.",
+      "claude_code": "configuration read by every hook",
+      "evidence": [
+        "lib/config.js",
+        "test/rc2-last-stops.test.mjs",
+        "test/config-uncertain.test.mjs",
+        "test/user-authority.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the block paths exist (UserPromptSubmit block, PreToolUse deny, PostToolUse `continue:false`), but Codex fails open on a hook error, so the loader writes the blocking JSON itself",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/events/post_tool_use.rs#L270-L290",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/output_parser.rs#L441-L487"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a throw in `chat.message`, `tool.execute.before` or `tool.execute.after` stops the prompt or call",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/plugin/index.ts#L284-L297",
+            "OpenCode local run L6, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a throw in the prompt or tool hooks stops it",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/tool.ts#L20-L51"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.keys-gitleaks",
+      "area": "detection",
+      "description": "221 key-format rules from gitleaks v8.30.1: 214 for a named provider's keys and 7 generic ones (API keys, private keys, JWTs, curl credentials, Kubernetes secrets). A variable reference (`$KEY`, `${KEY}`, `$env:KEY`, `%KEY%`, `${{ secrets.KEY }}`) is masked like a value, since whether it is expanded depends on the program that reads it; in a Bash or PowerShell command, a value that is only variable references is not stopped as a raw secret (it runs with a \"not protected\" line when it is sent somewhere; `uncertain block` stops it). A local rule adds GitHub App installation tokens in the stateless format of 2026 (`ghs_<app id>_<JWT>`, about 520 characters), which the gitleaks rule misses, and masks the whole token.",
+      "claude_code": "lib/detector.js with the vendored engine (gitleaks rules imported by the vendored generator; one rule, pkcs12-file, skipped)",
+      "evidence": [
+        "lib/detector.js",
+        "test/detectors.test.mjs",
+        "test/features.test.mjs",
+        "test/shell-variable-reference.test.mjs",
+        "test/github-app-token.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent; hooks need `node` on PATH"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent; the vendored engine runs in the Bun plugin runtime (Bun compatibility still to be tested)"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent; runtime compatibility still to be tested"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.secrets-context",
+      "area": "detection",
+      "description": "Passwords, tokens and secrets next to a key-like name, private keys, Authorization headers, credentials in URLs and connection strings, signed URLs, OTP seeds and password hashes are masked. A plain word found this way is masked where its name is beside it, not everywhere.",
+      "claude_code": "lib/detector.js with the vendored engine (secret rules, generic rules)",
+      "evidence": [
+        "lib/detector.js",
+        "test/detection-correctness.test.mjs",
+        "test/detectors.test.mjs",
+        "vendor/sensitive-data-detectors/src/detector.js"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.known-values",
+      "area": "detection",
+      "description": "Every value in your project's .env files, secret-named environment variables and credential files (AWS, gh, npm, PyPI, .netrc, .git-credentials, Docker) is masked by exact match, also base64-, hex- or URL-encoded, and a value masked once stays masked wherever it comes back.",
+      "claude_code": "known secrets loaded at SessionStart and in every hook; exact-value matcher over every live vault value and its encodings",
+      "evidence": [
+        "lib/secrets.js",
+        "test/secrets.test.mjs",
+        "test/detection-correctness.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent; loaded at SessionStart (which Codex runs at the first turn) and in every hook",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code, loaded when the plugin starts"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code, loaded when the plugin starts"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.pii-33",
+      "area": "detection",
+      "description": "33 kinds of personal data, each decided by a vendored library or a published rule (checksums, libphonenumber, national ID rules); digit-only IDs, passports and dates of birth count only next to a word naming them. `ZEROH_MASK_PII=off` leaves personal data in tool output unmasked, and `ZEROH_PHONE_REGION` sets the region for phone numbers without a country code.",
+      "claude_code": "lib/detector.js with the vendored engine; environment or config.env",
+      "evidence": [
+        "lib/detector.js",
+        "lib/hook-io.js",
+        "test/detection-correctness.test.mjs",
+        "test/detectors.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "the effect of `ZEROH_MASK_PII=off` is checked only by an audit probe (values already in the vault stay masked)"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent; hooks need `node` on PATH"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent; the vendored validators and libphonenumber run in the plugin (Bun compatibility still to be tested)"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent; runtime compatibility still to be tested"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "detect.typed-random",
+      "area": "detection",
+      "description": "A random-looking value you type that matches no rule is sent as it is, and ZeroH suggests `/zeroh-disclosure:report-miss`.",
+      "claude_code": "UserPromptSubmit entropy check; recorded as ENTROPY_WARNING in the receipt",
+      "evidence": ["hooks/user-prompt-submit.js", "test/hooks.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "the suggestion goes to the model (additionalContext), not straight to you; to check in a live session"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "UserPromptSubmit sees the raw prompt; the suggestion can go in `systemMessage`",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`chat.message` sees the typed text; the suggestion as a toast",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L234-L243"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`session.hook(\"prompt\")` sees the typed text",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L14-L20"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "unmask.dialog",
+      "area": "unmask",
+      "core": true,
+      "description": "Personal data (never keys) is shown to Claude for 15 minutes, 1 hour or the session, only after you accept a dialog; headless sessions are refused, and a grant applies only to the session that accepted it.",
+      "claude_code": "MCP elicitation (`request_unmask`); signed grants bound to the session, applied by the hooks and the proxy",
+      "evidence": [
+        "mcp/server.mjs",
+        "lib/unmask.js",
+        "test/mcp-unmask.test.mjs",
+        "test/unmask.test.mjs",
+        "test/proxy.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "MCP form elicitation is on by default and the TUI draws forms; declined under `approval_policy=\"never\"` and cancelled in `codex exec` (both fail closed); every form needs a required field, because full access auto-accepts an empty one; the proxy binds grants through `session-id` or `thread-id`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/config/mod.rs#L1854",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/codex-mcp/src/elicitation.rs#L321",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/exec/src/lib.rs#L1998",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/codex-api/src/requests/headers.rs#L5-L13"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "the MCP client doesn't advertise elicitation (#23066: added in v2); fallback: a custom tool's `context.ask()` permission prompt (once, always or reject; no duration choice) with a fresh pattern per request",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/mcp/index.ts#L39-L50",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tool.ts#L19-L27",
+            "https://github.com/anomalyco/opencode/issues/23066"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the MCP client advertises form and URL elicitation, shown as a session form; `opencode run` cancels forms (fails closed); a server can't tell a headless run apart (`clientInfo.name` is `cli`, #51578)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/core/src/mcp/client.ts#L143",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/core/src/mcp/index.ts#L218-L270",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/cli/src/run/noninteractive.ts#L185-L192"
+          ]
+        },
+        "copilot": {
+          "status": "partial",
+          "note": "CLI `ask_user` with `askUserVariant:\"elicitation\"`; MCP protocol 2026-07-28 not recognised (issue #4834)",
+          "sources": ["https://github.com/github/copilot-cli/issues/4834"]
+        },
+        "cursor": {
+          "status": "planned",
+          "note": "MCP elicitation since Cursor 1.5",
+          "sources": ["https://cursor.com/changelog/1-5"]
+        },
+        "gemini-cli": {
+          "status": "not possible",
+          "note": "no MCP elicitation (\"Method not found\", issue #22249; #15613 open)",
+          "sources": [
+            "https://github.com/google-gemini/gemini-cli/issues/22249"
+          ]
+        }
+      }
+    },
+    {
+      "id": "unmask.command",
+      "area": "unmask",
+      "description": "`/zeroh-disclosure:unmask KIND <why>` has Claude ask for that kind in the dialog, and alone lists active grants. `unmask caps KIND 15m|1h|session|0` caps how long each kind may be unmasked, or turns it off; caps are signed and only you can change them.",
+      "claude_code": "slash command `!` block, then the model calls `request_unmask`; HMAC-signed unmask.json, user-only caps command",
+      "evidence": [
+        "bin/zeroh-disclosure.mjs",
+        "lib/unmask.js",
+        "lib/settings-guard.js",
+        "test/unmask.test.mjs",
+        "test/mcp-unmask.test.mjs",
+        "test/user-authority.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "no plugin slash commands: a typed management line intercepted by UserPromptSubmit",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/slash_command.rs#L15-L85"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a TUI slash command (TUI only)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a code-defined or TUI command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "unmask.end-status",
+      "area": "unmask",
+      "description": "Tell Claude to stop, or run `/zeroh-disclosure:unmask revoke [id|all]`, and that kind is masked again at once. An active unmask is shown when it starts, with five minutes left and when it ends, and on the status line all the time.",
+      "claude_code": "MCP `end_unmask` (no dialog; it can only end grants); CLI `unmask revoke`; UserPromptSubmit systemMessage; status line countdown",
+      "evidence": [
+        "mcp/server.mjs",
+        "lib/unmask.js",
+        "hooks/user-prompt-submit.js",
+        "lib/statusline.js",
+        "test/mcp-unmask.test.mjs",
+        "test/unmask.test.mjs",
+        "test/hooks.test.mjs",
+        "test/statusline.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "`end_unmask` is a plain MCP tool; with no status line the countdown is a per-prompt `systemMessage`, and a typed management line ends grants too",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "`end_unmask` needs no dialog (a custom tool or MCP tool); the countdown shows in a TUI slot or toast",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L226-L228",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L455-L486"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`end_unmask` as an MCP tool; the countdown in the `prompt.footer.status` slot",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L191-L203"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "receipt.signed",
+      "area": "receipts",
+      "description": "Every turn gets a receipt signed on this machine (ECDSA P-256), with an HTML view and the session's token map; receipts are chained per session and can be checked with `zeroh-disclosure verify`.",
+      "claude_code": "Stop hook signs with a local ES256 key; receipt.html and the session bundle in ZEROH_HOME",
+      "evidence": [
+        "lib/receipt.js",
+        "hooks/stop.js",
+        "lib/report-html.js",
+        "lib/verify-receipt.js",
+        "lib/receipt-bundle.js",
+        "test/receipt.test.mjs",
+        "test/report.test.mjs",
+        "test/hooks.test.mjs",
+        "lib/turn-summary.js",
+        "test/raw-sent-claim.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "the Stop hook gets `turn_id`, `last_assistant_message` and `transcript_path`; with exit 0 it must print JSON (`{}` works); the ledger comes from ZeroH's own hooks, because the rollout format isn't stable",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/schema/generated/stop.command.input.schema.json",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the `session.idle` event (one per turn, seen live) triggers the receipt; the signing code runs in the Bun plugin runtime",
+          "sources": [
+            "https://opencode.ai/docs/plugins",
+            "OpenCode local run L1, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the idle event from `ctx.event.subscribe`",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "receipt.stop-line",
+      "area": "receipts",
+      "description": "After a turn that masked, stopped, blocked, sent or revealed something, one line says what happened and links the receipt; a quiet turn prints nothing. \"Sent\" counts each value that reached the model in plain text once, the same on the status line, this line, the receipt slip and `/report`.",
+      "claude_code": "Stop hook systemMessage",
+      "evidence": [
+        "hooks/stop.js",
+        "lib/report.js",
+        "test/hooks.test.mjs",
+        "test/report.test.mjs",
+        "test/rc2-a1-pass.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "Stop hook `systemMessage`",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a toast on `session.idle` (TUI only)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/sdk/js/src/gen/sdk.gen.ts#L1118"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "TUI `ui.toast` on the idle event",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "receipt.retention",
+      "area": "receipts",
+      "description": "Receipts are kept 90 days by default (`/zeroh-disclosure:settings receipts keep forever|1y|90d|30d`), pruned at most once a day and never the current session's; a repository may only shorten it.",
+      "claude_code": "SessionStart pruning; user-only CLI `receipts keep`",
+      "evidence": [
+        "lib/receipt-retention.js",
+        "hooks/session-start.js",
+        "test/receipt-retention.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "plugin-owned files, pruned at SessionStart (the first turn)",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "plugin-owned files, pruned on `session.created`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L223-L224"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "plugin-owned files, pruned on a session event",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "receipt.slip-command",
+      "area": "receipts",
+      "description": "`/zeroh-disclosure:mask-receipt` prints this session's receipt slip and the path to receipt.html; `/zeroh-disclosure:mask-show` lists the tokens the model saw, with types, sources and counts, never values.",
+      "claude_code": "read-only slash commands (`!` blocks); CLI `tokens`",
+      "evidence": [
+        "commands/scripts/receipt.js",
+        "commands/scripts/show.js",
+        "lib/report.js",
+        "test/receipt.test.mjs",
+        "test/report.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "read-only, so a native skill the model runs, or a typed management line; Claude command files don't migrate",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/command_migration.rs#L418"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a TUI slash command, or a markdown command with a `!` template (it holds no values)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592",
+            "OpenCode local run L11, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a code-defined or TUI command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "report.local",
+      "area": "receipts",
+      "description": "`/zeroh-disclosure:report` prints the receipt slip for the last 7d, 30d, 90d or all time, as text, from local files only; the command-line tool also writes it as HTML or JSON, for this project or all projects.",
+      "claude_code": "slash command (text); CLI `report [--since] [--html path] [--json path] [--all-projects]`",
+      "evidence": [
+        "lib/report.js",
+        "lib/report-html.js",
+        "commands/scripts/report.js",
+        "bin/zeroh-disclosure.mjs",
+        "test/report.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "`--all-projects` has no test"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "local files through the CLI: a native skill the model runs, or a typed management line",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/command_migration.rs#L418"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a TUI slash command renders the slip locally, or a markdown command with `` !`zeroh-disclosure report` `` puts it in chat (it holds no values)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592",
+            "OpenCode local run L11, 2026-09-28",
+            "OpenCode local run L12, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a code-defined or TUI command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "report-miss",
+      "area": "receipts",
+      "description": "Report a value ZeroH did not mask in a private dialog rather than in chat; it is masked from then on. Each report is kept on this machine as a shape-only record (type, prefix, length, character classes) that you can list, show or delete.",
+      "claude_code": "MCP `report_missed_secret` with elicitation, slash command; CLI `reports list|show|delete`",
+      "evidence": [
+        "lib/report-miss.js",
+        "mcp/server.mjs",
+        "bin/zeroh-disclosure.mjs",
+        "test/report-miss.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "MCP `report_missed_secret` with a form elicitation (a string field plus keep or delete), with the same policy limits as `unmask.dialog`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/codex-mcp/src/elicitation.rs",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/bottom_pane/mcp_server_elicitation.rs"
+          ]
+        },
+        "opencode": {
+          "status": "partial",
+          "note": "the user side works as a TUI command with a `DialogPrompt`; the model-invoked dialog needs elicitation, which v1 lacks (only a yes/no `context.ask()`)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L150-L159",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/mcp/index.ts#L44"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "MCP form elicitation, as for `unmask.dialog`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/core/src/mcp/client.ts#L143"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "report-miss.on-request",
+      "area": "receipts",
+      "description": "When you ask Claude to report a value as missed, it hands the value to ZeroH, which masks it at once, with no dialog.",
+      "claude_code": "MCP `report_missed_secret` with `value`; the model is briefed at SessionStart",
+      "evidence": [
+        "mcp/server.mjs",
+        "lib/report-miss.js",
+        "test/report-miss.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "a plain MCP tool call; no dialog needed",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a plain MCP or custom tool; no dialog needed",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L226-L228"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a plain MCP tool; no dialog needed",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
       "id": "banner.session-start",
-      "description": "The session banner: product, version, what is protected and any warning.",
-      "claude_code": "SessionStart `systemMessage` (ANSI colour)",
-      "evidence": ["lib/banner.js", "test/banner.test.mjs"],
+      "area": "status",
+      "description": "The session banner: the big ZEROH view after the install, then one line (`mini`) with what is protected, or what needs attention and its fix; `big`, `compact` or `off` in `/zeroh-disclosure:settings banner`. Warnings print below it in every mode. The session start also says once when a project's .zeroh.env was ignored, the allow list was hand-edited, a setting hides the status line, or ZeroH's folder is read-only.",
+      "claude_code": "SessionStart `systemMessage` (ANSI colour); `ZEROH_BANNER` wins over the saved mode",
+      "evidence": [
+        "lib/banner.js",
+        "hooks/session-start.js",
+        "test/banner.test.mjs",
+        "test/hooks.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
@@ -219,21 +2539,53 @@
         },
         "codex": {
           "status": "partial",
-          "note": "SessionStart `systemMessage` is shown at the first turn, not at launch, as plain text without colour (verified in source)"
+          "note": "SessionStart runs at the first turn, not at launch, and its `systemMessage` is a dim `↳ Hook · <first line>` cell without colour",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/session/turn.rs#L320",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/history_cell/hook_cell.rs#L287"
+          ]
         },
         "opencode": {
           "status": "planned",
-          "note": "TUI plugin `home_logo` slot shows the 5-line banner in truecolor (verified live); server `showToast` gives multi-line alerts without colour"
+          "note": "the TUI plugin's `home_logo` slot shows the banner in truecolor (verified live) on the home screen only; `-c`, `-s` and `run` get a `session.created` toast (multi-line, variant colour only)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/tui/src/routes/home.tsx#L76-L78",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L226-L231",
+            "OpenCode local run L12, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "partial",
+          "note": "no `home_logo` slot; the banner fits `home.footer.status`, `session.composer.top` or a toast",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L191-L203",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L271-L280"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
         }
       }
     },
     {
       "id": "statusline",
-      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt; added with the first message unless the user has their own.",
-      "claude_code": "`statusLine` command (a minimal `node -e` resolver); hooks keep status.json and a heartbeat",
+      "area": "status",
+      "core": true,
+      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt. It is added with the first message unless you have your own, which can show ZeroH's part with the `segment` command; `/zeroh-disclosure:settings statusline off`, or removing it, turns it off for good.",
+      "claude_code": "`statusLine` command (a minimal `node -e` resolver); hooks keep status.json and a heartbeat; choice recorded per settings file",
       "evidence": [
         "lib/statusline.js",
         "lib/statusline-settings.js",
+        "lib/session-status.js",
         "lib/first-run.js",
         "test/statusline.test.mjs",
         "test/rc2-astra3-lifecycle.test.mjs"
@@ -244,21 +2596,60 @@
           "note": ""
         },
         "codex": {
-          "status": "unknown",
-          "note": "not researched yet"
+          "status": "not possible",
+          "note": "the status line is a fixed list of built-in items in `[tui].status_line`, with no command or external item, and a hook can't write to it (requests #17827, #16921); fallback: a per-prompt `systemMessage`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/types.rs#L884-L894",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/bottom_pane/status_line_setup.rs#L56",
+            "https://github.com/openai/codex/issues/17827",
+            "https://github.com/openai/codex/issues/16921"
+          ]
         },
         "opencode": {
+          "status": "partial",
+          "note": "no status-line setting (#37464); a TUI slot draws it next to the prompt (`session_prompt_right`), at the bottom or in the sidebar, not under the prompt; TUI only",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L455-L486",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/tui/src/app.tsx#L1127",
+            "https://github.com/anomalyco/opencode/issues/37464",
+            "https://github.com/anomalyco/opencode/issues/41441",
+            "OpenCode local run L12, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the TUI slot `prompt.footer.status` sits under the prompt",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L191-L203"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
-          "note": "not researched yet"
+          "note": "no status-line surface found in the docs for the CLI or VS Code; flagged for follow-up",
+          "sources": [
+            "https://docs.github.com/en/copilot/reference/hooks-reference"
+          ]
+        },
+        "cursor": {
+          "status": "partial",
+          "note": "CLI only: `/statusline` (a known bug replaces both built-in footer rows); nothing found for the editor",
+          "sources": ["https://cursor.com/docs/cli/reference/slash-commands"]
+        },
+        "gemini-cli": {
+          "status": "planned",
+          "note": "`/footer` and `/statusline`, shipped around March 2026",
+          "sources": ["https://geminicli.com/docs/reference/configuration/"]
         }
       }
     },
     {
-      "id": "statusline.custom",
-      "description": "Change how the status line looks (fields, order, labels, emoji, compact wording, only when not 🟢) by asking Claude, which may edit only the style file; the state can't be hidden or faked while ZeroH isn't 🟢. Its state as versioned JSON data for a status line of your own.",
-      "claude_code": "`statusline-style.json` under ZEROH_HOME, validated on every draw; `zeroh-disclosure statusline --json`",
+      "id": "statusline.style",
+      "area": "status",
+      "description": "Change how the status line looks (fields, order, labels, emoji, compact wording, only when not 🟢) by asking Claude, which may edit only the style file; the state and its fix can't be hidden or faked while ZeroH isn't 🟢.",
+      "claude_code": "`statusline-style.json` under ZEROH_HOME, validated on every draw; the settings guard allows only that file",
       "evidence": [
         "lib/statusline.js",
+        "lib/settings-guard.js",
         "docs/statusline.md",
         "test/statusline-style.test.mjs"
       ],
@@ -268,90 +2659,130 @@
           "note": ""
         },
         "codex": {
+          "status": "not possible",
+          "note": "Codex has no custom status line to style",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/config/src/types.rs#L884-L894"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the TUI plugin reads and validates statusline-style.json on each draw; the settings guard adds tui.json",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L455-L486"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the same, in the `prompt.footer.status` slot",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L191-L203"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
       }
     },
     {
-      "id": "unmask.dialog",
-      "description": "Personal data (never keys) is shown to Claude for 15 minutes, 1 hour or the session, only after the user accepts a dialog.",
-      "claude_code": "MCP elicitation (`request_unmask`)",
-      "evidence": ["lib/unmask.js", "test/mcp-unmask.test.mjs"],
+      "id": "statusline.json",
+      "area": "status",
+      "description": "`zeroh-disclosure statusline --json` gives the status line's state as versioned data (`zeroh-statusline/1`) for a status line of your own.",
+      "claude_code": "CLI `statusline --json`",
+      "evidence": [
+        "lib/statusline.js",
+        "bin/zeroh-disclosure.mjs",
+        "test/statusline-style.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
-          "status": "unknown",
-          "note": "unverified"
+          "status": "planned",
+          "note": "host-independent CLI; Codex has no status line to feed it into"
         },
         "opencode": {
-          "status": "unknown",
-          "note": "unverified"
-        }
-      }
-    },
-    {
-      "id": "receipt.signed",
-      "description": "Every turn gets a receipt signed on this machine (ECDSA P-256), with an HTML view and the session's token map.",
-      "claude_code": "Stop hook",
-      "evidence": ["lib/receipt.js", "test/receipt.test.mjs"],
-      "platforms": {
-        "claude-code": {
-          "status": "shipped",
-          "note": ""
+          "status": "planned",
+          "note": "works unchanged"
         },
-        "codex": {
+        "opencode-v2": {
+          "status": "planned",
+          "note": "works unchanged"
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
-          "status": "unknown",
-          "note": "not researched yet"
-        }
-      }
-    },
-    {
-      "id": "report.local",
-      "description": "`/zeroh-disclosure:report`: the receipt slip for a period, as text or HTML, from local files only.",
-      "claude_code": "slash command and CLI",
-      "evidence": ["lib/report.js", "test/report.test.mjs"],
-      "platforms": {
-        "claude-code": {
-          "status": "shipped",
-          "note": ""
-        },
-        "codex": {
+        "cursor": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
       }
     },
     {
-      "id": "report-miss",
-      "description": "Report a value ZeroH did not mask, in a private dialog rather than in chat; it is masked from then on.",
-      "claude_code": "MCP `report_missed_secret` and slash command",
-      "evidence": ["lib/report-miss.js", "test/report-miss.test.mjs"],
+      "id": "cmd.status",
+      "area": "status",
+      "description": "`/zeroh-disclosure:status` shows what is protected now, whether the local proxy is running and this session goes through it, whether a login item starts it after a restart (and why not, with the fix), unmask grants, receipts and warnings, without a model tool call.",
+      "claude_code": "slash command `!` block (the full banner view plus the proxy's real state)",
+      "evidence": [
+        "commands/scripts/status.js",
+        "lib/banner.js",
+        "test/banner.test.mjs",
+        "lib/proxy-manager.js",
+        "test/commands.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "no plugin slash commands: a typed management line that UserPromptSubmit answers and blocks, so no model turn",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/slash_command.rs#L15-L85",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a TUI slash command runs without a model request (verified live)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592",
+            "OpenCode local run L12, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a code-defined or TUI command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
@@ -359,35 +2790,15 @@
     },
     {
       "id": "mgmt.user-authority",
-      "description": "Changes to ZeroH's protection (proxy, allow, settings, uninstall) run only for the user's own typed command, never for the model.",
-      "claude_code": "UserPromptSubmit ticket; the CLI refuses without it",
-      "evidence": ["lib/user-authority.js", "test/user-authority.test.mjs"],
-      "platforms": {
-        "claude-code": {
-          "status": "shipped",
-          "note": ""
-        },
-        "codex": {
-          "status": "unknown",
-          "note": "not researched yet"
-        },
-        "opencode": {
-          "status": "unknown",
-          "note": "not researched yet"
-        }
-      }
-    },
-    {
-      "id": "guard.settings",
-      "description": "The model can't change ZeroH's settings, keys, vault or hooks, or the Claude Code settings that would switch it off.",
-      "claude_code": "PreToolUse settings guard",
+      "area": "management",
+      "description": "Changes to ZeroH's protection (proxy, allow, settings, unmask caps, uninstall) run only for your own typed command, never for the model; a Skill or SlashCommand call of such a command is refused. Outside Claude Code the command-line tool applies a change only after you type the four-character code it shows.",
+      "claude_code": "UserPromptSubmit ticket (the CLI refuses without it); settings guard for Skill and SlashCommand; terminal confirmation code",
       "evidence": [
+        "lib/user-authority.js",
         "lib/settings-guard.js",
-        "test/settings-guard.test.mjs",
-        "lib/shell-programs.js",
-        "test/rc2-protected-paths.test.mjs",
-        "test/rc2-astra3-shell.test.mjs",
-        "test/rc2-astra4.test.mjs"
+        "bin/zeroh-disclosure.mjs",
+        "test/user-authority.test.mjs",
+        "test/settings-guard.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -395,26 +2806,156 @@
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "UserPromptSubmit gets the raw typed prompt before any model call and can act and then block, so it is the boundary; a nested `codex exec` from the model's shell must be told apart (`CODEX_THREAD_ID`, the sandbox; to verify)",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/schema/generated/user-prompt-submit.command.input.schema.json"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "TUI slash commands run in the TUI process and never reach the model, and the default TUI opens no TCP port (verified live); under `serve`, `web` or `--port`, `POST /tui/publish` can run a TUI command from the model's shell, so the CLI keeps its check",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/server/routes/instance/httpapi/handlers/tui.ts#L86-L96",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/tui/src/app.tsx#L987-L990",
+            "OpenCode local run L12, 2026-09-28",
+            "OpenCode local run L13, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "code-defined and TUI commands run without the model; the background service and `opencode api` weaken the boundary (best effort)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22",
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/tui/context.ts#L384-L425"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
       }
     },
     {
-      "id": "pass.uncertain-notice",
-      "description": "What ZeroH can't check runs as it would without ZeroH, with one \"not protected\" or \"ran with the token\" line, counted by reason in the receipt.",
-      "claude_code": "lib/unchecked.js in every hook",
+      "id": "mgmt.fix-commands",
+      "area": "management",
+      "description": "Every message that points to a fix names the slash command and, for when Claude Code can't start, the full terminal command with the plugin's path.",
+      "claude_code": "terminal command quoted per platform",
+      "evidence": ["lib/fix-command.js", "test/fix-command.test.mjs"],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "no plugin slash commands: fixes name the typed management line and the terminal command",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/slash_command.rs#L15-L85"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "TUI slash commands and the terminal command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "code-defined commands and the terminal command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "settings.show",
+      "area": "management",
+      "description": "`/zeroh-disclosure:settings` alone shows the banner mode, receipt retention, uncertain mode, status line and vault commands; `/zeroh-disclosure:mask-config` shows the configuration, policy, signing key and protection engine.",
+      "claude_code": "read-only slash commands (`!` blocks)",
       "evidence": [
-        "lib/unchecked.js",
-        "test/rc2-pass-default.test.mjs",
-        "test/rc2-last-stops.test.mjs",
-        "lib/shell-destinations.js",
-        "test/rc2-astra3-shell.test.mjs",
-        "test/rc2-astra3-followup.test.mjs"
+        "commands/scripts/settings.js",
+        "commands/scripts/config.js",
+        "bin/zeroh-disclosure.mjs",
+        "test/statusline.test.mjs",
+        "test/commands.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "the mask-config output has no test (only that the command exists)"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "read-only: a native skill or a typed management line",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/command_migration.rs#L418"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "a TUI slash command or a markdown command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592",
+            "OpenCode local run L11, 2026-09-28"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a code-defined or TUI command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "settings.user-config",
+      "area": "management",
+      "description": "Every setting can also live in ZeroH's own config.env, and real environment variables win; `ZEROH_HOME`, `ZEROH_PROXY_PORT` and `ZEROH_CLAUDE_SETTINGS` move ZeroH's folder, fix the proxy's port and choose the Claude Code settings file it writes to.",
+      "claude_code": "config.env in ZEROH_HOME, loaded by lib/config.js; environment (ZEROH_HOME from the environment only)",
+      "evidence": [
+        "lib/config.js",
+        "lib/vault.js",
+        "lib/proxy-manager.js",
+        "lib/claude-settings.js",
+        "test/hooks.test.mjs",
+        "test/secrets.test.mjs",
+        "test/proxy-manager.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -422,90 +2963,177 @@
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code: hooks inherit the environment"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code: the plugin reads the environment"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code: the plugin reads the environment"
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
       }
     },
     {
-      "id": "settings.uncertain-block",
-      "description": "`/zeroh-disclosure:settings uncertain block` stops the uncertain cases instead of passing them.",
-      "claude_code": "configuration read by every hook",
-      "evidence": ["lib/config.js", "test/rc2-last-stops.test.mjs"],
+      "id": "settings.repo-tighten-only",
+      "area": "management",
+      "description": "A project's .zeroh.env may set only the banner, on-screen values and vault retention, shorten receipt retention, turn personal-data masking on or set `uncertain block`; anything else is ignored and named at the session start, and the model can't write the file.",
+      "claude_code": "lib/config.js allowlists; the settings guard protects .zeroh.env",
+      "evidence": [
+        "lib/config.js",
+        "lib/settings-guard.js",
+        "test/hooks.test.mjs",
+        "test/config-uncertain.test.mjs",
+        "test/receipt-retention.test.mjs",
+        "test/settings-guard.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
-          "note": ""
+          "note": "`ZEROH_MASK_PII=on` in .zeroh.env does not override your `ZEROH_MASK_PII=off` (only `ZEROH_UNCERTAIN=block` wins over you)"
         },
         "codex": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code; the file is kept from the model by `guard.file-tools` and `guard.shell`"
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code; the file is kept from the model by `guard.file-tools` and `guard.shell`"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code; the file is kept from the model by `guard.file-tools` and `guard.shell`"
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
       }
     },
     {
-      "id": "detect.keys-gitleaks",
-      "description": "221 provider key formats (gitleaks v8.30.1), private keys, secret-named values, and values from .env and credential files, also when encoded.",
-      "claude_code": "lib/detector.js with the vendored engine",
-      "evidence": ["lib/detector.js", "test/detectors.test.mjs"],
+      "id": "proxy.toggle",
+      "area": "management",
+      "description": "`/zeroh-disclosure:proxy off` puts your own Claude Code setting back and stays off, also in new sessions, until `/zeroh-disclosure:proxy on`, and the session you typed it in keeps working through the retired proxy until you exit; `ZEROH_PROXY=off claude` skips the proxy for one session without changing any settings (typed secrets are then sent with a notice).",
+      "claude_code": "user-only slash command, choice recorded next to the settings file; `ZEROH_PROXY` environment",
+      "evidence": [
+        "lib/proxy-manager.js",
+        "commands/scripts/proxy-status.js",
+        "test/proxy-lifecycle.test.mjs",
+        "test/proxy-manager.test.mjs",
+        "test/hooks.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "`proxy off` removes `openai_base_url` from ~/.codex/config.toml and restores the user's value; it applies from the next session",
+          "sources": [
+            "https://learn.chatgpt.com/docs/config-file/config-advanced"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "only for the optional proxy route (a provider baseURL); in-process masking needs no toggle",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L225"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "only for an optional baseURL route; the in-process `http.request` hook needs no toggle",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/session.ts#L58-L120"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
       }
     },
     {
-      "id": "detect.pii-33",
-      "description": "33 kinds of personal data, each validated (checksums, libphonenumber, national ID rules).",
-      "claude_code": "lib/detector.js with the vendored engine",
-      "evidence": ["lib/detector.js", "test/detection-correctness.test.mjs"],
+      "id": "doctor",
+      "area": "management",
+      "description": "`/zeroh-disclosure:doctor` checks the proxy, its settings entry, the login item (and why the system refused it), the vaults, whether the plugin folder Claude Code runs matches its release and whether the public marketplace is still registered under its old name, and says what to do next; `--fix` is the one reset (it removes ZeroH's settings entry, retires this install's proxy so open sessions keep working, stops any other ZeroH proxy it finds and resets vaults that can't be read); `--report` prints a paste-safe summary with no values, keys, paths or user names.",
+      "claude_code": "slash command `!` block; user-only CLI `doctor --fix`; `doctor --report` rebuilt from the fixed report schema",
+      "evidence": [
+        "bin/zeroh-disclosure.mjs",
+        "lib/proxy-manager.js",
+        "lib/proxy-report.js",
+        "lib/vault.js",
+        "lib/plugin-integrity.js",
+        "test/proxy-recovery.test.mjs",
+        "test/vault-lifecycle.test.mjs",
+        "test/plugin-integrity.test.mjs",
+        "lib/first-run.js",
+        "test/marketplace-name.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
-          "status": "unknown",
-          "note": "not researched yet"
+          "status": "planned",
+          "note": "a typed management line or the terminal command (`--fix` changes protection, so it stays user-only)",
+          "sources": ["https://learn.chatgpt.com/docs/hooks"]
         },
         "opencode": {
-          "status": "unknown",
-          "note": "not researched yet"
-        }
-      }
-    },
-    {
-      "id": "proxy.manage",
-      "description": "`/zeroh-disclosure:proxy off|on` and `/zeroh-disclosure:doctor --fix`; your own Claude Code setting goes back.",
-      "claude_code": "slash commands, CLI and login item",
-      "evidence": ["lib/proxy-manager.js", "test/proxy-lifecycle.test.mjs"],
-      "platforms": {
-        "claude-code": {
-          "status": "shipped",
-          "note": ""
+          "status": "planned",
+          "note": "a TUI slash command or the terminal command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L592"
+          ]
         },
-        "codex": {
+        "opencode-v2": {
+          "status": "planned",
+          "note": "a code-defined or TUI command, or the terminal command",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/command.ts#L9-L22"
+          ]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
-        "opencode": {
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
@@ -513,19 +3141,95 @@
     },
     {
       "id": "vault.retention",
-      "description": "Detected values are kept 7 days by default (`session`, `7d` or `30d`); `vault clear` removes them now.",
-      "claude_code": "encrypted vault under ZEROH_HOME",
-      "evidence": ["lib/vault.js", "test/vault-lifecycle.test.mjs"],
+      "area": "management",
+      "description": "Detected values leave the vault after 7 days without use by default (`session`, `7d` or `30d`); values from your .env and credential files stay while they are there, and reported misses never age out. `vault status` shows counts and ages, never values; `vault clear --yes` removes every stored value of the project now.",
+      "claude_code": "retention applied at SessionStart and SessionEnd; CLI `vault status|clear` (clear is user-only)",
+      "evidence": [
+        "lib/vault.js",
+        "hooks/session-end.js",
+        "bin/zeroh-disclosure.mjs",
+        "test/vault.test.mjs",
+        "test/vault-lifecycle.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "SessionEnd exists but its timeout defaults to 1 s (capped at 3 s), so `session` retention hands the work to a detached process; `7d` and `30d` pruning runs at SessionStart",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/discovery.rs#L749",
+            "https://learn.chatgpt.com/docs/hooks"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "no SessionEnd: prune on `session.created`, `session.idle` or `session.deleted` and on the plugin's `dispose`",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/index.ts#L223-L224"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "plugin state in `ctx.storage`, pruned on session events",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "vault.encrypted",
+      "area": "management",
+      "description": "Values live in one encrypted vault per project (AES-256-GCM) in ZeroH's own folder, readable only by you and never in your projects; a damaged or newer vault is never silently replaced. When the vault can't be opened, ZeroH says so once with the fix and passes content unmasked with a line, never leaving tokens it can't restore (`uncertain block` withholds instead).",
+      "claude_code": "vault/<project hash>.json with vault.key beside it in ZEROH_HOME (0600, Windows ACL); every hook and the proxy name the fix",
+      "evidence": [
+        "lib/vault.js",
+        "lib/private-fs.js",
+        "hooks/post-tool-use.js",
+        "test/secrets.test.mjs",
+        "test/vault-lifecycle.test.mjs",
+        "test/rc2-last-stops.test.mjs",
+        "test/fail-closed.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
         "opencode": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "host-independent: ZeroH's own code"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }
@@ -533,19 +3237,249 @@
     },
     {
       "id": "uninstall.clean",
-      "description": "`/zeroh-disclosure:uninstall --yes` removes the plugin, the proxy and its settings entry, the status line, the login item and ZeroH's folder.",
-      "claude_code": "slash command and CLI",
-      "evidence": ["lib/plugin-removal.js", "test/uninstall.test.mjs"],
+      "area": "management",
+      "description": "`/zeroh-disclosure:uninstall` removes the plugin, the proxy's settings entry, login item and runtime copy, the status line and ZeroH's folder (vault, keys, settings, allow rules, grants) in one step (typing the user-only command is the confirmation; `--dry-run` only shows what it would do). It keeps the signed receipts, value-free, with the public keys that verify them, in a folder of their own (`~/ZeroH Receipts`, `%LOCALAPPDATA%\\ZeroH Receipts` on Windows); `--delete-receipts` removes them too. The session you ran it in keeps working until you exit: the proxy is retired, not stopped, passes it through unmasked, and every hook stands down.",
+      "claude_code": "user-only slash command and CLI",
+      "evidence": [
+        "lib/plugin-removal.js",
+        "test/uninstall.test.mjs",
+        "test/watchdog.test.mjs",
+        "test/proxy-lifecycle.test.mjs",
+        "test/statusline.test.mjs",
+        "lib/receipt-keep.js",
+        "test/receipt-keep.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
           "note": ""
         },
         "codex": {
+          "status": "planned",
+          "note": "a typed management line runs `codex plugin remove` (and optionally `codex plugin marketplace remove`) and removes `openai_base_url`, ZeroH's `[hooks.state]` entries, the login item and ZEROH_HOME",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core-plugins/src/marketplace_remove.rs"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "v1 has no `opencode plugin remove`: the uninstall edits opencode.json and tui.json and removes the cached package and ZEROH_HOME, from a TUI command or outside OpenCode",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/core/src/npm.ts#L87"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`opencode plugin remove`",
+          "sources": ["https://opencode.ai/v2/docs/plugins"]
+        },
+        "copilot": {
           "status": "unknown",
           "note": "not researched yet"
         },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "platform.macos",
+      "area": "platforms",
+      "description": "Works on macOS: Bash by default, Claude Code's PowerShell tool with PowerShell 7, the proxy started by a LaunchAgent, and the clipboard copy through pbcopy.",
+      "claude_code": "launchd LaunchAgent (bootstrap/bootout); case-insensitive path checks",
+      "evidence": [
+        "lib/service-manager.js",
+        "lib/clipboard.js",
+        "test/service-manager.test.mjs",
+        "test/settings-guard.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "unit tests simulate macOS on Linux; the live suite runs on macOS"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "hook commands run through `$SHELL -lc`, where `${VAR}` fails under fish, so handlers use `$PLUGIN_ROOT` or an explicit `sh`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/command_runner.rs#L400-L445"
+          ]
+        },
         "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode-v2": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "platform.linux",
+      "area": "platforms",
+      "description": "Works on Linux: the proxy starts from a systemd user unit or, in a desktop session, an XDG autostart entry; over SSH, in WSL or in a container there is no login item, so the proxy runs only while Claude Code does and ZeroH says why and how to fix it.",
+      "claude_code": "systemd --user unit or XDG autostart; wl-copy, xclip or xsel for the clipboard copy",
+      "evidence": [
+        "lib/service-manager.js",
+        "lib/clipboard.js",
+        "test/service-manager.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": ""
+        },
+        "codex": {
+          "status": "planned",
+          "note": "hook commands run through `$SHELL -lc`, where `${VAR}` fails under fish, so handlers use `$PLUGIN_ROOT` or an explicit `sh`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/command_runner.rs#L400-L445"
+          ]
+        },
+        "opencode": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "opencode-v2": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "platform.windows",
+      "area": "platforms",
+      "description": "Works on Windows through Git Bash or Claude Code's PowerShell tool, with ZeroH's folder in %LOCALAPPDATA%\\ZeroH limited to your account and the proxy started at logon without a console window.",
+      "claude_code": "per-user scheduled task (task XML in UTF-16 with a byte order mark, as schtasks requires) via conhost.exe --headless; user-only ACL on ZEROH_HOME; clip.exe from System32; forward-slash values paths for Git Bash",
+      "evidence": [
+        "lib/service-manager.js",
+        "lib/private-fs.js",
+        "lib/late-bind.js",
+        "test/service-manager.test.mjs",
+        "test/vault-lifecycle.test.mjs",
+        "test/late-bind.test.mjs",
+        "test/windows-retest.test.mjs",
+        "test/windows-real.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "unit tests simulate Windows on Linux (task XML, quoting, ACL, paths) and, on Windows, register the task with schtasks and run the restore wrapper in Git Bash; the live suite runs on Windows"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "Codex runs natively on Windows with PowerShell as the default shell; hook commands run through `%COMSPEC% /C`, where `${CLAUDE_PLUGIN_ROOT}` doesn't expand, so every handler needs `commandWindows` with `%PLUGIN_ROOT%`",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/hooks/src/engine/command_runner.rs#L400-L445",
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/shell-command/src/shell_detect.rs#L352"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the shell tool picks pwsh, powershell, Git Bash or cmd (the id stays `bash`), and `shell.env` late binding works for each (`$env:X`, `%X%`, `\"$X\"`)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/core/src/shell.ts#L98-L106",
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/opencode/src/tool/shell/id.ts"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "`shell.hook(\"create.before\")` names the shell, so the plugin needn't guess it",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/shell.ts#L3-L13"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
+          "status": "unknown",
+          "note": "not researched yet"
+        }
+      }
+    },
+    {
+      "id": "shell.powershell",
+      "area": "platforms",
+      "description": "Claude Code's PowerShell tool gets the same output masking, destination checks and settings guard as Bash, in PowerShell 7 and Windows PowerShell 5.1.",
+      "claude_code": "PowerShell scanner and exit-status wrapper",
+      "evidence": [
+        "lib/exit-status.js",
+        "lib/shell-destinations.js",
+        "test/fail-closed.test.mjs",
+        "test/late-bind-differential.test.mjs",
+        "test/hooks.test.mjs"
+      ],
+      "platforms": {
+        "claude-code": {
+          "status": "shipped",
+          "note": "unit tests run PowerShell under pwsh 7 only; 5.1 relies on the Windows live suite"
+        },
+        "codex": {
+          "status": "planned",
+          "note": "PowerShell commands reach the hooks as `Bash` with only `{command}`, so the hooks pick the PowerShell scanner from the platform",
+          "sources": [
+            "https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/core/src/tools/handlers/unified_exec/exec_command.rs#L520-L531"
+          ]
+        },
+        "opencode": {
+          "status": "planned",
+          "note": "the hook input doesn't name the shell; the plugin resolves it the way OpenCode does (or reads the `shell` config)",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/core/src/shell.ts#L98-L106"
+          ]
+        },
+        "opencode-v2": {
+          "status": "planned",
+          "note": "the `shell.hook(\"create.before\")` input names the shell",
+          "sources": [
+            "https://github.com/anomalyco/opencode/blob/v2.0.18/packages/plugin/src/effect/shell.ts#L3-L13"
+          ]
+        },
+        "copilot": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "cursor": {
+          "status": "unknown",
+          "note": "not researched yet"
+        },
+        "gemini-cli": {
           "status": "unknown",
           "note": "not researched yet"
         }

@@ -14,8 +14,13 @@ import {
   AWK_PROGRAMS,
   awkProgram,
   execCommand,
+  GIT_WRITE_SUBCOMMANDS,
+  gitCommand,
   interpreterCode,
   interpreterSpec,
+  localProgramReach,
+  optionWrites,
+  optionWritesInto,
   readCode,
   sedProgram,
 } from './shell-programs.js';
@@ -224,7 +229,7 @@ export function textReferencesZeroHSettings(
         ...(entry.redirects || []).map((redirect) => redirect.target),
       ]) {
         if (!word) continue;
-        for (const candidate of wordPathValues(word, env)) {
+        for (const candidate of wordPathValues(word, env, platform)) {
           if (
             candidate &&
             (/(?:^|[\\/])\.zeroh(?:[\\/]|$)/iu.test(candidate) ||
@@ -689,8 +694,10 @@ function splitOptions(list) {
   );
 }
 
-// A word as a path: `~` and the variables the guards know are expanded.
-function wordPathValues(word, env) {
+// A word as a path: `~` and the variables the guards know are expanded. On
+// Windows, Git Bash (Claude Code's Bash there) names drives /c/…, as its
+// own `pwd` does: such a word is also read as C:\… .
+function wordPathValues(word, env, platform = process.platform) {
   const home = env.HOME || env.USERPROFILE || os.homedir();
   let value = String(word.value);
   if (word.tilde && (value === '~' || /^~[\\/]/u.test(value)))
@@ -716,6 +723,12 @@ function wordPathValues(word, env) {
   const attached =
     /^--?[A-Za-z][\w-]*=(.+)$/su.exec(value) || /^of=(.+)$/su.exec(value);
   if (attached) values.push(attached[1]);
+  if (platform === 'win32') {
+    for (const entry of [...values]) {
+      const drive = /^\/([A-Za-z])(?=\/|$)(.*)$/su.exec(entry);
+      if (drive) values.push(`${drive[1].toUpperCase()}:${drive[2] || '/'}`);
+    }
+  }
   return values;
 }
 
@@ -733,7 +746,7 @@ function protectedWordTest(root, opts) {
     const raw = String(word.raw ?? word.value ?? '');
     if (PROTECTED_VARIABLE_RE.test(raw) || PROTECTED_TEXT_RE.test(raw))
       return true;
-    for (const value of wordPathValues(word, env)) {
+    for (const value of wordPathValues(word, env, opts.platform)) {
       if (!value) continue;
       if (PROTECTED_TEXT_RE.test(value)) return true;
       // The folders that hold them: `find ~/.claude -delete`, `rm -r .claude`.
@@ -796,16 +809,14 @@ function explicitWrite(entry, isProtected, lineNamesProtected) {
   const args = entry.args || [];
   const values = args.map((word) => word.value);
   const anyProtected = words(entry).some(isProtected);
-  if (
-    program === 'rg' &&
-    values.some((v) => /^--(?:pre|hostname-bin)(?:=|$)/u.test(v))
-  )
-    return anyProtected || lineNamesProtected;
-  if (
-    (program === 'less' || program === 'more') &&
-    values.some((v) => v.startsWith('+'))
-  )
-    return anyProtected || lineNamesProtected;
+  // A program's own options, read once for the guard and the destination
+  // check alike (lib/shell-programs.js): one that runs another program
+  // (`rg --pre`, `tar --to-command`, `sort --compress-program`, `less
+  // +!cmd`) against a protected path is a run; one that writes its value
+  // (`sort -o`, `tar -cf`) is a write.
+  if (localProgramReach(entry).runs) return anyProtected || lineNamesProtected;
+  if (optionWrites(entry).some((word) => isProtected(pathWord(word.value))))
+    return true;
   if (
     program === 'find' &&
     values.some((v) =>
@@ -846,13 +857,12 @@ function explicitWrite(entry, isProtected, lineNamesProtected) {
           raw: w.raw.replace(/^of=/u, ''),
         }),
     );
+  // git's subcommand after its global options (`git -C /tmp rm …`).
   if (
     program === 'git' &&
-    /^(?:rm|mv|restore|checkout|apply|clean)$/u.test(
-      operandsOf(args)[0]?.value ?? '',
-    )
+    GIT_WRITE_SUBCOMMANDS.has(gitCommand(entry).subcommand)
   )
-    return args.slice(1).some(isProtected);
+    return args.some(isProtected);
   if (SCRIPT_RUNNERS.has(program) && !interpreterSpec(program)) {
     const operands = operandsOf(args);
     if (operands[0] && isProtected(operands[0])) return true;
@@ -892,6 +902,11 @@ function protectedEffect(entry, ctx) {
     return WRITE;
   const program = entry.program;
   if (!program) return null;
+  // An extractor writing files ZeroH can't name into a protected folder
+  // (`tar -xf a.tar -C ~/.claude`, a plugin's hooks folder): uncertain
+  // (Astra pre-1.0.0 R1). Named members are writes, above.
+  if (optionWritesInto(entry).some((dir) => extractsIntoProtected(dir, ctx)))
+    return UNCERTAIN;
   if (program === 'sed') return sedEffect(entry, ctx);
   if (AWK_PROGRAMS.has(program)) return awkEffect(entry, ctx);
   const interpreter = interpreterCode(entry);
@@ -917,6 +932,13 @@ function commandTextEffect(text, ctx) {
       }),
     );
   return effect;
+}
+
+function extractsIntoProtected(dir, ctx) {
+  const base = String(dir.value).replace(/[\\/]+$/u, '');
+  return [base, `${base}/settings.json`].some((value) =>
+    ctx.isProtected({ ...pathWord(value), raw: value }),
+  );
 }
 
 // A word for a path the program itself names (a sed `w` file, an awk
@@ -1193,18 +1215,8 @@ export function isReadOnlyInspection(command, shell = 'bash') {
     if (entry.launchers?.length || entry.stdinArgs) return false;
     if (!(entry.redirects || []).every(harmlessRedirect)) return false;
     if (!READERS.has(entry.program ?? '')) return false;
-    const values = (entry.args || []).map((word) => word.value);
-    if (
-      entry.program === 'rg' &&
-      values.some((v) => /^--(?:pre|hostname-bin)(?:=|$)/u.test(v))
-    )
-      return false;
-    if (
-      (entry.program === 'less' || entry.program === 'more') &&
-      values.some((v) => v.startsWith('+'))
-    )
-      return false;
-    return true;
+    // An option that runs another program (lib/shell-programs.js).
+    return !localProgramReach(entry).runs;
   });
 }
 
@@ -1229,13 +1241,21 @@ export function protectedShellDecision(
   const readings = shellReadings(command, shell).filter(
     (reading) => reading.ok,
   );
+  // A path an option names only with its value attached (`-C/…/.claude`,
+  // `unzip -d/…`, `7z -o/…`) is named too, as the shared reader reads it.
+  const optionNamed = (entry) =>
+    optionWrites(entry).some((word) => isProtected(pathWord(word.value))) ||
+    optionWritesInto(entry).some((dir) =>
+      extractsIntoProtected(dir, { isProtected }),
+    );
   const tokenNamed = readings.some((reading) =>
     reading.commands.some(
       (entry) =>
         words(entry).some(isProtected) ||
         (entry.redirects || []).some((redirect) =>
           isProtected(redirect.target),
-        ),
+        ) ||
+        optionNamed(entry),
     ),
   );
   if (!namesProtected && !tokenNamed) return none;

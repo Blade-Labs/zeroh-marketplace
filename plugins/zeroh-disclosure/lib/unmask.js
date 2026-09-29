@@ -19,7 +19,7 @@ import {
 } from './allow-rules.js';
 import { isSecretType, normaliseKind, SECRET_TYPES } from './data-kinds.js';
 import { detectorManifest } from './detector.js';
-import { writePrivateJson } from './private-fs.js';
+import { canonicalProjectPath, writePrivateJson } from './private-fs.js';
 import { envSessionId, sessionDir } from './session.js';
 import {
   acquireFileLock,
@@ -124,7 +124,7 @@ function readSessionValue(file, root, { now, maxAgeMs }) {
     const value = JSON.parse(readFileSync(file, 'utf8'));
     const written = Date.parse(value.written_at);
     if (
-      value.project !== path.resolve(root) ||
+      value.project !== canonicalProjectPath(root) ||
       typeof value.session_id !== 'string' ||
       !Number.isFinite(written) ||
       written > now ||
@@ -142,7 +142,7 @@ function writeSessionValue(file, root, sessionId, now) {
   writePrivateJson(
     file,
     {
-      project: path.resolve(root),
+      project: canonicalProjectPath(root),
       session_id: String(sessionId),
       written_at: new Date(now).toISOString(),
     },

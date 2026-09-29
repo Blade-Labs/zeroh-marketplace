@@ -41,7 +41,7 @@ test('terminal commands name the absolute CLI path, quoted per platform', () => 
   );
   assert.match(
     fixHint('/zeroh-disclosure:doctor --fix', ['doctor', '--fix']),
-    /^`\/zeroh-disclosure:doctor --fix` \(if Claude Code can't start, in a terminal: `node ".+\/bin\/zeroh-disclosure\.mjs" doctor --fix`\)$/u,
+    /^`\/zeroh-disclosure:doctor --fix` \(if Claude Code can't start, in a terminal: `node ".+[\\/]bin[\\/]zeroh-disclosure\.mjs" doctor --fix`\)$/u,
   );
 });
 

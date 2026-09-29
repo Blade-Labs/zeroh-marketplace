@@ -18,8 +18,27 @@ import {
   unwrapCommand,
 } from '../lib/shell-scan.js';
 
-const BASH = process.platform === 'win32' ? null : '/bin/bash';
-const skip = !BASH || spawnSync(BASH, ['-c', 'true']).status !== 0;
+// The oracle is Bash 4.4 or later, whose quoting the tokenizer follows
+// (`$'\u00e9'` is é). macOS ships Bash 3.2 as /bin/bash, so there the oracle
+// is a newer Bash from Homebrew when one is installed.
+function bashMajor(candidate) {
+  const run = spawnSync(candidate, ['-c', 'echo "${BASH_VERSINFO[0]}"'], {
+    encoding: 'utf8',
+  });
+  return run.status === 0 ? Number(run.stdout.trim()) : 0;
+}
+const BASH =
+  process.platform === 'win32'
+    ? null
+    : (['/bin/bash', '/opt/homebrew/bin/bash', '/usr/local/bin/bash'].find(
+        (candidate) => bashMajor(candidate) >= 4,
+      ) ?? null);
+const skip =
+  process.platform === 'win32'
+    ? 'the oracle runs POSIX Bash'
+    : BASH
+      ? false
+      : 'no Bash 4 or later (macOS /bin/bash is 3.2)';
 const EMPTY_DIR = mkdtempSync(path.join(os.tmpdir(), 'zeroh-oracle-'));
 const ORACLE_ENV = {
   PATH: process.env.PATH,
@@ -225,6 +244,7 @@ test(
       'xargs -d , zstub a',
     ];
     let compared = 0;
+    const unavailable = [];
     for (const command of cases) {
       const run = spawnSync(BASH, ['--noprofile', '--norc', '-c', command], {
         cwd: EMPTY_DIR,
@@ -238,6 +258,13 @@ test(
           : '',
         encoding: 'utf8',
       });
+      // GNU launchers and their long options (timeout, stdbuf, setsid,
+      // `env --unset`, `nice --adjustment`, `xargs -d`) are not part of
+      // macOS; a spelling the system cannot run has no oracle there.
+      if (run.status !== 0 && process.platform !== 'linux') {
+        unavailable.push(command);
+        continue;
+      }
       assert.equal(run.status, 0, `${command}: ${run.stderr}`);
       const argv = run.stdout.slice(0, -1).split('\0');
       const parsed = analyzeBash(command);
@@ -258,6 +285,9 @@ test(
       compared += 1;
     }
     t.diagnostic(`launcher oracle compared ${compared} command lines`);
+    if (unavailable.length)
+      t.diagnostic(`not on this system: ${unavailable.join(' | ')}`);
+    assert.ok(compared >= 20, `only ${compared} launcher spellings ran`);
   },
 );
 

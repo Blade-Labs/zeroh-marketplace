@@ -15,7 +15,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -28,6 +27,7 @@ import {
 } from '../lib/exit-status.js';
 import { writeJson } from '../lib/session.js';
 import {
+  assertPrivate,
   FAKE_DB_PASSWORD,
   FAKE_STRIPE,
   PLUGIN,
@@ -40,6 +40,12 @@ import {
 const TOKEN_RE = /\[API_KEY-[0-9a-f]{6}\]/;
 const HAS_PWSH = spawnSync('pwsh', ['-v'], { encoding: 'utf8' }).status === 0;
 const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+
+const BASH_MAJOR = Number(
+  spawnSync('bash', ['-c', 'echo "${BASH_VERSINFO[0]}"'], {
+    encoding: 'utf8',
+  }).stdout.trim(),
+);
 
 function bash(command, cwd) {
   return spawnSync('bash', ['-c', command], { encoding: 'utf8', cwd });
@@ -77,13 +83,15 @@ test('the Bash wrapper exits 0 and reports a failure in the output', () => {
     // These cannot take a suffix: an EXIT trap reports the exact status.
     ['echo a; false # trailing comment', 'a', 'trap'],
     ['echo hi; exit 3', 'hi', 'trap'],
+    // An early exit 0 is a success: no failure line.
+    ['echo hi; exit 0', 'hi', 'trap-success'],
     ['set -e; false; echo not-reached', '', 'trap'],
     // An unset variable under nounset or ${X:?} ends the shell after printing.
-    ['set -u; echo out; echo $ZH_UNSET_B9', 'out', 'trap'],
-    ['set -eu\necho out; echo "$ZH_UNSET_B9"', 'out', 'trap'],
-    ['set -o nounset\necho out; echo $ZH_UNSET_B9', 'out', 'trap'],
-    ['echo out; : "${ZH_UNSET_B9:?is required}"', 'out', 'trap'],
-    ['echo out; echo ${ZH_UNSET_B9?}', 'out', 'trap'],
+    ['set -u; echo out; echo $ZH_UNSET_B9', 'out', 'trap-expansion'],
+    ['set -eu\necho out; echo "$ZH_UNSET_B9"', 'out', 'trap-expansion'],
+    ['set -o nounset\necho out; echo $ZH_UNSET_B9', 'out', 'trap-expansion'],
+    ['echo out; : "${ZH_UNSET_B9:?is required}"', 'out', 'trap-expansion'],
+    ['echo out; echo ${ZH_UNSET_B9?}', 'out', 'trap-expansion'],
     ['echo ${#ZH_UNSET_B9}; false', '0', false],
   ];
   for (const [command, expected, failure] of cases) {
@@ -97,7 +105,25 @@ test('the Bash wrapper exits 0 and reports a failure in the output', () => {
       assert.ok(!wrapped.startsWith('trap'), command);
     } else if (failure === 'trap') {
       assert.ok(wrapped.startsWith('trap'), command);
-      if (command !== 'echo ok') assert.match(output, /exit status [1-9]/u);
+      assert.match(output, /exit status [1-9]/u, command);
+    } else if (failure === 'trap-success') {
+      assert.ok(wrapped.startsWith('trap'), command);
+      assert.ok(!output.includes('[ZeroH:'), command);
+    } else if (failure === 'trap-expansion') {
+      assert.ok(wrapped.startsWith('trap'), command);
+      assert.doesNotMatch(output, /exit status 0/u, command);
+      if (BASH_MAJOR >= 4) {
+        assert.match(output, /exit status [1-9]/u, command);
+      } else {
+        // Bash 3.2 (macOS /bin/bash) hands an EXIT trap status 0 after an
+        // unset-variable error, so the status is unknown there; Bash's own
+        // error line says what failed.
+        assert.match(
+          output,
+          /ZH_UNSET_B9: (?:unbound variable|is required|parameter null or not set)/u,
+          command,
+        );
+      }
     } else {
       assert.ok(!output.includes('[ZeroH:'), command);
     }
@@ -156,16 +182,18 @@ test(
   'the PowerShell wrapper keeps using, param and #requires first and catches syntax errors',
   { skip: HAS_PWSH ? false : 'pwsh is not installed' },
   () => {
+    // PowerShell ends output lines with CRLF on Windows.
     const run = (command) => {
       const encoded = Buffer.from(
         wrapPowerShellExitStatus(command),
         'utf16le',
       ).toString('base64');
-      return spawnSync(
+      const result = spawnSync(
         'pwsh',
         ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
         { encoding: 'utf8' },
       );
+      return { ...result, stdout: result.stdout.replaceAll('\r\n', '\n') };
     };
     const using = run(
       'using namespace System.Text\n[StringBuilder]::new("zh-using").ToString()',
@@ -726,8 +754,9 @@ test('no file ZeroH keeps for a project holds a typed or read secret, and modes 
     entries.some((entry) => /signing-key\.private\.json$/.test(entry.path)),
   );
   for (const entry of entries) {
-    const mode = statSync(entry.path).mode & 0o777;
-    assert.equal(mode, entry.dir ? 0o700 : 0o600, entry.path);
+    assertPrivate(entry.path, entry.dir ? 0o700 : 0o600, entry.path, {
+      home: p.home,
+    });
     if (entry.dir) continue;
     const text = readFileSync(entry.path, 'utf8');
     for (const secret of [FAKE_STRIPE, FAKE_DB_PASSWORD]) {
@@ -737,14 +766,15 @@ test('no file ZeroH keeps for a project holds a typed or read secret, and modes 
     }
     assert.ok(!text.includes('original_text'), entry.path);
   }
-  assert.equal(statSync(state).mode & 0o777, 0o700);
+  assertPrivate(state, 0o700, state, { home: p.home });
 });
 
 test('session writeJson is atomic and private', async () => {
   const p = tempProject();
   const file = path.join(stateDirOf(p), 'sessions', 'x', 'state.json');
   await writeJson(file, { a: 1 });
-  assert.equal(statSync(file).mode & 0o777, 0o600);
+  // In process, outside this process's ZeroH home: the mode on POSIX only.
+  assertPrivate(file, 0o600);
   assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), { a: 1 });
   // A failed write leaves the previous file and no temporary behind.
   const blocked = path.join(stateDirOf(p), 'sessions', 'x', 'dir.json');

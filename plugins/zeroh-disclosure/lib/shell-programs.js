@@ -925,6 +925,17 @@ const GIT_REMOTE_LOCAL = new Set([
 const GIT_COMMAND_CONFIG_RE =
   /^(?:alias\..+|core\.(?:sshcommand|pager|editor|askpass|fsmonitor|hookspath|gitproxy)|sequence\.editor|gpg\.(?:.+\.)?program|diff\.external|credential\..+|url\..+|remote\..+|include(?:if\..+)?\.path|.+\.(?:command|cmd|helper|textconv|driver|process|clean|smudge|tool|proxy))$/iu;
 
+// git subcommands that change or delete the files they name: the settings
+// guard stops one naming a protected path (lib/settings-guard.js).
+export const GIT_WRITE_SUBCOMMANDS = new Set([
+  'rm',
+  'mv',
+  'restore',
+  'checkout',
+  'apply',
+  'clean',
+]);
+
 // { subcommand, kind: 'local' | 'network' | 'unknown', commandConfig, urls:
 // [word] } for a git command: `network` talks to a remote, `unknown` is an
 // alias or an external `git-foo`. `commandConfig`: a `-c` names a program
@@ -985,7 +996,13 @@ export function gitCommand(entry) {
         String(word.value),
       ),
     );
-  return { subcommand, kind, commandConfig, urls };
+  const remoteSubcommand =
+    subcommand === 'remote'
+      ? String(
+          rest.find((word) => !String(word.value).startsWith('-'))?.value ?? '',
+        )
+      : null;
+  return { subcommand, kind, commandConfig, urls, remoteSubcommand };
 }
 
 // ---------------------------------------------------------------------------
@@ -1120,6 +1137,9 @@ const OPENSSL_LOCAL = new Set(
 // Options that name a server: data goes there.
 const OPENSSL_SERVER_OPTIONS = [
   '-connect',
+  // The name sent to the server (SNI, XMPP to=): a destination too.
+  '-servername',
+  '-xmpphost',
   '-host',
   '-proxy',
   '-url',
@@ -1175,13 +1195,13 @@ export function opensslCommand(entry) {
 // And any program given a UNC path (`\\host\share\file`) reaches that host
 // over SMB.
 
-const RUNNER_OPTIONS = Object.freeze({
+export const RUNNER_OPTIONS = Object.freeze({
   tar: {
     spec: {
       values:
-        '-f --file -C --directory -I --use-compress-program -F --info-script --new-volume-script --to-command --rsh-command --checkpoint-action -b -g -K -L -N -T -V -X -H --exclude --transform',
+        '-f --file -C --directory -I --use-compress-program -F --info-script --new-volume-script --to-command --rsh-command --checkpoint-action -b -g -K -L -N -T -V -X -H --exclude --transform --xform --files-from --strip-components',
       longs:
-        '--file --directory --use-compress-program --info-script --new-volume-script --to-command --rsh-command --checkpoint-action --checkpoint --exclude --transform --force-local --create --extract --list --append --update --verbose --gzip --bzip2 --xz --zstd --to-stdout --totals',
+        '--file --directory --use-compress-program --info-script --new-volume-script --to-command --rsh-command --checkpoint-action --checkpoint --exclude --transform --xform --files-from --strip-components --wildcards --absolute-names --force-local --create --extract --get --list --append --update --verbose --gzip --bzip2 --xz --zstd --to-stdout --totals',
     },
     runs: [
       '-I',
@@ -1279,6 +1299,167 @@ export function localProgramReach(entry) {
     if (host) out.unc.push({ word, host });
   }
   return out;
+}
+
+// The words a program's own options write to, for the programs of
+// RUNNER_OPTIONS: `sort -o FILE`, and the archive `tar -c/-r/-u -f FILE`
+// creates or changes; and the files an archive extractor writes when its
+// members are named (`tar -xf a.tar -C DIR settings.json` writes
+// DIR/settings.json; Astra pre-1.0.0 R1). An attached value is its own word
+// ({ value }).
+export function optionWrites(entry) {
+  return archiveWrites(entry).writes;
+}
+
+// The directories an extractor writes files into that ZeroH can't name: all
+// members (`tar -xf a.tar -C DIR`, `unzip a.zip -d DIR`), patterns, a member
+// list from a file, renamed or stripped paths, cpio and 7z -o.
+export function optionWritesInto(entry) {
+  return archiveWrites(entry).into;
+}
+
+// A word for DIR/MEMBER as the extractor writes it (the working directory
+// when there is no DIR). Without -P tar drops a member's leading `/`.
+function memberWord(dir, member, absolute) {
+  const name = String(member.value);
+  if (absolute && /^\//u.test(name)) return member;
+  const relative = name.replace(/^\/+/u, '');
+  if (!dir) return { ...member, value: relative, raw: relative };
+  const joined = `${String(dir.value).replace(/[\\/]+$/u, '')}/${relative}`;
+  return { ...dir, value: joined, raw: joined, attached: false };
+}
+
+// A member ZeroH can't turn into one path: a pattern, a variable, a glob.
+function unnamedMember(word) {
+  return word.dynamic || word.glob || /[*?[]/u.test(String(word.value));
+}
+
+const CURRENT_DIRECTORY = Object.freeze({ value: '.', raw: '.' });
+
+function extraction(dir, members, { absolute = false, unknown = false } = {}) {
+  if (unknown || !members.length || members.some(unnamedMember))
+    return { writes: [], into: [dir ?? CURRENT_DIRECTORY] };
+  return {
+    writes: members.map((member) => memberWord(dir, member, absolute)),
+    into: [],
+  };
+}
+
+const NO_WRITES = Object.freeze({ writes: [], into: [] });
+
+function archiveWrites(entry) {
+  const program = entry.program;
+  const args = program === 'tar' ? tarArgs(entry.args || []) : entry.args || [];
+  if (program === 'sort' || program === 'tar') {
+    const read = readOptions(args, RUNNER_OPTIONS[program].spec);
+    const has = (names) =>
+      read.options.some((option) => names.includes(option.name));
+    const valuesOf = (names) =>
+      read.options
+        .filter((option) => names.includes(option.name) && option.value)
+        .map((option) => option.value);
+    if (program === 'sort')
+      return { writes: valuesOf(['-o', '--output']), into: [] };
+    if (has(['-c', '-r', '-u', '--create', '--append', '--update']))
+      return { writes: valuesOf(['-f', '--file']), into: [] };
+    if (!has(['-x', '--extract', '--get']) || has(['-O', '--to-stdout']))
+      return NO_WRITES;
+    const dirs = valuesOf(['-C', '--directory']);
+    return extraction(dirs.at(-1) ?? null, read.operands, {
+      absolute: has(['-P', '--absolute-names']),
+      unknown:
+        dirs.length > 1 ||
+        has([
+          '-T',
+          '--files-from',
+          '--transform',
+          '--xform',
+          '--strip-components',
+          '--wildcards',
+        ]),
+    });
+  }
+  if (program === 'unzip') return unzipWrites(args);
+  if (program === 'cpio') return cpioWrites(args);
+  if (['7z', '7za', '7zz', '7zr'].includes(program))
+    return sevenZipWrites(args);
+  return NO_WRITES;
+}
+
+// unzip [-opts] ARCHIVE [MEMBER…] [-x EXCLUDED…] [-d DIR]: options may come
+// after the operands; -l, -t, -v, -p, -c, -z and -Z write no file, -j drops
+// the members' folders.
+function unzipWrites(args) {
+  let dir = null;
+  let archive = null;
+  let excluding = false;
+  let junk = false;
+  const members = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const word = args[index];
+    const value = String(word.value);
+    if (value.startsWith('-') && value.length > 1 && !word.dynamic) {
+      excluding = false;
+      const flags = value.slice(1);
+      const d = flags.indexOf('d');
+      const before = d >= 0 ? flags.slice(0, d) : flags;
+      if (/[ltvpczZ]/u.test(before)) return NO_WRITES;
+      if (before.includes('j')) junk = true;
+      if (d >= 0) {
+        const rest = flags.slice(d + 1);
+        dir = rest ? { ...word, value: rest, attached: true } : args[index + 1];
+        if (!rest) index += 1;
+      } else if (before.endsWith('x')) excluding = true;
+      // -P takes the password as the next word.
+      else if (before.endsWith('P')) index += 1;
+      continue;
+    }
+    if (excluding) continue;
+    if (!archive) archive = word;
+    else members.push(word);
+  }
+  if (!archive) return NO_WRITES;
+  return extraction(dir ?? null, members, { unknown: junk });
+}
+
+// cpio -i (extract) or -p (pass-through, into its DIR operand); -D/--directory
+// changes the directory. Its members are always patterns.
+function cpioWrites(args) {
+  const read = readOptions(args, {
+    values:
+      '-D --directory -E --pattern-file -F --file -H --format -I -O -R --owner -M --message --rsh-command --block-size -C --io-size',
+  });
+  const has = (names) =>
+    read.options.some((option) => names.includes(option.name));
+  const dirs = read.options
+    .filter((o) => ['-D', '--directory'].includes(o.name) && o.value)
+    .map((o) => o.value);
+  const dir = dirs.at(-1) ?? null;
+  if (has(['-i', '--extract']) && !has(['-t', '--list']))
+    return { writes: [], into: [dir ?? CURRENT_DIRECTORY] };
+  if (has(['-p', '--pass-through'])) {
+    const target = read.operands.at(-1);
+    return { writes: [], into: [target ?? dir ?? CURRENT_DIRECTORY] };
+  }
+  return NO_WRITES;
+}
+
+// 7z x|e ARCHIVE [MEMBER…] [-oDIR]: `e` flattens paths, so only `x` names
+// where a member goes.
+function sevenZipWrites(args) {
+  const command = String(args[0]?.value ?? '');
+  if (command !== 'x' && command !== 'e') return NO_WRITES;
+  let dir = null;
+  const operands = [];
+  for (const word of args.slice(1)) {
+    const value = String(word.value);
+    if (/^-o/u.test(value))
+      dir = { ...word, value: value.slice(2), attached: true };
+    else if (!value.startsWith('-') || word.dynamic) operands.push(word);
+  }
+  const [archive, ...members] = operands;
+  if (!archive) return NO_WRITES;
+  return extraction(dir, members, { unknown: command === 'e' });
 }
 
 // ---------------------------------------------------------------------------

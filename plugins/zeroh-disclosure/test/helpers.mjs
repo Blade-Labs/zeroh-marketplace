@@ -2,7 +2,15 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,6 +40,85 @@ export const PROSE_FIXTURES = [
 
 // The unkeyed FNV-1a token hash of 0.x, for tests that need tokens a vault
 // did not mint with its own key.
+// A file or folder only its owner can use. POSIX: exactly `mode` (0600 for a
+// file, 0700 for a folder). Windows has no POSIX modes; there ZeroH gives its
+// home an ACL for the signed-in user and SYSTEM only (lib/private-fs.js
+// protectZerohHome), which everything inside inherits, so no other account or
+// group (Administrators included) may appear. `home` is the ZEROH_HOME the
+// writer ran with; without it (an in-process write outside the process's
+// ZeroH home) Windows has nothing to check.
+export function assertPrivate(target, mode, message = target, { home } = {}) {
+  if (process.platform !== 'win32') {
+    assert.equal(statSync(target).mode & 0o777, mode, message);
+    return;
+  }
+  if (!home) return;
+  assert.ok(
+    existsSync(path.join(home, '.acl-protected')),
+    `${message}: ZeroH did not protect its home ${home}`,
+  );
+  const tool = (name) =>
+    path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', name);
+  const user = execFileSync(tool('whoami.exe'), { encoding: 'utf8' })
+    .trim()
+    .toLowerCase();
+  const listing = execFileSync(tool('icacls.exe'), [target], {
+    encoding: 'utf8',
+  });
+  const principals = listing
+    .replace(target, '')
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.includes(':('))
+    .map((line) => line.slice(0, line.indexOf(':(')).toLowerCase());
+  assert.ok(principals.length > 0, `${message}: no ACL entries in ${listing}`);
+  for (const principal of principals) {
+    assert.ok(
+      principal === user || principal === 'nt authority\\system',
+      `${message}: ${principal} may use it (${listing.trim()}; the home: ${execFileSync(tool('icacls.exe'), [home], { encoding: 'utf8' }).trim()})`,
+    );
+  }
+}
+
+// Makes `project`'s vault impossible to save until the returned restore()
+// runs. POSIX: the vault folder is read-only (0500). Windows ignores a
+// folder's mode, and an administrator (GitHub's runners) writes through
+// deny entries with backup privileges; a read-only vault file can't be
+// replaced by anyone, so saving fails with EPERM there.
+export async function vaultUnsaveable(project) {
+  const dir = path.join(project.home, 'vault');
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') {
+    chmodSync(dir, 0o500);
+    return () => chmodSync(dir, 0o700);
+  }
+  const { Vault } = await import('../lib/vault.js');
+  const vault = new Vault(project.dir, {
+    env: { ...process.env, ZEROH_HOME: project.home },
+  });
+  vault.tokenFor('SECRET', 'ZEROHFAKE-unsaveable-seed', 'test');
+  vault.save();
+  chmodSync(vault.file, 0o444);
+  return () => chmodSync(vault.file, 0o600);
+}
+
+// A fake program the product runs by its path (ZEROH_CLAUDE_BIN). Windows
+// runs only programs such as .exe and .cmd, so there a .cmd beside the
+// script starts it with this Node.
+export function fakeProgram(script) {
+  if (process.platform !== 'win32') return script;
+  const launcher = `${script.replace(/\.m?js$/u, '')}.cmd`;
+  writeFileSync(launcher, `@"${process.execPath}" "${script}" %*\r\n`);
+  return launcher;
+}
+
+// A path as a Bash command on this system spells it: in Git Bash (Claude
+// Code's Bash on Windows) an unquoted C:\Users\… loses its backslashes, so
+// there it is C:/Users/…; elsewhere the path as it is.
+export function bashPath(p) {
+  return process.platform === 'win32' ? String(p).replaceAll('\\', '/') : p;
+}
+
 export function hash6(input) {
   let h = 0x811c9dc5;
   const s = String(input);
@@ -102,10 +189,14 @@ export function isolateTestEnvironment(env = process.env) {
 // Tests run hooks and the CLI as child processes. When the suite itself runs
 // inside a Claude Code session, that session's project and ids must not leak
 // into them: every test names its own project and session.
+// Nor may its Claude Code configuration: without CLAUDE_CONFIG_DIR,
+// Claude's folder is the isolated HOME's .claude.
 for (const key of [
   'CLAUDE_PROJECT_DIR',
   'CLAUDE_CODE_SESSION_ID',
   'CLAUDE_SESSION_ID',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_PLUGIN_CACHE_DIR',
 ]) {
   delete process.env[key];
 }

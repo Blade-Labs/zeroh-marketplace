@@ -21,7 +21,7 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runHook, tempProject } from './helpers.mjs';
+import { bashPath, runHook, tempProject } from './helpers.mjs';
 import {
   deniesClaudeControlChange,
   deniesZeroHSettings,
@@ -122,38 +122,46 @@ test('pass mode: the real PreToolUse hook denies rg --pre in every spelling', ()
 test('pass mode: commands that clearly write, delete or run against protected paths are denied', () => {
   const f = fixture();
   const s = f.settings;
+  // The paths as a Bash command spells them (C:/… in Git Bash on Windows).
+  const b = {
+    settings: bashPath(f.settings),
+    plugin: bashPath(f.plugin),
+    hooks: bashPath(f.hooks),
+    home: bashPath(f.home),
+    script: bashPath(f.script),
+  };
   const denied = [
-    `rm ${s}`,
+    `rm ${b.settings}`,
     `rm -f ~/.claude/settings.json`,
     `rm ~/.cl"aude"/settings.json`,
-    `mv ${s} /tmp/zerohfake.json`,
-    `cp /tmp/zerohfake.json ${s}`,
-    `cp -t ${f.plugin}/hooks /tmp/x.sh`,
-    `sed -i s/1/0/ ${s}`,
-    `sed -Ei.bak s/1/0/ ${s}`,
-    `perl -pi -e s/1/0/ ${s}`,
-    `echo {} > ${s}`,
-    `echo x >> ${f.hooks}`,
-    `jq . ${s} | tee ${s}`,
-    `chmod 000 ${s}`,
-    `truncate -s0 ${s}`,
-    `dd if=/dev/null of=${s}`,
-    `find ${f.home}/.claude -name settings.json -delete`,
-    `find ${f.home}/.claude -exec rm {} +`,
-    `echo ${s} | xargs rm`,
-    `sh ${f.script}`,
-    `bash ${f.script}`,
-    `python3 -c "open('${s}','w')"`,
-    `node -e "require('fs').unlinkSync('${s}')"`,
-    `env -u ZEROHFAKE rm ${s}`,
-    `/usr/bin/env rm ${s}`,
-    `sudo rm ${s}`,
-    `timeout 5 rm ${s}`,
-    `bash -c "rm ${s}"`,
-    `true && rm ${s}`,
-    `echo $(rm ${s})`,
-    `git rm ${s}`,
-    `less +!rm ${s}`,
+    `mv ${b.settings} /tmp/zerohfake.json`,
+    `cp /tmp/zerohfake.json ${b.settings}`,
+    `cp -t ${b.plugin}/hooks /tmp/x.sh`,
+    `sed -i s/1/0/ ${b.settings}`,
+    `sed -Ei.bak s/1/0/ ${b.settings}`,
+    `perl -pi -e s/1/0/ ${b.settings}`,
+    `echo {} > ${b.settings}`,
+    `echo x >> ${b.hooks}`,
+    `jq . ${b.settings} | tee ${b.settings}`,
+    `chmod 000 ${b.settings}`,
+    `truncate -s0 ${b.settings}`,
+    `dd if=/dev/null of=${b.settings}`,
+    `find ${b.home}/.claude -name settings.json -delete`,
+    `find ${b.home}/.claude -exec rm {} +`,
+    `echo ${b.settings} | xargs rm`,
+    `sh ${b.script}`,
+    `bash ${b.script}`,
+    `python3 -c "open('${b.settings}','w')"`,
+    `node -e "require('fs').unlinkSync('${b.settings}')"`,
+    `env -u ZEROHFAKE rm ${b.settings}`,
+    `/usr/bin/env rm ${b.settings}`,
+    `sudo rm ${b.settings}`,
+    `timeout 5 rm ${b.settings}`,
+    `bash -c "rm ${b.settings}"`,
+    `true && rm ${b.settings}`,
+    `echo $(rm ${b.settings})`,
+    `git rm ${b.settings}`,
+    `less +!rm ${b.settings}`,
   ];
   for (const command of denied) {
     for (const tool of ['Bash', 'Monitor']) {

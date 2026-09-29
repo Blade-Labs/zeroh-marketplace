@@ -31,6 +31,10 @@ import { registeredProjectRoots, registerProjectRoot } from '../lib/report.js';
 import { pruneReceipts } from '../lib/receipt-retention.js';
 import { updateSessionStatus } from '../lib/session-status.js';
 import { recordPluginRoot } from '../lib/statusline-settings.js';
+import {
+  checkPluginIntegrity,
+  integrityLines,
+} from '../lib/plugin-integrity.js';
 import { shadowedStatusline } from '../lib/first-run.js';
 import { managedSettingsPath } from '../lib/statusline.js';
 import { zerohHome } from '../lib/private-fs.js';
@@ -131,9 +135,10 @@ const contextFindings = scanSessionContext({
 });
 let proxy = await proxyState({ sessionId });
 // The first prompt can put this session behind the proxy only when the
-// proxy is installed with its login item (see ensureDefaultProxy).
+// proxy is set up (see ensureDefaultProxy; without a login item it runs for
+// the session all the same).
 if (proxy === 'ready' && (proxyError || !proxyResult?.enabled)) {
-  proxy = proxyResult && !proxyError ? 'no-login-item' : 'off';
+  proxy = 'off';
 }
 // This session's base URL is fixed until Claude Code restarts: when it names
 // a ZeroH proxy that is gone, try to bring it back now rather than at the
@@ -151,9 +156,13 @@ const unmask = await activeUnmaskStatus({ root, sessionId });
 // below (LP-B3); the banner then only says what is masked.
 const warnings = warningLines({
   contextFindings,
-  proxy: proxy === 'no-login-item' ? 'quiet' : proxy,
+  proxy,
   unmaskWarnings: unmask.warnings,
   uncertain: uncertainMode(),
+  // The first time, the notice above already says it.
+  loginItemRefused: proxyResult?.warning
+    ? null
+    : (proxyResult?.loginItemRefused ?? null),
 });
 if (proxyGuard?.report) {
   warnings.push(`  Details (stays on this machine): ${proxyGuard.report}`);
@@ -194,6 +203,7 @@ const lines = [
   '  {"version": 1} plus any of: fields (order of shield, name, state, fix, masked, sent,',
   '  notProtected, unmask, receipt), separator, labels, emoji (true/false), wording',
   '  ("long"/"compact"), colour (true/false), onlyWhenNotProtected. Never change statusLine.',
+  "- If the user says ZeroH isn't working, or ZeroH shows 🟡 or 🔴, suggest /zeroh-disclosure:doctor (then --fix); never run it yourself.",
   '',
   `Known secrets for this project: ${known.length} (from .env files and secret-named environment variables).`,
   `Typed prompts: ${
@@ -283,10 +293,16 @@ updateSessionStatus({ cwd: root, sessionId }, (status) => {
 });
 // Where the status line command finds this plugin version, and, for the
 // first prompt, which marketplace it came from (lib/first-run.js).
-recordPluginRoot(
-  zerohHome(),
-  path.dirname(path.dirname(fileURLToPath(import.meta.url))),
-);
+const pluginRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+recordPluginRoot(zerohHome(), pluginRoot);
+// A folder an earlier build left for this version, which `claude plugin
+// update` keeps as it is (lib/plugin-integrity.js): said at every session
+// start until the user replaces it. About 35 ms (one git ls-tree). It can
+// only speak when that folder's code already has this check.
+{
+  const [found, fix] = integrityLines(checkPluginIntegrity({ pluginRoot }));
+  if (found) userNotices.push(`⚠ ${found} ${fix}`);
+}
 // A project or managed settings file that sets its own status line over
 // ZeroH's: said once per session start.
 {

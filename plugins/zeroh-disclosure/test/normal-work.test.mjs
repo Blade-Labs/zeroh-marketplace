@@ -348,6 +348,27 @@ test('the code corpus has no finding in any profile', () => {
   }
 });
 
+// A bare reference after a secret-named key (`api_key: $API_KEY` in a
+// template) is a value to the detector: whether it is expanded depends on
+// the program that reads the file, which the detector can't know (1.0.0
+// detector-exceptions redesign). It is masked in what the model reads,
+// restorably; the key-name rules never rewrite what the model writes.
+test('a bare reference after a secret key is masked in output, and not rewritten on the way in', () => {
+  const content = 'db:\n  api_key: $API_KEY\n';
+  assert.deepEqual(
+    detectSensitiveData(content, { profile: 'tool' }).map((f) =>
+      content.slice(f.start, f.end),
+    ),
+    ['$API_KEY'],
+  );
+  assert.deepEqual(
+    detectSensitiveData(content, { profile: 'secrets' })
+      .filter((f) => !f.generic)
+      .map((f) => content.slice(f.start, f.end)),
+    [],
+  );
+});
+
 test('the code corpus passes Read unchanged and is not rewritten or denied on the way in', () => {
   const p = tempProject({ env: false });
   for (const [i, [name, content]] of Object.entries(NORMAL_CODE).entries()) {

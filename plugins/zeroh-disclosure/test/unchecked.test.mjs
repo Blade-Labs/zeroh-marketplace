@@ -27,7 +27,7 @@ function session() {
   return { cwd, env, dir };
 }
 
-test('the reasons are the agreed seventeen', () => {
+test('the reasons are the agreed nineteen', () => {
   assert.deepEqual(UNCHECKED_REASONS, [
     'dynamic-destination',
     'script-or-interpreter',
@@ -37,9 +37,11 @@ test('the reasons are the agreed seventeen', () => {
     'unknown-format',
     'proxy-not-running',
     'raw-secret-in-command',
+    'variable-in-command',
     'sensitive-file-masked',
     'too-large',
     'vault-unavailable',
+    'vault-unsaveable',
     'config-unreadable',
     'check-failed',
     'token-vault-unavailable',
@@ -60,6 +62,7 @@ test('each reason has its one-line notice, for a command, a tool output or a pro
     'unknown-format': 'unknown format',
     'proxy-not-running': 'proxy not running',
     'raw-secret-in-command': 'a known secret written into the command',
+    'variable-in-command': 'a variable whose value ZeroH cannot see',
     'sensitive-file-masked': 'private key or credential file read (masked)',
     'too-large': 'too large to scan',
     'config-unreadable': "couldn't read .zeroh.env; using defaults",

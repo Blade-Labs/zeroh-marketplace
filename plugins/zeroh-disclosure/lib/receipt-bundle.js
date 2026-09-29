@@ -95,6 +95,9 @@ function toBundleRecord(input, index) {
     sanitized_text: input.sanitized_text ?? null,
     receipt,
     token: input.token ?? null,
+    // The turn's signed summary (1.0.0): the bundle verifier checks its
+    // signature and that it belongs to this receipt.
+    ...(input.turn_summary ? { turn_summary: input.turn_summary } : {}),
   };
 }
 

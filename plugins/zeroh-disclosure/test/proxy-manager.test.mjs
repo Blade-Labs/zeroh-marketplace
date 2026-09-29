@@ -39,8 +39,11 @@ import {
 } from '../lib/private-fs.js';
 import {
   checkSessionProxy,
+  diagnoseProxy,
   ensureDefaultProxy,
+  evaluateSessionOnlyExit,
   prepareInstall,
+  proxyRuntimeStatus,
   probeProxy,
   repairDeadProxySetting,
   restoreClaudeSettings,
@@ -58,7 +61,10 @@ import {
   routeSeen,
   writeProxyConfig,
 } from '../lib/proxy-state.js';
-import { createServiceManager } from '../lib/service-manager.js';
+import {
+  createServiceManager,
+  readDefinitionText,
+} from '../lib/service-manager.js';
 import { projectKey } from '../lib/vault.js';
 import {
   fakeUpstream,
@@ -202,11 +208,11 @@ test('default install chains to the prior upstream, survives a reboot without th
         ? 'scheduled-task'
         : 'systemd',
   );
+  // The Windows task file is UTF-16LE (readDefinitionText decodes each kind).
   const definition = readdirSync(isolated.env.ZEROH_SERVICE_MANAGER_DIR)
     .map((name) =>
-      readFileSync(
+      readDefinitionText(
         path.join(isolated.env.ZEROH_SERVICE_MANAGER_DIR, name),
-        'utf8',
       ),
     )
     .join('\n');
@@ -219,7 +225,9 @@ test('default install chains to the prior upstream, survives a reboot without th
   // copy.
   process.kill(installed.pid, 'SIGTERM');
   await waitUntilDown(installed.proxyUrl);
-  assert.deepEqual(settingsDoc(isolated), original);
+  // Windows ends the daemon at once, so none of its handlers runs.
+  if (process.platform !== 'win32')
+    assert.deepEqual(settingsDoc(isolated), original);
   rmSync(pluginRoot, { recursive: true, force: true });
   const rebooted = spawn(
     process.execPath,
@@ -583,7 +591,7 @@ async function rawRequest(port, text) {
   });
 }
 
-test('the daemon masks registered sessions, masks unclaimed requests while a plugin session is live, and passes them through otherwise', async (t) => {
+test('the daemon masks registered sessions and passes requests no ZeroH hook registered through unmasked', async (t) => {
   const isolated = isolatedEnvironment('proxy-routing');
   const upstream = await fakeUpstream();
   t.after(() => upstream.close());
@@ -606,39 +614,38 @@ test('the daemon masks registered sessions, masks unclaimed requests while a plu
   const origin = new URL(installed.proxyUrl).origin;
   const port = Number(new URL(installed.proxyUrl).port);
 
-  // While session A's plugin is live, a request of a session no hook
-  // registered, or one without a session header, may be A's own traffic
-  // under another id: it is masked with A's vault, never sent as it is
-  // (LP-B5).
+  // A request of a session no hook registered, or one without a session
+  // header, passes through unmasked even while session A's plugin is live:
+  // no ZeroH hook runs for it, so a token in its context could never be put
+  // back into its commands (product rule 8; 1.0.0: a git author email
+  // committed as a token by a session ZeroH did not run in).
   const unknown = await postJson(`${installed.proxyUrl}/v1/messages`, body, {
     sessionId: 'ZEROHFAKE-session-unregistered',
   });
   assert.equal(unknown.status, 200);
-  assert.equal(unknown.headers['x-zeroh-disclosure'], undefined);
-  assert.ok(!upstream.seen[0].body.includes(secretA));
+  assert.equal(
+    unknown.headers['x-zeroh-disclosure'],
+    'passthrough-plugin-inactive',
+  );
+  assert.equal(upstream.seen[0].body, body);
   const headerlessLive = await postJson(
     `${installed.proxyUrl}/v1/messages`,
     body,
   );
   assert.equal(headerlessLive.status, 200);
-  assert.ok(!upstream.seen[1].body.includes(secretA));
+  assert.equal(upstream.seen[1].body, body);
   assert.equal(
     routeSeen(proxyPaths(isolated.env), 'ZEROHFAKE-session-unregistered'),
     false,
   );
 
-  // Once A has ended, no plugin session is live: a session no hook
-  // registered (ZeroH disabled in its project) passes through unchanged
-  // (D-12).
+  // Once A has ended, the same holds (D-12): Claude Code without the plugin
+  // keeps working.
   endSessionRoute({ env: isolated.env, sessionId: 'ZEROHFAKE-session-a' });
   const afterEnd = await postJson(`${installed.proxyUrl}/v1/messages`, body, {
     sessionId: 'ZEROHFAKE-session-unregistered',
   });
   assert.equal(afterEnd.status, 200);
-  assert.equal(
-    afterEnd.headers['x-zeroh-disclosure'],
-    'passthrough-plugin-inactive',
-  );
   assert.equal(upstream.seen[2].body, body);
 
   // A route no hook refreshed within the window no longer masks either.
@@ -1004,9 +1011,11 @@ test('proxy off and the next install recover the original upstream after ZEROH_H
   await waitUntilDown(second.proxyUrl);
   rmSync(envNew.ZEROH_HOME, { recursive: true, force: true });
 
-  // The daemon put the gateway back when it was stopped (LP-B4); proxy off
-  // with no ZEROH_HOME at all still clears the restore record.
-  assert.equal(settingsDoc(isolated).env.ANTHROPIC_BASE_URL, gateway);
+  // The daemon put the gateway back when it was stopped (LP-B4; Windows
+  // ends it at once, so there only proxy off can); proxy off with no
+  // ZEROH_HOME at all still restores it and clears the restore record.
+  if (process.platform !== 'win32')
+    assert.equal(settingsDoc(isolated).env.ANTHROPIC_BASE_URL, gateway);
   await stopDefaultProxy({ env: envNew });
   assert.equal(settingsDoc(isolated).env.ANTHROPIC_BASE_URL, gateway);
   assert.equal(existsSync(restoreRecordPath(isolated.settings)), false);
@@ -1118,11 +1127,13 @@ test('a plugin update restarts the daemon with the new code; an older copy never
   assert.equal(readJsonFile(path.join(runtime, 'build.json')).version, '1.0.1');
 });
 
-// P-3 and T-27: a machine that refuses login items gets a plain warning and
-// no settings entry, because nothing would keep the proxy running after a
-// reboot and every Claude Code session (with the plugin or without) would
-// meet a dead port. Typed secrets are stopped instead.
-test('a login item the OS refuses is a warning, and no settings entry is written', async (t) => {
+// Windows re-test (rc.2): with no login item, typed secrets went out
+// unmasked. A machine that refuses login items now still gets the proxy for
+// its sessions: the entry is written, typing is masked, and the daemon takes
+// the entry out and leaves once no plugin session is live (T-27: a later
+// session never meets a dead port). The refusal, its reason and the fix are
+// recorded for the banner, status and doctor.
+test('a refused login item still gives the session a running proxy, and says why with the fix', async (t) => {
   const isolated = isolatedEnvironment('proxy-login-item-refused');
   const upstream = await fakeUpstream();
   t.after(() => upstream.close());
@@ -1132,8 +1143,9 @@ test('a login item the OS refuses is a warning, and no settings entry is written
   const refusing = {
     isRegistered: () => false,
     register() {
-      throw Object.assign(new Error('Operation not permitted'), {
+      throw Object.assign(new Error('Command failed: schtasks.exe'), {
         code: 'EPERM',
+        detail: 'ERROR: The task XML is malformed.',
       });
     },
     unregister: () => ({ removed: false, kind: null }),
@@ -1144,16 +1156,22 @@ test('a login item the OS refuses is a warning, and no settings entry is written
     pluginRoot: PLUGIN,
     sessionId: 'ZEROHFAKE-refused',
     serviceManager: refusing,
+    writeSettings: false,
   });
-  assert.equal(installed.enabled, false);
-  assert.equal(installed.wroteSettings, false);
-  assert.match(installed.warning, /login item/u);
-  assert.match(
-    installed.warning,
-    /a typed secret is sent with a 'not protected' line \(stopped with uncertain block\)/u,
+  assert.equal(installed.enabled, true);
+  assert.equal(installed.loginItem, false);
+  assert.equal(installed.sessionOnly, true);
+  assert.equal(installed.loginItemRefused.code, 'EPERM');
+  assert.equal(
+    installed.loginItemRefused.detail,
+    'ERROR: The task XML is malformed.',
   );
-  assert.deepEqual(settingsDoc(isolated), {});
-  // The first prompt cannot put the session behind the proxy either.
+  assert.match(installed.warning, /could not register the login item/u);
+  assert.match(installed.warning, /The task XML is malformed/u);
+  assert.match(installed.warning, /what you type is still masked/u);
+  assert.match(installed.warning, /To fix: /u);
+  assert.ok(await probeProxy(installed.proxyUrl), 'the daemon runs');
+  // The first prompt puts the session behind the proxy.
   const sessionEnv = { ...isolated.env };
   delete sessionEnv.ANTHROPIC_BASE_URL;
   const routing = await routeSession({
@@ -1164,9 +1182,11 @@ test('a login item the OS refuses is a warning, and no settings entry is written
     serviceManager: refusing,
     waitMs: 10,
   });
-  // Told once, at SessionStart (LP-B3): the prompt adds no second notice.
-  assert.deepEqual(routing, { routed: false, state: 'no-login-item' });
-  assert.deepEqual(settingsDoc(isolated), {});
+  assert.deepEqual(routing, { routed: true, state: 'routed' });
+  assert.equal(
+    settingsDoc(isolated).env.ANTHROPIC_BASE_URL,
+    installed.proxyUrl,
+  );
   const again = await ensureDefaultProxy({
     env: isolated.env,
     root: isolated.root,
@@ -1174,14 +1194,83 @@ test('a login item the OS refuses is a warning, and no settings entry is written
     sessionId: 'ZEROHFAKE-refused-2',
     serviceManager: refusing,
   });
-  assert.equal(again.enabled, false);
-  assert.equal(again.warning, null, 'the warning is said once');
+  assert.equal(again.enabled, true);
+  assert.equal(again.warning, null, 'the notice is said once');
+  assert.equal(again.loginItemRefused.code, 'EPERM', 'the record stays');
   const reports = readdirSync(path.join(isolated.env.ZEROH_HOME, 'reports'));
   assert.equal(reports.length, 1);
   assert.equal(
     readJsonFile(path.join(isolated.env.ZEROH_HOME, 'reports', reports[0]))
       .event,
     'login-item-failed',
+  );
+  const runtime = await proxyRuntimeStatus({
+    env: isolated.env,
+    serviceManager: refusing,
+  });
+  assert.equal(runtime.running, true);
+  assert.equal(runtime.loginItem, false);
+  assert.equal(runtime.loginItemRefused.code, 'EPERM');
+  const doctor = await diagnoseProxy({
+    env: isolated.env,
+    serviceManager: refusing,
+  });
+  assert.ok(doctor.findings.includes('login-item-refused'));
+
+  // Sessions still live: the daemon stays and so does the entry.
+  let left = 0;
+  const leave = () => {
+    left += 1;
+  };
+  const config = readProxyConfig(proxyPaths(isolated.env));
+  assert.deepEqual(
+    await evaluateSessionOnlyExit({
+      env: isolated.env,
+      controlToken: config.controlToken,
+      leave,
+    }),
+    { leave: false },
+  );
+  // Every session ended: the entry comes out and the daemon leaves.
+  for (const id of ['ZEROHFAKE-refused', 'ZEROHFAKE-refused-2']) {
+    endSessionRoute({ env: isolated.env, sessionId: id });
+  }
+  const result = await evaluateSessionOnlyExit({
+    env: isolated.env,
+    controlToken: config.controlToken,
+    leave,
+  });
+  assert.deepEqual(result, { leave: true, restored: 1 });
+  assert.equal(left, 1);
+  assert.equal(settingsDoc(isolated).env?.ANTHROPIC_BASE_URL, undefined);
+
+  // Once the login item registers, the record goes and the daemon is kept.
+  const accepting = {
+    isRegistered: () => true,
+    register() {},
+    unregister: () => ({ removed: true, kind: 'systemd' }),
+  };
+  const fixed = await ensureDefaultProxy({
+    env: isolated.env,
+    root: isolated.root,
+    pluginRoot: PLUGIN,
+    sessionId: 'ZEROHFAKE-refused-3',
+    serviceManager: accepting,
+  });
+  assert.equal(fixed.loginItem, true);
+  assert.equal(fixed.loginItemRefused, null);
+  assert.equal(
+    readProxyConfig(proxyPaths(isolated.env)).loginItemRefused,
+    undefined,
+  );
+  endSessionRoute({ env: isolated.env, sessionId: 'ZEROHFAKE-refused-3' });
+  assert.deepEqual(
+    await evaluateSessionOnlyExit({
+      env: isolated.env,
+      controlToken: config.controlToken,
+      leave,
+    }),
+    { leave: false },
   );
 });
 
@@ -1317,4 +1406,24 @@ test('an entry with an unknown access key still works, and SessionStart repairs 
     settingsDoc(isolated).env.ANTHROPIC_BASE_URL,
     installed.proxyUrl,
   );
+});
+
+// Update gate (2026-09-28): rc.2 compared 1.0.0-rc.2 and 1.0.0 as equal, so
+// an rc session left open could copy its runtime back over the release's.
+// A release candidate now sorts below its release.
+test('a release candidate never replaces the release daemon', async () => {
+  const { compareVersions, newerBuild } =
+    await import('../lib/proxy-manager.js');
+  assert.equal(compareVersions('1.0.0-rc.2', '1.0.0'), -1);
+  assert.equal(compareVersions('1.0.0', '1.0.0-rc.2'), 1);
+  assert.equal(compareVersions('1.0.0-rc.10', '1.0.0-rc.2'), 1);
+  assert.equal(compareVersions('1.0.1', '1.0.0'), 1);
+  assert.equal(compareVersions('1.0.0', '1.0.0'), 0);
+  const rc = { version: '1.0.0-rc.2', hash: 'aaaa' };
+  const release = { version: '1.0.0', hash: 'bbbb' };
+  assert.equal(newerBuild(rc, release), false);
+  assert.equal(newerBuild(release, rc), true);
+  // The same version with other code (an edited checkout) still replaces it.
+  assert.equal(newerBuild({ ...release, hash: 'cccc' }, release), true);
+  assert.equal(newerBuild(release, release), false);
 });

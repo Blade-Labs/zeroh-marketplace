@@ -24,7 +24,6 @@ export const STOP_REASONS = Object.freeze({
   provider: "Bedrock, Vertex and Foundry traffic doesn't pass the ZeroH proxy",
   overridden:
     "ANTHROPIC_BASE_URL is set outside ZeroH, so the ZeroH proxy isn't used",
-  'no-login-item': "the ZeroH proxy can't keep running on this system",
   'not-set-up': "ZeroH couldn't put this session behind its proxy",
   'not-applied': "Claude Code didn't switch this session to the ZeroH proxy",
   unreachable: "the ZeroH proxy isn't reachable",

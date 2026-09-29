@@ -14,7 +14,9 @@ import {
   networkProxyUnreachable,
   transientNetworkError,
 } from './network.js';
-import { isVaultError, saveQuietly, Vault, vaultProblem } from './vault.js';
+import { isVaultError, Vault, vaultProblem } from './vault.js';
+import { maskRestorably, UNSAVEABLE_REASON } from './restorable.js';
+import { recordUnchecked } from './unchecked.js';
 import { loadKnownSecrets, scrubDeep } from './secrets.js';
 import { isSecretType, tokenType } from './data-kinds.js';
 import { activeGrants } from './unmask.js';
@@ -96,6 +98,9 @@ export function scrubBody(json, opts, acc = []) {
     if (value.length > MAX_SCRUB_STRING) {
       throw new Error('a text field is too large to inspect');
     }
+    // A retired daemon (knownValueMasker) only replaces what it masked
+    // before; it detects nothing new.
+    if (o.replaceText) return o.replaceText(value);
     return scrubDeep(value, o, acc);
   };
   const scrubString = (value) => scrubWith(value, typedOpts);
@@ -334,6 +339,10 @@ function addTypedNotes(originals, scrubbed, opts) {
   }
 }
 
+// What a retired daemon masks with, and the read-only fallback vault of a
+// failed save: lib/restorable.js.
+export { knownValueMasker } from './restorable.js';
+
 export function isProxyLoop(upstream, { host = '127.0.0.1', port } = {}) {
   if (!port) return false;
   const target = new URL(upstream);
@@ -379,7 +388,7 @@ export const MESSAGES = Object.freeze({
     `ZeroH proxy: ${reason}. Nothing was sent. ${RECOVERY_HINT}`,
   optedOut:
     'ZeroH Disclosure: a session started with ZEROH_PROXY=off; its requests pass through without masking.',
-  noRoute: `ZeroH Disclosure: a Claude Code session that ZeroH Disclosure does not run in (the plugin is disabled in that project, or removed) still uses the local proxy through your Claude Code settings; its requests pass through without masking. Run ${PROXY_OFF()} to stop using the proxy.`,
+  noRoute: `ZeroH Disclosure: a Claude Code session that ZeroH Disclosure does not run in (the plugin is disabled in that project or removed, or Claude Code started the session without plugins) still uses the local proxy through your Claude Code settings; its requests pass through without masking. Run ${PROXY_OFF()} to stop using the proxy.`,
   down: "ZeroH's local proxy isn't running, so what you type can't be masked in this session. Restart Claude Code to continue without it; until then typed secrets are stopped, not sent.",
 });
 
@@ -497,8 +506,11 @@ export function upstreamTarget(upstream, { pathname, search }) {
 // The masking HTTP server.
 // - resolveUpstream(key): the upstream URL for an access key; none refuses.
 // - route(req, { hasBody }): { action: 'mask', root } masks with that
-//   project's vault ({ roots } with each in turn); { action: 'pass',
-//   notice?, quiet? } forwards unchanged.
+//   project's vault ({ roots }: each in turn; the daemon names one root);
+//   { action: 'known',
+//   masker } replaces only the values a retired daemon holds in memory
+//   (knownValueMasker); { action: 'pass', notice?, quiet? } forwards
+//   unchanged.
 // - handleRequest(req, res): the owner's own endpoints; true when handled.
 export function createMaskingProxy({
   resolveUpstream,
@@ -511,6 +523,11 @@ export function createMaskingProxy({
   // Called when the network proxy itself can't be reached; the owner may
   // switch networks with server.useNetwork().
   onNetworkProxyUnreachable = null,
+  // Called when a project's vault could not be saved and new values went
+  // unmasked (rule 8): { roots, sessionId }. The proxy can't show a line, so
+  // by default the pass is recorded on the session's turn and the turn's
+  // Stop shows it (lib/unchecked.js, deferNotice).
+  onUnrestorable = recordUnrestorable,
 }) {
   let currentNetwork = network;
   let upstreamClient = createUpstreamClient(network, { connectTimeoutMs });
@@ -540,16 +557,35 @@ export function createMaskingProxy({
     return { up, target: upstreamTarget(up.href, target) };
   }
 
-  // Masks with each project's vault in turn: one for a registered session;
-  // every live project for a request no session claims (LP-B5).
+  // Masks with each project's vault in turn (the daemon names one, the
+  // registered session's; a request no session claims passes unmasked).
+  // `unrestorable`: the roots whose vault could not be saved (rule 8).
   function maskBodyWith(req, body, roots) {
     let out = body;
     let encoding = req.headers['content-encoding'];
+    const unrestorable = [];
     for (const root of roots) {
-      out = maskBody(req, out, root, encoding).body;
+      const masked = maskBody(req, out, root, encoding);
+      out = masked.body;
+      if (masked.unrestorable) unrestorable.push(root);
       encoding = 'identity';
     }
-    return { body: out, masked: true };
+    return { body: out, masked: true, unrestorable };
+  }
+
+  // A retired daemon: the values it masked before, from memory, nothing new.
+  function maskKnown(req, body, masker) {
+    const type = String(req.headers['content-type'] || '');
+    if (!type.includes('json')) return { body, masked: false };
+    const json = JSON.parse(
+      decode(body, req.headers['content-encoding']).toString('utf8'),
+    );
+    const out = scrubBody(json, {
+      replaceText: masker.replaceText,
+      vault: masker.vault,
+      typedNoteMemory,
+    });
+    return { body: Buffer.from(JSON.stringify(out), 'utf8'), masked: true };
   }
 
   function maskBody(
@@ -581,23 +617,30 @@ export function createMaskingProxy({
     // Unmask grants belong to one Claude session: the one in the header.
     const sessionId = String(req.headers['x-claude-code-session-id'] || '');
     const grants = sessionId ? activeGrants(requestRoot, { sessionId }) : [];
-    const acc = [];
-    const out = scrubBody(
-      json,
-      {
-        vault,
-        known: loadKnownSecrets(requestRoot),
-        profile: 'prompt',
-        unmaskedTypes: grants.map(({ kind }) => kind),
-        typedNoteMemory,
-      },
-      acc,
+    // Rule 8 (lib/restorable.js): when the vault can't be saved, only the
+    // values already on disk are masked and every new one goes as it is;
+    // the pass is recorded for the turn (onUnrestorable). Only a token
+    // conflict (a token another writer holds for a different value) refuses
+    // the request.
+    const known = loadKnownSecrets(requestRoot);
+    const unmaskedTypes = grants.map(({ kind }) => kind);
+    const { result: out, restorable } = maskRestorably(
+      vault,
+      (maskWith) =>
+        scrubBody(json, {
+          vault: maskWith,
+          known,
+          profile: 'prompt',
+          unmaskedTypes,
+          typedNoteMemory,
+        }),
+      'ZeroH proxy',
     );
-    // Masking already happened; a lock timeout or write failure is logged,
-    // never turned into a failed request. Only a token conflict (a token
-    // another writer holds for a different value) refuses it.
-    saveQuietly(vault, 'ZeroH proxy');
-    return { body: Buffer.from(JSON.stringify(out), 'utf8'), masked: true };
+    return {
+      body: Buffer.from(JSON.stringify(out), 'utf8'),
+      masked: true,
+      unrestorable: !restorable,
+    };
   }
 
   function forward(
@@ -715,10 +758,26 @@ export function createMaskingProxy({
         };
         let masked = false;
         let firstInactive = false;
-        if (decision.action === 'mask') {
+        let unrestorable = [];
+        if (decision.action === 'known') {
           if (body.length) {
             try {
-              ({ body, masked } = maskBodyWith(
+              ({ body, masked } = maskKnown(req, body, decision.masker));
+            } catch (e) {
+              // Never forward a body we could not inspect.
+              sendError(
+                res,
+                400,
+                'invalid_request_error',
+                MESSAGES.notInspected(e.message),
+              );
+              return;
+            }
+          }
+        } else if (decision.action === 'mask') {
+          if (body.length) {
+            try {
+              ({ body, masked, unrestorable } = maskBodyWith(
                 req,
                 body,
                 decision.roots ?? [decision.root],
@@ -741,7 +800,16 @@ export function createMaskingProxy({
           firstInactive = true;
           onInactive?.(decision.notice || MESSAGES.noRoute);
         }
-        forward(req, res, resolved, body, masked, firstInactive);
+        if (!unrestorable.length) {
+          forward(req, res, resolved, body, masked, firstInactive);
+          return;
+        }
+        // Recorded before the request goes, so the turn's Stop counts it.
+        const sessionId = String(req.headers['x-claude-code-session-id'] || '');
+        Promise.resolve()
+          .then(() => onUnrestorable({ roots: unrestorable, sessionId }))
+          .catch(() => {})
+          .then(() => forward(req, res, resolved, body, masked, firstInactive));
       } catch (error) {
         sendError(
           res,
@@ -781,6 +849,22 @@ export function createMaskingProxy({
     setTimeout(() => previous.destroy(), 60_000).unref?.();
   };
   return server;
+}
+
+// The default onUnrestorable: one `vault-unsaveable` pass per project on the
+// session's current turn, its line left for the turn's Stop.
+async function recordUnrestorable({ roots, sessionId }) {
+  if (!sessionId) return;
+  for (const root of roots) {
+    await recordUnchecked({
+      reason: UNSAVEABLE_REASON,
+      tool: 'proxy',
+      cwd: root,
+      sessionId,
+      subject: 'model request',
+      deferNotice: true,
+    });
+  }
 }
 
 export function listen(server, port = 0, host = '127.0.0.1') {

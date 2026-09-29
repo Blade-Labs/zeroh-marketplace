@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The feature list (docs/features.json) and its public table
 // (docs/features.md): one row per user-visible feature, with its status on
-// every platform ZeroH Disclosure targets. docs/features.json is the source;
-// the table between the markers in docs/features.md is generated from it.
+// every platform ZeroH Disclosure targets or may target next.
+// docs/features.json is the source; the tables between the markers in
+// docs/features.md (one per area, then the next platforms) are generated
+// from it.
 //
-//   node scripts/features.mjs --write   regenerate the table
+//   node scripts/features.mjs --write   regenerate the tables
 //   node scripts/features.mjs --check   fail when the table, the JSON or an
 //                                       evidence path is out of date
 //
@@ -19,12 +21,48 @@ import { fileURLToPath } from 'node:url';
 export const PLUGIN_ROOT = path.dirname(
   path.dirname(fileURLToPath(import.meta.url)),
 );
-export const PLATFORMS = Object.freeze(['claude-code', 'codex', 'opencode']);
+// Every platform in features.json, in column order. The first four are the
+// platforms ZeroH targets (the main tables and the release notes' parity
+// table); NEXT_PLATFORMS are candidates, shown only for core features.
+export const PLATFORMS = Object.freeze([
+  'claude-code',
+  'codex',
+  'opencode',
+  'opencode-v2',
+  'copilot',
+  'cursor',
+  'gemini-cli',
+]);
+export const NEXT_PLATFORMS = Object.freeze([
+  'copilot',
+  'cursor',
+  'gemini-cli',
+]);
+export const TARGET_PLATFORMS = Object.freeze(
+  PLATFORMS.filter((platform) => !NEXT_PLATFORMS.includes(platform)),
+);
 export const PLATFORM_NAMES = Object.freeze({
   'claude-code': 'Claude Code',
   codex: 'Codex',
-  opencode: 'OpenCode',
+  opencode: 'OpenCode 1.x',
+  'opencode-v2': 'OpenCode 2',
+  copilot: 'GitHub Copilot',
+  cursor: 'Cursor',
+  'gemini-cli': 'Gemini CLI',
 });
+// The sections of docs/features.md, in order; every feature names one.
+export const AREAS = Object.freeze([
+  { id: 'install', title: 'Install and setup' },
+  { id: 'masking', title: 'Masking' },
+  { id: 'restoring', title: 'Restoring' },
+  { id: 'guards', title: 'Guards' },
+  { id: 'detection', title: 'Detection' },
+  { id: 'unmask', title: 'Unmask' },
+  { id: 'receipts', title: 'Receipts and reports' },
+  { id: 'status', title: 'Status' },
+  { id: 'management', title: 'Management' },
+  { id: 'platforms', title: 'Platforms and operating systems' },
+]);
 export const STATUSES = Object.freeze([
   'shipped',
   'partial',
@@ -59,6 +97,14 @@ export function validateFeatures(data, { root = PLUGIN_ROOT } = {}) {
   if (JSON.stringify(data.platforms) !== JSON.stringify(PLATFORMS)) {
     errors.push(`features.json platforms must be ${PLATFORMS.join(', ')}`);
   }
+  if (
+    data.next_platforms !== undefined &&
+    JSON.stringify(data.next_platforms) !== JSON.stringify(NEXT_PLATFORMS)
+  ) {
+    errors.push(
+      `features.json next_platforms must be ${NEXT_PLATFORMS.join(', ')}`,
+    );
+  }
   if (!Array.isArray(data.features) || data.features.length === 0) {
     errors.push('features.json lists no features');
     return errors;
@@ -72,6 +118,14 @@ export function validateFeatures(data, { root = PLUGIN_ROOT } = {}) {
     }
     if (seen.has(id)) errors.push(`${id} is listed twice`);
     seen.add(id);
+    if (!AREAS.some((area) => area.id === feature.area)) {
+      errors.push(
+        `${id} needs an area (${AREAS.map((area) => area.id).join(', ')})`,
+      );
+    }
+    if (feature.core !== undefined && typeof feature.core !== 'boolean') {
+      errors.push(`${id}: core must be true or false`);
+    }
     for (const field of ['description', 'claude_code']) {
       if (typeof feature[field] !== 'string' || !feature[field].trim()) {
         errors.push(`${id} has no ${field}`);
@@ -104,6 +158,16 @@ export function validateFeatures(data, { root = PLUGIN_ROOT } = {}) {
       if (entry.status === 'not possible' && !entry.note?.trim()) {
         errors.push(`${id}: ${platform} is "not possible" without a reason`);
       }
+      // Optional: where the status comes from (links, source paths, runs).
+      if (
+        entry.sources !== undefined &&
+        (!Array.isArray(entry.sources) ||
+          !entry.sources.every(
+            (source) => typeof source === 'string' && source.trim(),
+          ))
+      ) {
+        errors.push(`${id}: ${platform} sources must be a list of strings`);
+      }
     }
     for (const platform of Object.keys(feature.platforms ?? {})) {
       if (!PLATFORMS.includes(platform))
@@ -123,23 +187,67 @@ function statusCell({ status, note }) {
   return note ? `${status}: ${cell(note)}` : status;
 }
 
+function claudeCodeCell(feature) {
+  const { status, note } = feature.platforms['claude-code'];
+  const text = `${status}: ${cell(feature.claude_code)}`;
+  return note ? `${text}. Note: ${cell(note)}` : text;
+}
+
+function table(header, rows) {
+  return [
+    `| ${header.join(' | ')} |`,
+    `| ${header.map(() => '---').join(' | ')} |`,
+    ...rows.map((cells) => `| ${cells.join(' | ')} |`),
+  ].join('\n');
+}
+
+// The generated part of docs/features.md: one table per area with the target
+// platforms, then the next platforms for the core features only.
 export function renderFeaturesTable(data) {
+  const others = TARGET_PLATFORMS.filter(
+    (platform) => platform !== 'claude-code',
+  );
   const header = [
     'ID',
     'Feature',
-    'In Claude Code',
-    ...PLATFORMS.map((platform) => PLATFORM_NAMES[platform]),
+    PLATFORM_NAMES['claude-code'],
+    ...others.map((platform) => PLATFORM_NAMES[platform]),
   ];
-  const lines = [
-    `| ${header.join(' | ')} |`,
-    `| ${header.map(() => '---').join(' | ')} |`,
-  ];
-  for (const feature of data.features) {
-    lines.push(
-      `| \`${feature.id}\` | ${cell(feature.description)} | ${cell(feature.claude_code)} | ${PLATFORMS.map((platform) => statusCell(feature.platforms[platform])).join(' | ')} |`,
+  const parts = [];
+  for (const area of AREAS) {
+    const features = data.features.filter(
+      (feature) => feature.area === area.id,
+    );
+    if (!features.length) continue;
+    parts.push(
+      `## ${area.title}`,
+      table(
+        header,
+        features.map((feature) => [
+          `\`${feature.id}\``,
+          cell(feature.description),
+          claudeCodeCell(feature),
+          ...others.map((platform) => statusCell(feature.platforms[platform])),
+        ]),
+      ),
     );
   }
-  return lines.join('\n');
+  const core = data.features.filter((feature) => feature.core);
+  if (core.length) {
+    parts.push(
+      '## Next platforms',
+      table(
+        ['ID', ...NEXT_PLATFORMS.map((platform) => PLATFORM_NAMES[platform])],
+        core.map((feature) => [
+          `\`${feature.id}\``,
+          ...NEXT_PLATFORMS.map((platform) =>
+            statusCell(feature.platforms[platform]),
+          ),
+        ]),
+      ),
+    );
+  }
+  return parts.join('\n\n');
 }
 
 // The generated block of docs/features.md, or null without the markers.
@@ -255,23 +363,24 @@ export function changedClaudeCodeIds(previous, current) {
   return changed;
 }
 
-// The "Feature parity" table for release notes: the features `ids` names.
+// The "Feature parity" table for release notes: the features `ids` names,
+// on the platforms ZeroH targets.
 export function parityTable(data, ids) {
   const wanted = new Set(ids);
   const rows = data.features.filter((feature) => wanted.has(feature.id));
   if (!rows.length) return '';
-  const header = [
-    'Feature',
-    ...PLATFORMS.map((platform) => PLATFORM_NAMES[platform]),
-  ];
-  return [
-    `| ${header.join(' | ')} |`,
-    `| ${header.map(() => '---').join(' | ')} |`,
-    ...rows.map(
-      (feature) =>
-        `| \`${feature.id}\` | ${PLATFORMS.map((platform) => feature.platforms[platform].status).join(' | ')} |`,
-    ),
-  ].join('\n');
+  return table(
+    [
+      'Feature',
+      ...TARGET_PLATFORMS.map((platform) => PLATFORM_NAMES[platform]),
+    ],
+    rows.map((feature) => [
+      `\`${feature.id}\``,
+      ...TARGET_PLATFORMS.map(
+        (platform) => feature.platforms[platform]?.status ?? 'unknown',
+      ),
+    ]),
+  );
 }
 
 function main(argv) {

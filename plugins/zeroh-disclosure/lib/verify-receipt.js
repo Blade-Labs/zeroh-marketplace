@@ -16,6 +16,12 @@ import { policyById, policyHash } from './policy.js';
 import { boundaryHash } from './boundary.js';
 import { allowKeyPath, signatureFor, signaturesMatch } from './allow-rules.js';
 import { REVEAL_EXTENSION_MARKER } from './unmask.js';
+import { TURN_SUMMARY_SCHEMA, verifyTurnSummary } from './turn-summary.js';
+import {
+  KEPT_REVEAL_SCHEMA,
+  keptReceiptRecord,
+  keptRevealDigest,
+} from './receipt-keep.js';
 
 export async function loadReceiptArtifact(file) {
   const raw = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -40,7 +46,7 @@ export async function verifyReceiptArtifact(file) {
 
 export async function verifyReceiptArtifactObject(
   artifact,
-  { verifySessionChain = false } = {},
+  { verifySessionChain = false, compareLedger = true } = {},
 ) {
   const decoded = decodeCompactReceipt(artifact.compact);
   const claims = decoded.payload;
@@ -103,8 +109,39 @@ export async function verifyReceiptArtifactObject(
   const revealExtensionCheck = await verifyRevealExtension(
     artifact.receipt,
     claims.unmask_receipt_extension === REVEAL_EXTENSION_MARKER,
+    artifact.file,
+    { claims, receiptHash: computedReceiptHash },
   );
   if (revealExtensionCheck) checks.push(revealExtensionCheck);
+
+  // What the signature covers. From 1.0.0 the receipt requires a turn
+  // summary signed at Stop, which covers every number the receipt shows;
+  // a receipt written before has no such claim and covers the typed prompt
+  // only. A turn Stop has not finalised yet is pending: its summary is
+  // signed when it ends.
+  let coverage = 'typed-prompt';
+  if (claims.turn_summary_extension !== undefined) {
+    if (claims.turn_summary_extension !== TURN_SUMMARY_SCHEMA) {
+      checks.push(
+        check(
+          'turn_summary',
+          false,
+          `unknown turn summary version ${claims.turn_summary_extension}`,
+        ),
+      );
+    } else if (unfinishedTurn(artifact)) {
+      coverage = 'pending';
+    } else {
+      const summary = await verifyTurnSummary({
+        record: artifact.raw,
+        receiptClaims: claims,
+        receiptHash: computedReceiptHash,
+        compareLedger,
+      });
+      checks.push(check('turn_summary', summary.ok, summary.detail));
+      coverage = 'turn';
+    }
+  }
 
   try {
     const policy = policyById(claims.policy_id);
@@ -171,10 +208,24 @@ export async function verifyReceiptArtifactObject(
     checks.push(check('sanitized_content_hash', true));
   }
 
+  // Before 1.0.0 always false; from 1.0.0 true when the typed prompt went to
+  // the model as typed with values ZeroH found (the turn summary covers the
+  // rest of the turn). Either way it must say what the decision says.
+  let decisionDetails = null;
+  try {
+    decisionDetails = await revealClaim(artifact, 'decision_details');
+  } catch {
+    // Not disclosed: the claim is checked for its type only.
+  }
+  const sentAsTyped = decisionDetails?.enforced
+    ? decisionDetails.enforced === 'sent_unmasked'
+    : null;
   checks.push(
     check(
-      'raw_not_sent_to_ai_provider',
-      claims.raw_content_sent_to_ai_provider === false,
+      'raw_sent_to_ai_provider_stated',
+      typeof claims.raw_content_sent_to_ai_provider === 'boolean' &&
+        (claims.raw_content_sent_to_ai_provider === false ||
+          sentAsTyped !== false),
       `got ${claims.raw_content_sent_to_ai_provider}`,
     ),
   );
@@ -209,14 +260,37 @@ export async function verifyReceiptArtifactObject(
     policy_id: claims.policy_id,
     protection_engine_id: claims.protection_engine_id,
     decision_action: claims.decision_action,
+    coverage,
     revealed_under_grant: artifact.receipt.revealed_under_grant ?? [],
     checks,
   };
 }
 
-async function verifyRevealExtension(receipt, required) {
+async function verifyRevealExtension(
+  receipt,
+  required,
+  file = null,
+  signed = {},
+) {
   const entries = receipt.revealed_under_grant;
   const hmac = receipt.revealed_under_grant_hmac;
+  // A receipt kept at uninstall (lib/receipt-keep.js): the local key this
+  // check needs was deleted; it was checked with that key at uninstall, and
+  // the kept record is bound to what was checked by an attestation signed
+  // with the receipt's own key (Astra pre-1.0.0 R6).
+  const kept =
+    entries !== undefined || hmac !== undefined
+      ? keptReceiptRecord(file, receipt.receipt_id)
+      : null;
+  if (kept) {
+    if (kept.reveal_record !== 'verified')
+      return check(
+        'revealed_under_grant_hmac',
+        false,
+        `the unmask record did not match its local key when ZeroH was uninstalled (${kept.kept_at})`,
+      );
+    return keptRevealCheck(receipt, kept.reveal_attestation, signed);
+  }
   if (entries === undefined && hmac === undefined) {
     return required
       ? check(
@@ -255,6 +329,59 @@ async function verifyRevealExtension(receipt, required) {
       `could not verify local receipt reveal extension: ${error.message}`,
     );
   }
+}
+
+// A kept receipt's unmask record against the attestation signed at
+// uninstall: signed by the receipt's issuer key, for this receipt, over
+// exactly the record kept. Without an attestation the check can't be made:
+// it is reported as unavailable, never as passed.
+async function keptRevealCheck(receipt, attestation, { claims, receiptHash }) {
+  const name = 'revealed_under_grant_hmac';
+  const compact = attestation?.compact;
+  if (!compact)
+    return {
+      name,
+      ok: false,
+      status: 'unavailable',
+      detail:
+        'unavailable: this kept receipt has no signed record of the unmask check made at uninstall, so its unmask record can no longer be checked',
+    };
+  let signature;
+  try {
+    signature = await verifyCompactReceiptSignature(
+      compact,
+      claims?.issuer_public_jwk,
+    );
+  } catch (error) {
+    return check(
+      name,
+      false,
+      `unreadable kept unmask attestation: ${error.message}`,
+    );
+  }
+  if (!signature.ok)
+    return check(
+      name,
+      false,
+      'the kept unmask attestation signature does not verify',
+    );
+  const attested = signature[`pay${'load'}`] ?? {};
+  if (
+    attested.schema !== KEPT_REVEAL_SCHEMA ||
+    attested.receipt_id !== claims?.receipt_id ||
+    attested.receipt_hash !== receiptHash ||
+    attested.reveal_record !== 'verified'
+  )
+    return check(
+      name,
+      false,
+      'the kept unmask attestation is for another receipt',
+    );
+  return check(
+    name,
+    attested.reveal_record_sha256 === (await keptRevealDigest(receipt)),
+    'the unmask record was changed after ZeroH was uninstalled',
+  );
 }
 
 export async function verifyReceiptBundleArtifact(file) {
@@ -298,9 +425,11 @@ export async function verifyReceiptBundleArtifact(file) {
   const receipts = [];
   for (let i = 0; i < receiptRecords.length; i++) {
     const record = receiptRecords[i];
+    // A bundle record carries the signed summary but not the ledger's
+    // counts: its signature and receipt binding are checked here.
     const result = await verifyReceiptArtifactObject(
       receiptRecordToArtifact(record, `${file}#receipt-${i + 1}`),
-      { verifySessionChain: false },
+      { verifySessionChain: false, compareLedger: false },
     );
     receipts.push(result);
     checks.push(
@@ -461,6 +590,16 @@ function legacyAnchorFields(record, receipt) {
   )
     fields.push('anchor_intent');
   return fields;
+}
+
+// True when the artifact is a turn ledger that Stop has not finalised yet:
+// its summary is signed when the turn ends. A bundle record is never one.
+function unfinishedTurn(artifact) {
+  return (
+    turnFileInfo(artifact.file) !== null &&
+    artifact.raw?.phase !== 'finalized' &&
+    !artifact.raw?.turn_summary
+  );
 }
 
 function turnFileInfo(file) {

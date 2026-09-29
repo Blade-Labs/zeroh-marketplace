@@ -56,6 +56,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import {
+  canonicalProjectPath,
   ensurePrivateDir,
   notWritable,
   removeQuietly,
@@ -214,6 +215,13 @@ function loadKey(env = process.env) {
 
 function createOrRepairKey(keyPath, key, env) {
   if (vaultFiles(env).length) {
+    // Another process may have made the key since this one looked, and
+    // saved a vault with it (parallel first use; ensurePrivateDir's ACL takes
+    // a moment on Windows). A vault is saved only after its key is in place,
+    // so the key read after seeing the vault is the one it used.
+    const current = readKeyFile(keyPath);
+    if (current?.length === 32) return current;
+    key = current;
     // A new key would make every existing vault unreadable for good.
     throw key === null
       ? vaultError(
@@ -267,7 +275,7 @@ export function tokenHashKey(env = process.env) {
 
 export function projectKey(projectRoot) {
   return createHash('sha256')
-    .update(path.resolve(projectRoot))
+    .update(canonicalProjectPath(projectRoot))
     .digest('hex')
     .slice(0, 16);
 }
@@ -1094,6 +1102,17 @@ function lockOwnerGone(file) {
   }
 }
 
+// Whether `file` is there, a file being deleted included (Windows answers
+// EPERM for one).
+function lockFilePresent(file) {
+  try {
+    statSync(file);
+    return true;
+  } catch (error) {
+    return error.code !== 'ENOENT';
+  }
+}
+
 export function acquireFileLock(
   file,
   {
@@ -1103,12 +1122,30 @@ export function acquireFileLock(
   } = {},
 ) {
   const deadline = Date.now() + waitMs;
+  let deniedAbsent = 0;
   for (;;) {
     try {
       const fd = openSync(file, 'wx', 0o600);
       writeFileSync(fd, `${process.pid}\n`);
       return { fd, file };
     } catch (error) {
+      // Windows refuses to create a file another process is still deleting
+      // (the previous holder's release) with EPERM, not EEXIST: busy too,
+      // until the deadline. A folder this user may not write has no such
+      // file, and its EPERM stands (after one more try, in case the delete
+      // finished in between).
+      if (
+        error.code === 'EPERM' &&
+        process.platform === 'win32' &&
+        Date.now() < deadline
+      ) {
+        if (lockFilePresent(file)) {
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+          continue;
+        }
+        deniedAbsent += 1;
+        if (deniedAbsent < 2) continue;
+      }
       if (error.code !== 'EEXIST') throw error;
       try {
         if (

@@ -144,6 +144,8 @@ export interface GitleaksSource {
   readonly commit: string;
   readonly license: string;
   readonly file: string;
+  /** SHA-256 of the vendored upstream file; the importer refuses any other. */
+  readonly sha256: string;
 }
 
 export interface GitleaksRule {

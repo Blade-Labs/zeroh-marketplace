@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import {
@@ -16,6 +16,7 @@ import {
   formatDestinationSummary,
 } from '../lib/allow-list.js';
 import {
+  assertPrivate,
   FAKE_STRIPE,
   PLUGIN,
   runHook,
@@ -58,10 +59,9 @@ test('CLI writes, lists and removes HMAC-verified allow rules', () => {
   assert.deepEqual(loadAllowRules(project.dir, project.home), {
     API_KEY: ['api.internal.example'],
   });
-  assert.equal(
-    statSync(path.join(project.home, 'allow.key')).mode & 0o777,
-    0o600,
-  );
+  assertPrivate(path.join(project.home, 'allow.key'), 0o600, 'allow.key', {
+    home: project.home,
+  });
   assert.equal(readFileSync(path.join(project.home, 'allow.key')).length, 32);
 });
 

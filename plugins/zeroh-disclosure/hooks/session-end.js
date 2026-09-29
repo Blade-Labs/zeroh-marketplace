@@ -30,8 +30,9 @@ try {
 } catch {
   // The next SessionStart prunes again if the vault cannot be opened now.
 }
-// The session is over: its route no longer makes the proxy mask requests it
-// cannot tie to a session (LP-B5); a resumed session registers it again.
+// The session is over: its route no longer counts as a live plugin session
+// (the daemon's lifecycle, and which settings entries it keeps); a resumed
+// session registers it again.
 try {
   endSessionRoute({ sessionId });
 } catch {

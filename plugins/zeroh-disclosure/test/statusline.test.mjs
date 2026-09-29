@@ -23,6 +23,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  canonicalProjectPath,
   encodeProjectPath,
   grantTimeLeft,
   managedSettingsPath,
@@ -571,6 +572,10 @@ test('the built-in copies match the modules they copy', () => {
   for (const root of ['/tmp/a b/c', `/tmp/${'x'.repeat(260)}`, '/']) {
     assert.equal(encodeProjectPath(root), session.encodeProjectPath(root));
     assert.equal(projectKey(root), vault.projectKey(root));
+    assert.equal(
+      canonicalProjectPath(root),
+      privateFs.canonicalProjectPath(root),
+    );
   }
   for (const sid of ['s1', '../../etc', 'a'.repeat(100)]) {
     assert.equal(sanitizeSid(sid), session.sanitizeSid(sid));
@@ -771,8 +776,14 @@ function resolverHome() {
   return {
     home,
     config,
-    zeroh: path.join(home, '.zeroh'),
-    env: { HOME: home },
+    // The default ZeroH home: %LOCALAPPDATA%\ZeroH on Windows (here with
+    // no LOCALAPPDATA, under the home), ~/.zeroh elsewhere.
+    zeroh:
+      process.platform === 'win32'
+        ? path.join(home, 'AppData', 'Local', 'ZeroH')
+        : path.join(home, '.zeroh'),
+    // Node's home is USERPROFILE on Windows, HOME elsewhere.
+    env: { HOME: home, USERPROFILE: home },
   };
 }
 
@@ -912,6 +923,8 @@ test('the command is the same text for every shell Claude Code uses', () => {
         ...(process.env.SystemRoot
           ? { SystemRoot: process.env.SystemRoot }
           : {}),
+        // PowerShell finds node.exe through PATHEXT.
+        ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       },
       encoding: 'utf8',
     });

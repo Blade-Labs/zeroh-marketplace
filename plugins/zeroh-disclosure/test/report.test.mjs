@@ -31,10 +31,15 @@ import {
   writeSessionReceiptHtml,
 } from '../lib/report.js';
 import { bumpTurn, loadSession, writeTurn } from '../lib/session.js';
+import { signTurnSummary } from '../lib/turn-summary.js';
 import { recordRevealedUnderGrant } from '../lib/unmask.js';
 import { Vault } from '../lib/vault.js';
 
 const FAKE_VALUE = 'person.ZEROHFAKE@example.com';
+// Absolute paths as this system spells them (a drive on Windows): the lines
+// show the resolved path.
+const RECEIPT = path.resolve('/tmp/receipt.html');
+const REPORT_HTML = path.resolve('/tmp/zeroh-fixture/report.html');
 const CLI = fileURLToPath(
   new URL('../bin/zeroh-disclosure.mjs', import.meta.url),
 );
@@ -113,14 +118,14 @@ test('Stop line is human and hides default implementation names', () => {
     },
   };
   assert.equal(
-    formatStopReceiptLine(5, ledger, '/tmp/receipt.html'),
-    'ZeroH Disclosure · turn 5 · 2 values masked · receipt: /tmp/receipt.html',
+    formatStopReceiptLine(5, ledger, RECEIPT),
+    `ZeroH Disclosure · turn 5 · 2 values masked · receipt: ${RECEIPT}`,
   );
   const replacements = ledger.replacements;
   ledger.replacements = [];
   ledger.audit.masked.token_map = [];
   assert.equal(
-    formatStopReceiptLine(5, ledger, '/tmp/receipt.html'),
+    formatStopReceiptLine(5, ledger, RECEIPT),
     null,
     'a quiet turn prints nothing',
   );
@@ -136,11 +141,11 @@ test('Stop line is human and hides default implementation names', () => {
   ledger.receipt.public_claims.policy_id = 'example-policy-v1';
   ledger.receipt.public_claims.protection_engine_id = 'example-engine';
   assert.match(
-    formatStopReceiptLine(5, ledger, '/tmp/receipt.html'),
+    formatStopReceiptLine(5, ledger, RECEIPT),
     /policy example-policy-v1/,
   );
   assert.match(
-    formatStopReceiptLine(5, ledger, '/tmp/receipt.html'),
+    formatStopReceiptLine(5, ledger, RECEIPT),
     /engine example-engine/,
   );
 });
@@ -151,7 +156,7 @@ test('Stop line names each kind of event and stays quiet otherwise', () => {
     receipt: { receipt_id: 'zrh_ZEROHFAKE', public_claims: {} },
   };
   assert.deepEqual(stopTurnEvents(quiet), []);
-  assert.equal(formatStopReceiptLine(2, quiet, '/tmp/receipt.html'), null);
+  assert.equal(formatStopReceiptLine(2, quiet, RECEIPT), null);
   const busy = {
     phase: 'blocked_pending_user_resubmit',
     replacements: [{ entity_type: 'API_KEY', replacement: '[API_KEY-a1b2c3]' }],
@@ -167,8 +172,8 @@ test('Stop line names each kind of event and stays quiet otherwise', () => {
     format_disclosure: { passed_unmasked: { image: 1 } },
   };
   assert.equal(
-    formatStopReceiptLine(3, busy, '/tmp/receipt.html'),
-    'ZeroH Disclosure · turn 3 · prompt stopped, 1 destination blocked, 2 values shown under your unmask grant, 1 file passed unchecked, 1 missed value reported · receipt: /tmp/receipt.html',
+    formatStopReceiptLine(3, busy, RECEIPT),
+    `ZeroH Disclosure · turn 3 · prompt stopped, 1 destination blocked, 2 values shown under your unmask grant, 1 file passed unchecked, 1 missed value reported · receipt: ${RECEIPT}`,
   );
   assert.deepEqual(
     stopTurnEvents({ ...busy, phase: 'finalized' }, { blocked: false })[0],
@@ -275,7 +280,10 @@ test('session receipt HTML expands verified turns without rendering fixture valu
     assert.match(maskShow.stdout, /what the model saw this session/i);
     // /mask-show output is loaded into the model's context: no previews.
     assert.doesNotMatch(maskShow.stdout, /sk_live…|Your value/);
-    assert.match(maskShow.stdout, /node ".*bin\/zeroh-disclosure\.mjs" tokens/);
+    assert.match(
+      maskShow.stdout,
+      /node ".*bin[\\/]zeroh-disclosure\.mjs" tokens/,
+    );
     assert.doesNotMatch(maskShow.stdout, new RegExp(escapeRegExp(fakeKey)));
 
     const report = await buildLocalReport({
@@ -468,6 +476,12 @@ async function createTurn({
     ...(formatDisclosure ? { format_disclosure: formatDisclosure } : {}),
     ...extra,
   };
+  // What Stop does: sign the turn summary the receipt requires.
+  ledger.turn_summary = await signTurnSummary({
+    ledger,
+    turn,
+    signer: session.signingKey,
+  });
   await writeTurn({ dir: session.dir, turn, payload: ledger });
   await markDisclosureResultCommitted({ session, result });
   return { session, ledger };
@@ -542,12 +556,9 @@ const FIXTURE_SLIP = [
 
 test('period slip matches the till-slip snapshot and fits 44 columns', () => {
   const text = formatLocalReport(FIXTURE_REPORT, {
-    html: '/tmp/zeroh-fixture/report.html',
+    html: REPORT_HTML,
   });
-  assert.equal(
-    text,
-    `${FIXTURE_SLIP}\n\nreport.html: /tmp/zeroh-fixture/report.html`,
-  );
+  assert.equal(text, `${FIXTURE_SLIP}\n\nreport.html: ${REPORT_HTML}`);
   assertSlipWidth(FIXTURE_SLIP);
   assertNoForbiddenNames(text);
 });
@@ -665,6 +676,16 @@ test('values revealed under an unmask grant count as sent; unchecked formats nev
       ],
     });
     assert.equal(entries[0].values, 2);
+    // Stop signs the turn's summary after the reveal was recorded.
+    const first = await loadSession({ cwd: root, sessionId: 'granted' });
+    const firstPath = path.join(first.dir, 'turn-1.json');
+    const firstLedger = JSON.parse(readFileSync(firstPath, 'utf8'));
+    firstLedger.turn_summary = await signTurnSummary({
+      ledger: firstLedger,
+      turn: 1,
+      signer: first.signingKey,
+    });
+    await writeTurn({ dir: first.dir, turn: 1, payload: firstLedger });
     await createTurn({
       root,
       sessionId: 'granted',

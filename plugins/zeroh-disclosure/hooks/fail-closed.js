@@ -13,6 +13,9 @@ export const HOOKS = Object.freeze({
   'message-display': 'MessageDisplay',
   stop: 'Stop',
   'session-end': 'SessionEnd',
+  // PostToolUseFailure and PermissionDenied: a shell command that did not
+  // run (or stopped early) leaves no late-binding values file behind.
+  'tool-not-run': 'PostToolUseFailure',
 });
 
 // Each hook's timeout in hooks.json, in seconds. The loader (run.js) answers
@@ -26,6 +29,7 @@ export const HOOK_TIMEOUTS = Object.freeze({
   'message-display': 5,
   stop: 30,
   'session-end': 10,
+  'tool-not-run': 5,
 });
 
 // What failing closed means for each hook: what the user is left with when
@@ -39,6 +43,8 @@ export const FAIL_CLOSED = Object.freeze({
   'message-display': 'tokens stay tokens on screen',
   stop: 'no receipt is signed for this turn',
   'session-end': 'the session is tidied up at the next start instead',
+  'tool-not-run':
+    "the command's restored values are removed at the end of the turn instead",
 });
 
 // The loader's deadline for hook `name`, in milliseconds: its timeout minus
@@ -297,6 +303,10 @@ export function failClosedAnswer(name, raw, state, error) {
       })}\n`,
     };
   }
+  // MessageDisplay answered, then ran out of time on its bookkeeping (the
+  // vault's last-use save): exit 0, so Claude Code shows that answer, with
+  // real values, instead of the delta with tokens.
+  if (name === 'message-display' && state.emitted) return { code: 0 };
   // The other hooks guard nothing that could leak: Claude Code reports the
   // error and carries on (FAIL_CLOSED says what the user is left with).
   const hook = HOOKS[name] || name;

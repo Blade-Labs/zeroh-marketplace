@@ -4,7 +4,7 @@
 import './helpers.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -91,5 +91,52 @@ test('the skill names every credential store ZeroH refuses', async () => {
   ]) {
     assert.equal(isSensitivePath(file, '/tmp/project'), true, file);
     assert.ok(SKILL.includes(word), word);
+  }
+});
+
+// Owner, 2026-09-28: the install reply no longer sends the user to doctor;
+// instead the model always knows when to suggest it (the session briefing
+// and the about skill), and never runs it itself.
+test('the session briefing and the about skill say when to suggest doctor', async () => {
+  const { runHook, tempProject } = await import('./helpers.mjs');
+  const project = tempProject();
+  const start = runHook(
+    'session-start',
+    { session_id: 'ZEROHFAKE-doctor-hint', source: 'startup' },
+    { project },
+  );
+  assert.equal(start.code, 0, start.stderr);
+  const briefing = start.json.hookSpecificOutput.additionalContext;
+  const lines = briefing
+    .split('\n')
+    .filter((line) => line.includes('/zeroh-disclosure:doctor'));
+  assert.equal(lines.length, 1, briefing);
+  assert.match(
+    lines[0],
+    /isn't working.*🟡 or 🔴.*doctor \(then --fix\); never run it yourself/u,
+  );
+  // Nothing user-visible: the banner does not carry it.
+  assert.doesNotMatch(
+    start.json.systemMessage ?? '',
+    /zeroh-disclosure:doctor/u,
+  );
+  assert.match(
+    SKILL,
+    /isn't working.*\n.*🟡 or 🔴, suggest `\/zeroh-disclosure:doctor`/u,
+  );
+  // The install steps (in the monorepo; a staged release has no copy).
+  const publicReadme = path.join(
+    PLUGIN,
+    '..',
+    '..',
+    'release',
+    'public-root',
+    'README.md',
+  );
+  if (existsSync(publicReadme)) {
+    assert.doesNotMatch(
+      readFileSync(publicReadme, 'utf8'),
+      /zeroh-disclosure:doctor/u,
+    );
   }
 });

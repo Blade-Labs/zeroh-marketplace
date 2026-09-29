@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Regenerates src/rules/gitleaks.generated.json from the vendored gitleaks
 // rule set (vendor/gitleaks). `--check` fails when the JSON is stale.
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +16,19 @@ const SOURCE_METADATA = Object.freeze({
   commit: '83d9cd684c87',
   license: 'MIT',
   file: 'vendor/gitleaks/gitleaks-v8.30.1.toml',
+  // SHA-256 of config/gitleaks.toml at the tag, byte for byte (the vendored
+  // file is never edited).
+  sha256: 'e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf',
 });
+
+// Fails when the vendored file is not the pinned upstream file.
+export function verifySource(text = readFileSync(SOURCE)) {
+  const actual = createHash('sha256').update(text).digest('hex');
+  if (actual !== SOURCE_METADATA.sha256)
+    throw new Error(
+      `${SOURCE_METADATA.file} is not the pinned gitleaks ${SOURCE_METADATA.version} file (sha256 ${actual})`,
+    );
+}
 
 function assignmentEnd(text, start) {
   let quote = null;
@@ -729,7 +742,7 @@ export function shannonEntropy(value) {
   return entropy;
 }
 
-function sampleAllowlisted(rule, secret, match) {
+export function sampleAllowlisted(rule, secret, match) {
   for (const allowlist of rule.allowlists ?? []) {
     if (allowlist.paths?.length || allowlist.commits?.length) continue;
     const target = allowlist.regexTarget === 'match' ? match[0] : secret;
@@ -858,6 +871,7 @@ function main(argv = process.argv.slice(2)) {
   const check = argv.includes('--check');
   const unknown = argv.filter((arg) => arg !== '--check');
   if (unknown.length) throw new Error(`unknown option: ${unknown.join(', ')}`);
+  verifySource();
   const rendered = renderCatalog(generateCatalog());
   if (check) {
     let current = '';

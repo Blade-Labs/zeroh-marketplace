@@ -48,6 +48,7 @@ import {
   REVEAL_EXTENSION_MARKER,
 } from '../lib/unmask.js';
 import { recordMaskedOutput } from '../lib/report.js';
+import { persistedEntries, UNSAVEABLE_REASON } from '../lib/restorable.js';
 import { checkSessionProxy, routeSession } from '../lib/proxy-manager.js';
 import { stopMessage } from '../lib/stop-message.js';
 import {
@@ -114,8 +115,9 @@ if (Buffer.byteLength(userPrompt) > MAX_CHECKED_PROMPT_BYTES) {
 // uninstall --yes, allow, settings, unmask caps): its `!` block only recorded
 // the request, and the user's own typed prompt is what applies it (Astra R3,
 // lib/user-authority.js). The result is shown and the prompt stops here:
-// there is nothing for the model to do, and a turn after `proxy off` or
-// `uninstall` would go through a proxy that was just taken away.
+// there is nothing for the model to do. The session's next prompt goes on
+// through the retired proxy (bin/proxy-daemon.mjs) after `proxy off`,
+// `doctor --fix` or `uninstall`.
 // Any failure here leaves an ordinary prompt alone; only ZeroH's own
 // management command is then stopped, with nothing changed.
 {
@@ -174,15 +176,16 @@ if (!proxyOn) {
     // is registered again first (the restarted daemon reads it from disk).
     refreshRoute(event);
     proxyOn = await proxyActive({ sessionId });
-    if (!proxyOn) stopReason = 'unreachable';
+    // A retired proxy (`proxy off`, doctor --fix) still carries this
+    // session, masking only what it masked before: as off for new values.
+    if (!proxyOn)
+      stopReason = guard.state === 'retired' ? 'off' : 'unreachable';
   } else if (routing.state === 'not-written') {
     stopReason = 'not-set-up';
     routingNotice = `ZeroH Disclosure couldn't put this session behind its local proxy, so what you type can't be masked; ${TYPED_SECRETS}. \`/zeroh-disclosure:doctor\` shows why.`;
   } else if (routing.state === 'not-applied') {
     stopReason = 'not-applied';
     routingNotice = `ZeroH Disclosure: Claude Code didn't switch this session to the local proxy, so what you type can't be masked here; ${TYPED_SECRETS}. A new Claude Code session uses it.`;
-  } else if (routing.state === 'no-login-item') {
-    stopReason = 'no-login-item';
   } else if (routing.state === 'overridden') {
     stopReason = 'overridden';
   } else if (routing.state === 'not-configured') {
@@ -191,13 +194,13 @@ if (!proxyOn) {
   }
 }
 // A session counts as masked by the proxy when its traffic is known to reach
-// it (LP-B5, T-29, lib/hook-io.js proxyConfirmed): the daemon has seen a
-// request under this session id, or this hook's own environment names this
-// install's proxy URL (the daemon, proven healthy above, masks this session
-// and every request it cannot attribute while a ZeroH session is live). Only
-// a session switched to the proxy mid-prompt waits for "seen": its secret is
-// stopped as without the proxy (a clean prompt goes), and from its next
-// prompt on its environment names the proxy.
+// it (T-29, lib/hook-io.js proxyConfirmed): the daemon has seen a request
+// under this session id, or this hook's own environment names this install's
+// proxy URL (the daemon, proven healthy above, masks this session's own
+// requests; one it cannot attribute passes through unmasked). Only a session
+// switched to the proxy mid-prompt waits for "seen": its secret is handled as
+// without the proxy (sent with a notice; stopped with `uncertain block`), and
+// from its next prompt on its environment names the proxy.
 const proxyUnconfirmed = proxyOn && !proxyConfirmed({ sessionId });
 if (proxyUnconfirmed) {
   proxyOn = false;
@@ -324,33 +327,43 @@ function enforcedDecision(policyDecision, findings) {
     blocked: true,
   };
 }
-const result = await applyDisclosurePolicy({
-  text: userPrompt,
-  session,
-  cwd,
-  enforce: enforcedDecision,
-  // The ledger and the receipt keep only masked text; values the engine left
-  // in place are tokenized through the vault first.
-  sanitizeResidual: vault
-    ? (text) => scrub(text, { vault, known, profile: 'secrets' }).text
-    : null,
-  publicClaimExtras: {
-    unmask_receipt_extension: REVEAL_EXTENSION_MARKER,
-    ...(receiptWarnings.length ? { entropy_warnings: receiptWarnings } : {}),
-  },
-  selectiveClaimExtras: receiptWarnings.length
-    ? { entropy_warnings: receiptWarnings }
-    : {},
-});
-try {
-  initializeRevealReceiptExtension(result.receipt);
-} catch (error) {
-  // A read-only ZEROH_HOME has no key to sign the receipt's unmask
-  // extension; the receipt then says so when verified. The prompt goes on.
-  if (!notWritable(error)) throw error;
-}
+// Signs the prompt's receipt; signed again, from the same findings, when the
+// vault can't be saved (sentAsTypedDecision below).
+const signPrompt = async (enforce, findingsOverride = null) => {
+  const signed = await applyDisclosurePolicy({
+    text: userPrompt,
+    session,
+    cwd,
+    enforce,
+    findingsOverride,
+    // The ledger and the receipt keep only masked text; values the engine left
+    // in place are tokenized through the vault first.
+    sanitizeResidual: vault
+      ? (text) => scrub(text, { vault, known, profile: 'secrets' }).text
+      : null,
+    publicClaimExtras: {
+      unmask_receipt_extension: REVEAL_EXTENSION_MARKER,
+      ...(receiptWarnings.length ? { entropy_warnings: receiptWarnings } : {}),
+    },
+    selectiveClaimExtras: receiptWarnings.length
+      ? { entropy_warnings: receiptWarnings }
+      : {},
+  });
+  try {
+    initializeRevealReceiptExtension(signed.receipt);
+  } catch (error) {
+    // A read-only ZEROH_HOME has no key to sign the receipt's unmask
+    // extension; the receipt then says so when verified. The prompt goes on.
+    if (!notWritable(error)) throw error;
+  }
+  return signed;
+};
+let result = await signPrompt(enforcedDecision);
 
 let vaultPassNotice = null;
+// A pass recorded after the turn's ledger is written, so writeTurn can't
+// drop it (Astra pre-1.0.0 R5).
+let pendingPass = null;
 const mentionsFile = /(?:^|\s)@(?:[\w.~/-]|\\ )+/u.test(userPrompt);
 if (
   !vault &&
@@ -366,7 +379,7 @@ if (
   if (proxyOn && (await passesUncertain())) {
     // The proxy sends it unmasked: tokens it can't restore would break the
     // user's work (lib/proxy.js).
-    vaultPassNotice = await passUnchecked('vault-unavailable');
+    pendingPass = 'vault-unavailable';
   } else {
     const problem = vaultProblem(vaultFailure);
     // deny-inventory: vault-unavailable-prompt
@@ -415,7 +428,9 @@ if (vault) {
     if (needsVault && passUnmasked) {
       // Sent unmasked anyway (A1): nothing in the vault is needed.
     } else if (needsVault && proxyOn && (await passesUncertain())) {
-      vaultPassNotice = await passUnchecked('vault-unavailable');
+      // Rule 8: the proxy masks only the values already on disk
+      // (lib/restorable.js); what this prompt adds goes unmasked.
+      pendingPass = UNSAVEABLE_REASON;
     } else if (needsVault) {
       // deny-inventory: vault-unsaveable-prompt
       stopPrompt(
@@ -431,20 +446,36 @@ if (vault) {
 // prompt goes ahead; the receipt still records what was found.
 if (proxyOn) {
   markPromptCleared();
-  await writeTurn({
-    dir: session.dir,
+  // The vault couldn't be saved: the proxy masked only the values already
+  // on disk, and the others went to the model as typed. The receipt, the
+  // ledger and the turn summary say so (Astra pre-1.0.0 R5): the receipt is
+  // signed again as sent unmasked, the values not on disk are counted as
+  // sent, and only the tokens the model saw are recorded.
+  const unsaved = pendingPass === UNSAVEABLE_REASON ? unsavedValues() : null;
+  if (unsaved?.sent.count)
+    result = await signPrompt(sentAsTypedDecision, result.findings);
+  const ledger = ledgerFromDisclosureResult({
     turn,
-    payload: ledgerFromDisclosureResult({
-      turn,
-      phase:
-        result.findings.length || knownHits.length
-          ? 'masked_by_proxy'
-          : 'allowed_no_findings',
-      result,
-      referencedTokens: tokens,
-    }),
+    phase: unsaved?.sent.count
+      ? 'sent_unmasked_vault_unsaveable'
+      : result.findings.length || knownHits.length
+        ? 'masked_by_proxy'
+        : 'allowed_no_findings',
+    result,
+    referencedTokens: tokens,
   });
-  await recordPromptTokens([...promptTokens.values()]);
+  if (unsaved?.sent.count)
+    ledger.audit = { ...(ledger.audit ?? {}), sent_unmasked: unsaved.sent };
+  await writeTurn({ dir: session.dir, turn, payload: ledger });
+  if (pendingPass) vaultPassNotice = await passUnchecked(pendingPass);
+  if (unsaved?.sent.count) {
+    updateSessionStatus({ cwd, sessionId }, (status) =>
+      addSent(status, unsaved.sent.count),
+    );
+    // What the proxy did mask counts as masked; a token for a value that
+    // went as typed was never seen.
+    await recordPromptTokens(unsaved.masked, { countMasked: true });
+  } else await recordPromptTokens([...promptTokens.values()]);
   await markDisclosureResultCommitted({ session, result });
   emitPromptNotice({
     additionalContext: entropyWarnings.length
@@ -461,25 +492,22 @@ const holdsFindings =
 if (holdsFindings && passUnmasked) {
   // Sent as typed: recorded and told, never stopped.
   markPromptCleared();
-  await writeTurn({
-    dir: session.dir,
+  // Real values that reached the model in plain text, each counted once
+  // however many detectors, known values or @-files found it (docs/receipt-
+  // format.md "values sent": the status line, the Stop line, the receipt
+  // slip and /report all count them this way).
+  const sentUnmasked = distinctSentValues();
+  const ledger = ledgerFromDisclosureResult({
     turn,
-    payload: ledgerFromDisclosureResult({
-      turn,
-      phase: 'sent_unmasked_no_proxy',
-      result,
-      referencedTokens: tokens,
-    }),
+    phase: 'sent_unmasked_no_proxy',
+    result,
+    referencedTokens: tokens,
   });
+  ledger.audit = { ...(ledger.audit ?? {}), sent_unmasked: sentUnmasked };
+  await writeTurn({ dir: session.dir, turn, payload: ledger });
   await markDisclosureResultCommitted({ session, result });
-  // Real values that reached the model: the status line's "sent" count.
   updateSessionStatus({ cwd, sessionId }, (status) =>
-    addSent(
-      status,
-      result.findings.length +
-        knownHits.length +
-        fileHits.reduce((sum, hit) => sum + hit.count, 0),
-    ),
+    addSent(status, sentUnmasked.count),
   );
   const { notice } = await recordUnchecked({
     reason: 'proxy-not-running',
@@ -698,6 +726,77 @@ function emitPromptNotice({ additionalContext = null, systemMessage = null }) {
   });
 }
 
+// The distinct values a prompt sent as typed puts in front of the model:
+// detector findings, known values and values of @-mentioned files, keyed by
+// the value itself so one key found by two detectors, or typed and also in
+// .env, counts once. { count, by_type } for the turn record.
+function distinctSentValues() {
+  const byValue = new Map();
+  const note = (value, type) => {
+    if (typeof value !== 'string' || !value || byValue.has(value)) return;
+    byValue.set(value, type || 'UNKNOWN');
+  };
+  for (const r of result.replacements ?? []) {
+    if (Number.isInteger(r.start) && Number.isInteger(r.end)) {
+      note(userPrompt.slice(r.start, r.end), r.entity_type);
+    }
+  }
+  for (const f of result.findings ?? []) {
+    if (Number.isInteger(f.start) && Number.isInteger(f.end)) {
+      note(userPrompt.slice(f.start, f.end), f.type);
+    }
+  }
+  for (const hit of knownHits) note(hit.value, hit.type);
+  for (const hit of fileHits) {
+    for (const entry of hit.values ?? []) note(entry.value, entry.type);
+  }
+  const by_type = {};
+  for (const type of byValue.values()) by_type[type] = (by_type[type] ?? 0) + 1;
+  return { count: byValue.size, by_type };
+}
+
+// After a failed vault save: { sent: { count, by_type } for the distinct
+// values not on disk (the proxy sent them as typed), masked: the prompt's
+// token entries whose value is on disk (the proxy masked them) }.
+function unsavedValues() {
+  const onDisk = new Set(persistedEntries(vault).map((entry) => entry.value));
+  const sent = new Map();
+  const note = (value, type) => {
+    if (typeof value !== 'string' || !value || onDisk.has(value)) return;
+    if (!sent.has(value)) sent.set(value, type || 'UNKNOWN');
+  };
+  for (const r of result.replacements ?? [])
+    if (Number.isInteger(r.start) && Number.isInteger(r.end))
+      note(userPrompt.slice(r.start, r.end), r.entity_type);
+  for (const f of result.findings ?? [])
+    if (Number.isInteger(f.start) && Number.isInteger(f.end))
+      note(userPrompt.slice(f.start, f.end), f.type);
+  for (const hit of knownHits) note(hit.value, hit.type);
+  const by_type = {};
+  for (const type of sent.values()) by_type[type] = (by_type[type] ?? 0) + 1;
+  const masked = [...promptTokens.values()].filter((entry) =>
+    onDisk.has(vault.valueOf(entry.token)),
+  );
+  return { sent: { count: sent.size, by_type }, masked };
+}
+
+// The signed decision for a prompt whose new values went as typed because
+// the vault couldn't be saved (uncertain: pass; rule 8).
+function sentAsTypedDecision(policyDecision, findings) {
+  const extra = knownHits.map((hit) => hit.type);
+  return {
+    ...policyDecision,
+    action: 'allow',
+    enforced: 'sent_unmasked',
+    policy_action: policyDecision.action,
+    reason:
+      "ZeroH couldn't save its vault, so the local proxy masked only the values already in it; the others were sent as typed (uncertain cases: pass).",
+    mask_categories: [...new Set([...findings.map((f) => f.type), ...extra])],
+    extra_categories: extra,
+    blocked: false,
+  };
+}
+
 // Files mentioned with @ that hold secrets or personal data.
 function mentionedFileSecrets(prompt, dir) {
   const hits = [];
@@ -720,7 +819,16 @@ function mentionedFileSecrets(prompt, dir) {
         profile: 'tool',
       });
       if (replacements.length)
-        hits.push({ path: rel, count: replacements.length });
+        hits.push({
+          path: rel,
+          count: replacements.length,
+          values: replacements
+            .map((r) => ({
+              value: vault.entryOf(r.token)?.value,
+              type: r.type,
+            }))
+            .filter((entry) => typeof entry.value === 'string'),
+        });
     } catch {
       /* unreadable: nothing to report */
     }
@@ -730,14 +838,14 @@ function mentionedFileSecrets(prompt, dir) {
 
 // helpers ---------------------------------------------------------------------
 
-async function recordPromptTokens(entries) {
+async function recordPromptTokens(entries, { countMasked = false } = {}) {
   if (!entries.length) return;
   await recordMaskedOutput({
     cwd: root,
     sessionId,
     channel: 'typed prompt',
-    replacements: [],
-    countMasked: false,
+    replacements: countMasked ? entries : [],
+    countMasked,
     observations: entries.map((entry) => ({
       ...entry,
       channel: 'typed prompt',

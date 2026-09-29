@@ -195,7 +195,32 @@ function newWord() {
     tilde: false,
     brace: false,
     subs: [],
+    // Where each character of the word's source came from, as
+    // { kind, start, end } source ranges: 'literal' (a character of the
+    // value as written, quoted or not), 'syntax' (a quote or a line
+    // continuation: not part of the value), 'reference' (a plain parameter
+    // expansion the shell performs: `$NAME`, `${NAME}`, `$1`; in PowerShell
+    // `$NAME`, `$env:NAME`, `${NAME}`, `${env:NAME}`) or 'expansion' (any
+    // other expansion: a default, a command substitution, arithmetic).
+    // Read by lib/shell-references.js.
+    parts: [],
   };
+}
+
+function addPart(word, kind, start, end) {
+  if (end <= start) return;
+  const last = word.parts.at(-1);
+  if (last && last.kind === kind && last.end === start && kind !== 'reference')
+    last.end = end;
+  else word.parts.push({ kind, start, end });
+}
+
+// A plain Bash parameter expansion: the value of a variable or a positional
+// parameter, with nothing of its own (no default, no operator).
+const BASH_REFERENCE =
+  /^\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]|\{[A-Za-z_][A-Za-z0-9_]*\}|\{[0-9]+\})$/u;
+function bashExpansionKind(text) {
+  return BASH_REFERENCE.test(text) ? 'reference' : 'expansion';
 }
 
 function markDynamic(word) {
@@ -306,12 +331,15 @@ function readDouble(src, i, word, ctx) {
     if (c === '\\') {
       const n = src[j + 1];
       if (n === '\n') {
+        addPart(word, 'syntax', j, j + 2);
         j += 2;
       } else if (n !== undefined && /[$`"\\]/u.test(n)) {
         word.value += n;
+        addPart(word, 'literal', j, j + 2);
         j += 2;
       } else {
         word.value += '\\';
+        addPart(word, 'literal', j, j + 1);
         j += 1;
       }
       continue;
@@ -321,6 +349,7 @@ function readDouble(src, i, word, ctx) {
       if (expansion) {
         markDynamic(word);
         word.value += expansion.text;
+        addPart(word, bashExpansionKind(expansion.text), j, expansion.end);
         j = expansion.end;
         continue;
       }
@@ -329,10 +358,12 @@ function readDouble(src, i, word, ctx) {
       const sub = readBacktick(src, j, ctx, word.subs);
       markDynamic(word);
       word.value += sub.text;
+      addPart(word, 'expansion', j, sub.end);
       j = sub.end;
       continue;
     }
     word.value += c;
+    addPart(word, 'literal', j, j + 1);
     j += 1;
   }
   return parseFail('unterminated double quote');
@@ -368,12 +399,15 @@ function readWord(src, i, ctx) {
     if (c === '\\') {
       if (j + 1 >= src.length) {
         word.value += '\\';
+        addPart(word, 'literal', j, j + 1);
         j += 1;
       } else if (src[j + 1] === '\n') {
+        addPart(word, 'syntax', j, j + 2);
         j += 2;
       } else {
         word.quoted = true;
         word.value += src[j + 1];
+        addPart(word, 'literal', j, j + 2);
         j += 2;
       }
       continue;
@@ -383,12 +417,17 @@ function readWord(src, i, ctx) {
       if (end < 0) parseFail('unterminated single quote');
       word.quoted = true;
       word.value += src.slice(j + 1, end);
+      addPart(word, 'syntax', j, j + 1);
+      addPart(word, 'literal', j + 1, end);
+      addPart(word, 'syntax', end, end + 1);
       j = end + 1;
       continue;
     }
     if (c === '"') {
       word.quoted = true;
+      addPart(word, 'syntax', j, j + 1);
       j = readDouble(src, j + 1, word, ctx);
+      addPart(word, 'syntax', j - 1, j);
       continue;
     }
     if (c === '$') {
@@ -396,18 +435,22 @@ function readWord(src, i, ctx) {
         const ansi = readAnsiC(src, j + 2);
         word.quoted = true;
         word.value += ansi.value;
+        addPart(word, 'literal', j, ansi.end);
         j = ansi.end;
         continue;
       }
       if (src[j + 1] === '"') {
         word.quoted = true;
+        addPart(word, 'syntax', j, j + 2);
         j = readDouble(src, j + 2, word, ctx);
+        addPart(word, 'syntax', j - 1, j);
         continue;
       }
       const expansion = readDollar(src, j, ctx, word.subs);
       if (expansion) {
         markDynamic(word);
         word.value += expansion.text;
+        addPart(word, bashExpansionKind(expansion.text), j, expansion.end);
         j = expansion.end;
         continue;
       }
@@ -416,12 +459,14 @@ function readWord(src, i, ctx) {
       const sub = readBacktick(src, j, ctx, word.subs);
       markDynamic(word);
       word.value += sub.text;
+      addPart(word, 'expansion', j, sub.end);
       j = sub.end;
       continue;
     }
     if (c === '*' || c === '?' || c === '[') word.glob = true;
     if (c === '{' && braceExpansionAt(src, j)) word.brace = true;
     word.value += c;
+    addPart(word, 'literal', j, j + 1);
     j += 1;
   }
   word.end = j;
@@ -884,6 +929,7 @@ export function unwrapCommand(words) {
     lookupOnly: false,
     dynamicProgram: false,
     splitString: null,
+    splitWord: null,
   };
   let index = 0;
   while (index < words.length) {
@@ -940,6 +986,7 @@ export function unwrapCommand(words) {
         const [option, inline] = value.split(/=(.*)/su);
         if ((spec.split || []).includes(option)) {
           out.splitString = inline ?? words[index + 1]?.value ?? '';
+          out.splitWord = words[index + (inline === undefined ? 1 : 0)] ?? null;
           out.args = words.slice(index + (inline === undefined ? 2 : 1));
           return out;
         }
@@ -958,6 +1005,7 @@ export function unwrapCommand(words) {
           if ((spec.split || []).includes(option)) {
             const rest = value.slice(k + 1);
             out.splitString = rest || words[index + 1]?.value || '';
+            out.splitWord = words[index + (rest ? 0 : 1)] ?? null;
             out.args = words.slice(index + (rest ? 1 : 2));
             return out;
           }
@@ -1049,6 +1097,7 @@ function inlineCode(resolved, command) {
           language: 'bash',
           code: code.value,
           dynamic: code.dynamic,
+          words: [code],
         });
       else found.push({ language: 'bash', code: '', dynamic: false });
     } else if (index >= args.length) {
@@ -1082,6 +1131,7 @@ function inlineCode(resolved, command) {
       language: 'powershell',
       code: values.filter((value) => !/^-command$/iu.test(value)).join(' '),
       dynamic: args.some((word) => word.dynamic),
+      words: args.filter((word) => !/^-command$/iu.test(word.value)),
     });
     return found;
   }
@@ -1093,6 +1143,9 @@ function inlineCode(resolved, command) {
         language: 'bash',
         code: rest.map((word) => word.value).join(' '),
         dynamic: rest.some((word) => word.dynamic),
+        // cmd's own syntax (`%X%`, `^`, `&`) is not Bash: never proven.
+        words: rest,
+        foreignSyntax: true,
       });
     }
     return found;
@@ -1102,6 +1155,7 @@ function inlineCode(resolved, command) {
       language: 'bash',
       code: values.join(' '),
       dynamic: args.some((word) => word.dynamic),
+      words: args,
     });
     return found;
   }
@@ -1123,6 +1177,7 @@ function inlineCode(resolved, command) {
           language: 'bash',
           code: values.slice(index).join(' '),
           dynamic: args.slice(index).some((word) => word.dynamic),
+          words: args.slice(index),
         });
         return found;
       }
@@ -1133,6 +1188,7 @@ function inlineCode(resolved, command) {
             language: 'bash',
             code: code.value,
             dynamic: code.dynamic,
+            words: [code],
           });
         return found;
       }
@@ -1141,6 +1197,8 @@ function inlineCode(resolved, command) {
           language: 'bash',
           code: value.slice(10),
           dynamic: args[index].dynamic,
+          words: [args[index]],
+          foreignSyntax: true,
         });
         return found;
       }
@@ -1175,6 +1233,7 @@ function inlineCode(resolved, command) {
           language: 'powershell',
           code: rest.map((word) => word.value).join(' '),
           dynamic: rest.some((word) => word.dynamic),
+          words: rest,
         });
         return found;
       }
@@ -1213,9 +1272,13 @@ export function analyzeBash(source, { depth = 0 } = {}) {
         language: 'bash',
         code: resolved.splitString,
         dynamic: false,
+        // env -S expands `${VAR}` itself: never proven.
+        words: resolved.splitWord ? [resolved.splitWord] : [],
+        foreignSyntax: true,
       });
     }
     scripts.push(...inlineCode(resolved, command));
+    resolved.scripts = scripts;
     // The code this command runs is read and listed below.
     resolved.inlineParsed = scripts.some(
       (script) => script.language !== 'foreign' && !script.dynamic,
@@ -1263,6 +1326,20 @@ export function analyzeBash(source, { depth = 0 } = {}) {
 // Here-strings are read. Anything else unusual makes the parse fail, and a
 // guard that needs certainty then denies.
 
+// A plain PowerShell variable: `$NAME`, `$env:NAME`, `${NAME}`,
+// `${env:NAME}`, and a subexpression that holds only one of them
+// (`$($env:NAME)`, the usual way to end a name before `:`), which evaluates
+// to exactly the variable's value (see newWord's parts).
+const PS_VARIABLE =
+  '\\$(?:(?:env:)?[A-Za-z_][A-Za-z0-9_]*|\\{(?:env:)?[A-Za-z_][A-Za-z0-9_]*\\})';
+const PS_REFERENCE = new RegExp(
+  `^(?:${PS_VARIABLE}|\\$\\([ \\t]*${PS_VARIABLE}[ \\t]*\\))$`,
+  'iu',
+);
+function psExpansionKind(text) {
+  return PS_REFERENCE.test(text) ? 'reference' : 'expansion';
+}
+
 function psReadString(src, i, quote, word) {
   let j = i;
   while (j < src.length) {
@@ -1271,21 +1348,26 @@ function psReadString(src, i, quote, word) {
       if (c === "'" || c === '\u2019' || c === '\u2018') {
         if (src[j + 1] === "'") {
           word.value += "'";
+          addPart(word, 'literal', j, j + 2);
           j += 2;
           continue;
         }
+        addPart(word, 'syntax', j, j + 1);
         return j + 1;
       }
       word.value += c;
+      addPart(word, 'literal', j, j + 1);
       j += 1;
       continue;
     }
     if (c === '"' || c === '\u201c' || c === '\u201d') {
       if (src[j + 1] === '"') {
         word.value += '"';
+        addPart(word, 'literal', j, j + 2);
         j += 2;
         continue;
       }
+      addPart(word, 'syntax', j, j + 1);
       return j + 1;
     }
     if (c === '`') {
@@ -1302,6 +1384,7 @@ function psReadString(src, i, quote, word) {
         e: '\x1b',
       };
       word.value += Object.hasOwn(map, n) ? map[n] : (n ?? '');
+      addPart(word, 'literal', j, j + 2);
       j += 2;
       continue;
     }
@@ -1310,6 +1393,7 @@ function psReadString(src, i, quote, word) {
       if (src[j + 1] === '(') {
         const inner = psGroup(src, j + 1, word);
         word.value += src.slice(j, inner);
+        addPart(word, psExpansionKind(src.slice(j, inner)), j, inner);
         j = inner;
         continue;
       }
@@ -1317,6 +1401,7 @@ function psReadString(src, i, quote, word) {
         const close = src.indexOf('}', j + 2);
         if (close < 0) parseFail('unterminated ${…}');
         word.value += src.slice(j, close + 1);
+        addPart(word, psExpansionKind(src.slice(j, close + 1)), j, close + 1);
         j = close + 1;
         continue;
       }
@@ -1325,10 +1410,17 @@ function psReadString(src, i, quote, word) {
           src.slice(j),
         );
       word.value += name ? name[0] : '$';
+      addPart(
+        word,
+        name ? psExpansionKind(name[0]) : 'literal',
+        j,
+        j + (name ? name[0].length : 1),
+      );
       j += name ? name[0].length : 1;
       continue;
     }
     word.value += c;
+    addPart(word, 'literal', j, j + 1);
     j += 1;
   }
   return parseFail(`unterminated ${quote} string`);
@@ -1478,12 +1570,59 @@ function psParse(src) {
       continue;
     }
     const { word, end } = psWord(src, i);
+    if (word.raw === '--%' && command.words.length) {
+      // The stop-parsing token: the rest of the line, up to a newline or a
+      // `|`, goes to the program as written, with no expansion, no quote
+      // removal by PowerShell and no escapes (a `%NAME%` is expanded by
+      // Windows, not PowerShell, and is dynamic here). Every character of
+      // it is literal: nothing after `--%` is a pure reference.
+      const stop = stopParsingWords(src, end);
+      command.words.push(...stop.words);
+      i = stop.end;
+      continue;
+    }
     commands.push(...word.subs);
     command.words.push(word);
     i = end;
   }
   finish();
   return commands;
+}
+
+// The words after PowerShell's `--%`: split on blanks, `"…"` kept together
+// with its quotes removed from the value (the program's own argument
+// parser removes them on Windows), every character a literal part.
+function stopParsingWords(src, i) {
+  const words = [];
+  let j = i;
+  while (j < src.length && src[j] !== '\n' && src[j] !== '|') {
+    if (src[j] === ' ' || src[j] === '\t' || src[j] === '\r') {
+      j += 1;
+      continue;
+    }
+    const word = newWord();
+    word.start = j;
+    let quoted = false;
+    while (j < src.length && src[j] !== '\n' && src[j] !== '|') {
+      const c = src[j];
+      if (!quoted && (c === ' ' || c === '\t' || c === '\r')) break;
+      if (c === '"') {
+        quoted = !quoted;
+        word.quoted = true;
+      } else {
+        if (c === '%' && /^%[A-Za-z_][A-Za-z0-9_]*%/u.test(src.slice(j)))
+          markDynamic(word);
+        word.value += c;
+      }
+      j += 1;
+    }
+    addPart(word, 'literal', word.start, j);
+    word.end = j;
+    word.raw = src.slice(word.start, j);
+    word.stopParsed = true;
+    words.push(word);
+  }
+  return { words, end: j };
 }
 
 function psWord(src, i) {
@@ -1506,6 +1645,7 @@ function psWord(src, i) {
       if (/\$\(/u.test(body)) parseFail('subexpression in a here-string');
     }
     j += 2 + close.index + close[0].length;
+    addPart(word, 'literal', i, j);
     word.end = j;
     word.raw = src.slice(i, j);
     return { word, end: j };
@@ -1524,12 +1664,14 @@ function psWord(src, i) {
     ) {
       word.quoted = true;
       const quote = c === '"' || c === '\u201c' || c === '\u201d' ? '"' : "'";
+      addPart(word, 'syntax', j, j + 1);
       j = psReadString(src, j + 1, quote, word);
       continue;
     }
     if (c === '`') {
       word.quoted = true;
       if (j + 1 < src.length) word.value += src[j + 1];
+      addPart(word, 'literal', j, Math.min(j + 2, src.length));
       j += 2;
       continue;
     }
@@ -1541,12 +1683,19 @@ function psWord(src, i) {
           if (close < 0) parseFail('unterminated ${…}');
           markDynamic(word);
           word.value += src.slice(j, close + 1);
+          addPart(word, psExpansionKind(src.slice(j, close + 1)), j, close + 1);
           j = close + 1;
           continue;
         }
         markDynamic(word);
         const end = psGroup(src, j + 1, word);
         word.value += src.slice(j, end);
+        addPart(
+          word,
+          c === '$' ? psExpansionKind(src.slice(j, end)) : 'expansion',
+          j,
+          end,
+        );
         j = end;
         continue;
       }
@@ -1557,6 +1706,7 @@ function psWord(src, i) {
             src.slice(j),
           );
         word.value += name[0];
+        addPart(word, psExpansionKind(name[0]), j, j + name[0].length);
         j += name[0].length;
         continue;
       }
@@ -1565,11 +1715,13 @@ function psWord(src, i) {
       markDynamic(word);
       const end = psGroup(src, j, word);
       word.value += src.slice(j, end);
+      addPart(word, 'expansion', j, end);
       j = end;
       continue;
     }
     if (c === ')' || c === '}') parseFail(`unexpected ${c}`);
     word.value += c;
+    addPart(word, 'literal', j, j + 1);
     j += 1;
   }
   word.end = j;
@@ -1597,6 +1749,7 @@ export function parsePowerShell(source, { depth = 0 } = {}) {
       commands.push(resolved);
       // Code handed to an interpreter as text: iex, pwsh -Command, cmd /c.
       const scripts = inlineCode(resolved, command);
+      resolved.scripts = scripts;
       resolved.inlineParsed = scripts.some(
         (script) => script.language !== 'foreign' && !script.dynamic,
       );
@@ -1625,6 +1778,27 @@ export function parsePowerShell(source, { depth = 0 } = {}) {
       return { ok: false, reason: error.message, commands: [] };
     throw error;
   }
+}
+
+// The source ranges PowerShell passes as written after a stop-parsing
+// token `--%` (a `--%` inside a string or a comment is text, not one), as
+// [start, end) pairs; null when the command cannot be parsed.
+export function stopParsingRanges(source) {
+  const text = String(source ?? '');
+  let commands;
+  try {
+    commands = psParse(text);
+  } catch (error) {
+    if (error instanceof ShellParseError) return null;
+    throw error;
+  }
+  return commands
+    .flatMap((command) => command.words)
+    .filter(
+      (word) =>
+        word.stopParsed && text.slice(word.start, word.end) === word.raw,
+    )
+    .map((word) => [word.start, word.end]);
 }
 
 // analyzeBash or parsePowerShell, by shell name.

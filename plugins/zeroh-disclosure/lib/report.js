@@ -27,7 +27,11 @@ import {
   sessionSlip,
   signingLabel,
 } from './report-slip.js';
-import { displayPath, writePrivateJson } from './private-fs.js';
+import {
+  canonicalProjectPath,
+  displayPath,
+  writePrivateJson,
+} from './private-fs.js';
 import { retentionNote } from './receipt-retention.js';
 import { scrub } from './secrets.js';
 import {
@@ -45,6 +49,15 @@ import {
   zerohHome as defaultZerohHome,
 } from './vault.js';
 import { verifyReceiptArtifact } from './verify-receipt.js';
+import {
+  normalizeTokenObservations,
+  promptSentUnmasked,
+  promptStopped,
+  sentUnmaskedCount,
+  signedTurnSummary,
+  turnSummary,
+  uniqueReplacements,
+} from './turn-summary.js';
 import {
   TOKEN_REASONS,
   UNCHECKED_LABELS,
@@ -69,6 +82,7 @@ export {
   slipLines,
 } from './report-slip.js';
 export { renderReportHtml } from './report-html.js';
+export { promptSentUnmasked, promptStopped } from './turn-summary.js';
 
 export const DEFAULT_POLICY_ID = 'zeroh-disclosure-v1';
 
@@ -197,14 +211,19 @@ export async function recordDestinationCheck({
   }
 }
 
-export async function writeSessionReceiptHtml({ session, env = process.env }) {
+// `previews: false` (the receipts uninstall keeps, lib/receipt-keep.js):
+// no vault is opened and no value preview is shown.
+export async function writeSessionReceiptHtml({
+  session,
+  env = process.env,
+  previews = true,
+}) {
   const turns = await loadSessionTurns(session.dir);
-  const vault = new Vault(
-    session.root ?? path.resolve(session.dir, '..', '..', '..'),
-    {
-      env,
-    },
-  );
+  const vault = previews
+    ? new Vault(session.root ?? path.resolve(session.dir, '..', '..', '..'), {
+        env,
+      })
+    : null;
   const summaries = [];
   for (const entry of turns) {
     summaries.push(await summarizeTurn(entry, vault));
@@ -218,53 +237,6 @@ export async function writeSessionReceiptHtml({ session, env = process.env }) {
   });
   await fs.chmod(file, 0o600);
   return { path: file, summaries, tokenMap };
-}
-
-// What a turn has to report at Stop, or an empty list when it has nothing: no
-// value masked, no prompt stopped, no destination blocked, no value shown under
-// a grant, no file passed unchecked and no missed value reported.
-// What happened to the turn's prompt, from its phase until Stop finalises
-// the turn, and always from the signed receipt: `decision_action` is a
-// public claim (`mask_and_allow` when the proxy masked it, `allow` when it
-// went as typed, `block` when it was stopped); the full decision
-// (`decision_details.enforced`) is a selective claim, used when present.
-function promptDecision(ledger) {
-  const claims = ledger?.receipt?.public_claims ?? {};
-  return {
-    action: claims.decision_action ?? null,
-    enforced: claims.decision_details?.enforced ?? null,
-  };
-}
-
-// True when the turn's prompt went to the model as typed (no proxy in the
-// route, uncertain: pass). Its replacements are only the ledger's masked
-// copy: nothing in them was masked for the model (Astra rc.2 F6).
-export function promptSentUnmasked(ledger) {
-  const { action, enforced } = promptDecision(ledger);
-  return (
-    ledger?.phase === 'sent_unmasked_no_proxy' ||
-    enforced === 'sent_unmasked' ||
-    (action === 'allow' && (ledger?.replacements ?? []).length > 0)
-  );
-}
-
-// True when the turn's prompt was stopped: nothing was sent, and its
-// replacements are only the masked copy offered for resubmission.
-export function promptStopped(ledger) {
-  const { action, enforced } = promptDecision(ledger);
-  return (
-    String(ledger?.phase).startsWith('blocked_') ||
-    enforced === 'stopped' ||
-    action === 'block'
-  );
-}
-
-// The prompt's replacements that were masked in what reached the model:
-// none for a prompt that was stopped or sent as typed.
-function promptMaskedReplacements(ledger) {
-  return promptStopped(ledger) || promptSentUnmasked(ledger)
-    ? []
-    : uniqueReplacements(ledger?.replacements ?? []);
 }
 
 // The values a turn masked: distinct tokens of its prompt (unless the prompt
@@ -289,6 +261,9 @@ export function turnMaskedCount(
   ]).size;
 }
 
+// What a turn has to report at Stop, or an empty list when it has nothing: no
+// value masked, no prompt stopped, no destination blocked, no value shown under
+// a grant, no file passed unchecked and no missed value reported.
 export function stopTurnEvents(
   ledger,
   { blocked = null, sentUnmasked = null } = {},
@@ -302,6 +277,12 @@ export function stopTurnEvents(
   if (destinations > 0) {
     events.push(
       `${destinations} ${plural(destinations, 'destination')} blocked`,
+    );
+  }
+  const typedSent = sentUnmaskedCount(ledger);
+  if (typedSent > 0) {
+    events.push(
+      `${typedSent} ${plural(typedSent, 'value')} sent to Claude as typed`,
     );
   }
   const revealed = revealedUnderGrantCount(ledger);
@@ -507,7 +488,9 @@ export async function buildLocalReport({
 } = {}) {
   const period = parseSince(since, now);
   const aggregate = emptyAggregate();
-  const roots = [...new Set(projectRoots.map((root) => path.resolve(root)))];
+  const roots = [
+    ...new Set(projectRoots.map((root) => canonicalProjectPath(root))),
+  ];
   for (const root of roots) {
     await aggregateProject({ root, period, aggregate });
   }
@@ -650,51 +633,37 @@ async function aggregateProject({ root, period, aggregate }) {
 }
 
 function addTurnToAggregate(ledger, aggregate, dayEntry) {
-  const promptReplacements = promptMaskedReplacements(ledger);
-  for (const replacement of promptReplacements) {
-    add(aggregate.maskedByType, replacement.type, replacement.count);
-    add(aggregate.maskedByChannel, 'typed prompt', replacement.count);
-  }
-  const auditMasked = ledger.audit?.masked ?? {};
-  for (const [type, count] of Object.entries(auditMasked.by_type ?? {})) {
-    add(aggregate.maskedByType, type, count);
-  }
-  for (const [channel, types] of Object.entries(auditMasked.by_channel ?? {})) {
+  // The same numbers the turn's receipt shows (signed from 1.0.0 on).
+  const { summary } = shownTurnSummary(ledger);
+  mergeCounts(aggregate.maskedByType, summary.masked_by_type);
+  for (const [channel, types] of Object.entries(summary.masked_by_channel)) {
     add(aggregate.maskedByChannel, channel, sumCounts(types));
   }
   // "withheld" counts every occurrence replaced by a token before it reached
   // the model, summed across prompt and tool-output types shown on the slip.
-  const masked =
-    promptReplacements.reduce(
-      (sum, replacement) => sum + replacement.count,
-      0,
-    ) + sumCounts(auditMasked.by_type);
-  // Only detected values explicitly recorded as revealed under a user-approved
-  // grant count as sent. A receipt without reveal data counts zero; unchecked binary files do not.
-  const sent = revealedUnderGrantCount(ledger);
+  const masked = summary.values_masked;
+  const sent = summary.values_sent;
   aggregate.totals.values_masked += masked;
   aggregate.totals.values_sent += sent;
+  aggregate.totals.values_sent_typed += summary.sent_unmasked?.count ?? 0;
   dayEntry.masked += masked;
   dayEntry.sent += sent;
-  if (promptStopped(ledger)) {
+  if (summary.prompt === 'stopped') {
     aggregate.totals.prompts_stopped += 1;
     dayEntry.prompts_stopped += 1;
   }
   mergeCounts(
     aggregate.files,
     Object.fromEntries(
-      Object.entries(ledger.audit?.files ?? {}).map(([file, count]) => [
+      Object.entries(summary.files).map(([file, count]) => [
         maskStoredLabel(file),
         count,
       ]),
     ),
   );
-  mergeCounts(
-    aggregate.destinationsBlocked,
-    ledger.audit?.destinations?.blocked,
-  );
-  mergeCounts(aggregate.formats, ledger.format_disclosure?.passed_unmasked);
-  mergeCounts(aggregate.unchecked, uncheckedCounts(ledger.audit));
+  mergeCounts(aggregate.destinationsBlocked, summary.destinations_blocked);
+  mergeCounts(aggregate.formats, summary.formats_passed_unmasked);
+  mergeCounts(aggregate.unchecked, summary.passed_unchecked);
 }
 
 // Passed-unchecked counts as rows: reason, count and a value-free label.
@@ -705,35 +674,30 @@ export function uncheckedRows(counts) {
   }));
 }
 
+// A turn's numbers as the receipt shows them. A turn finalised by 1.0.0 or
+// later shows its signed summary (lib/turn-summary.js), so what is shown is
+// what is signed; a turn still in progress, or written before 1.0.0, shows
+// the ledger's counts, and `coverage` says which it is.
+export function shownTurnSummary(ledger) {
+  const signed = signedTurnSummary(ledger)?.summary;
+  if (signed) return { summary: signed, coverage: 'turn' };
+  const required = Boolean(
+    ledger?.receipt?.public_claims?.turn_summary_extension,
+  );
+  return {
+    summary: turnSummary(ledger),
+    coverage: required ? 'pending' : 'typed-prompt',
+  };
+}
+
 async function summarizeTurn({ turn, ledger, file }, vault = null) {
   const verification = await verifyReceiptArtifact(file).catch(() => ({
     ok: false,
     checks: [],
   }));
-  // A prompt stopped or sent as typed was not masked for the model; only
-  // its ledger copy is.
-  const prompt = promptMaskedReplacements(ledger);
-  const maskedByChannel = {};
-  if (prompt.length)
-    maskedByChannel['typed prompt'] = countReplacementTypes(prompt);
-  for (const [channel, counts] of Object.entries(
-    ledger.audit?.masked?.by_channel ?? {},
-  )) {
-    maskedByChannel[channel] = { ...counts };
-  }
-  const byType = {};
-  for (const counts of Object.values(maskedByChannel))
-    mergeCounts(byType, counts);
-  const tokens = [
-    ...new Set([
-      ...prompt.map((entry) => entry.token).filter(Boolean),
-      ...(ledger.audit?.masked?.tokens ?? []),
-    ]),
-  ].sort();
+  const { summary, coverage } = shownTurnSummary(ledger);
   const claims = ledger.receipt?.public_claims ?? {};
-  const valuesMasked = sumCounts(byType);
-  const valuesSent = revealedUnderGrantCount(ledger);
-  const tokenMap = tokenObservationsFromLedger(ledger).map((entry) => ({
+  const tokenMap = (summary.token_map ?? []).map((entry) => ({
     ...entry,
     source: maskStoredLabel(entry.source, vault),
     preview: previewForToken(vault, entry.token, entry.type),
@@ -746,25 +710,26 @@ async function summarizeTurn({ turn, ledger, file }, vault = null) {
     signing: signingLabel(ledger),
     policy_id: claims.policy_id ?? '-',
     engine_id: claims.protection_engine_id ?? '-',
-    values_masked: valuesMasked,
-    values_sent: valuesSent,
-    masked_by_type: byType,
-    masked_by_channel: maskedByChannel,
+    coverage: verification.coverage ?? coverage,
+    values_masked: summary.values_masked,
+    values_sent: summary.values_sent,
+    sent_typed: summary.sent_unmasked?.count ?? 0,
+    sent_under_grant: summary.sent_under_grant ?? summary.values_sent,
+    masked_by_type: { ...summary.masked_by_type },
+    masked_by_channel: { ...summary.masked_by_channel },
     masked_by_channel_totals: Object.fromEntries(
-      Object.entries(maskedByChannel).map(([channel, counts]) => [
+      Object.entries(summary.masked_by_channel).map(([channel, counts]) => [
         channel,
         sumCounts(counts),
       ]),
     ),
-    tokens,
+    tokens: [...summary.tokens],
     token_map: tokenMap,
-    destinations_checked: { ...(ledger.audit?.destinations?.checked ?? {}) },
-    destinations_blocked: { ...(ledger.audit?.destinations?.blocked ?? {}) },
-    formats_passed_unmasked: {
-      ...(ledger.format_disclosure?.passed_unmasked ?? {}),
-    },
-    formats_withheld: { ...(ledger.format_disclosure?.withheld ?? {}) },
-    passed_unchecked: uncheckedCounts(ledger.audit),
+    destinations_checked: { ...summary.destinations_checked },
+    destinations_blocked: { ...summary.destinations_blocked },
+    formats_passed_unmasked: { ...summary.formats_passed_unmasked },
+    formats_withheld: { ...summary.formats_withheld },
+    passed_unchecked: { ...summary.passed_unchecked },
     verified: !!verification.ok,
     failed_checks:
       verification.failed ?? (verification.ok ? [] : ['receipt_readable']),
@@ -815,6 +780,7 @@ function emptyAggregate() {
     totals: {
       values_masked: 0,
       values_sent: 0,
+      values_sent_typed: 0,
       prompts_stopped: 0,
       receipts_found: 0,
       receipts_verified: 0,
@@ -850,55 +816,6 @@ function recordDate(record) {
     record.receipt?.public_claims?.iat;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function uniqueReplacements(replacements) {
-  const found = new Map();
-  for (const replacement of replacements ?? []) {
-    const type = replacement?.entity_type || replacement?.type;
-    const token = replacement?.replacement || replacement?.token;
-    if (!type) continue;
-    const key = token || `${type}:${replacement?.start}:${replacement?.end}`;
-    const current = found.get(key) ?? {
-      type,
-      token: token || null,
-      count: 0,
-    };
-    current.count += Math.max(1, Number(replacement?.count) || 1);
-    found.set(key, current);
-  }
-  return [...found.values()];
-}
-
-function normalizeTokenObservations(observations) {
-  const found = new Map();
-  for (const observation of observations ?? []) {
-    const token = observation?.token || observation?.replacement;
-    const type = observation?.type || observation?.entity_type;
-    const channel = String(observation?.channel || '').trim();
-    const source = String(observation?.source || '').trim();
-    if (!token || !type || !channel || !source) continue;
-    const key = `${token}\u0000${type}\u0000${channel}\u0000${source}`;
-    const current = found.get(key) ?? {
-      token,
-      type,
-      channel,
-      source,
-      count: 0,
-    };
-    // The known value's own name (STRIPE_KEY), never the value.
-    if (!current.name && typeof observation?.name === 'string') {
-      current.name = observation.name;
-    }
-    current.count += Math.max(1, Number(observation?.count) || 1);
-    found.set(key, current);
-  }
-  return [...found.values()].sort(
-    (left, right) =>
-      left.token.localeCompare(right.token) ||
-      left.channel.localeCompare(right.channel) ||
-      left.source.localeCompare(right.source),
-  );
 }
 
 function mergeTokenObservations(target, incoming) {
@@ -964,13 +881,6 @@ function buildSessionTokenMap(summaries) {
         left.first_seen_turn - right.first_seen_turn ||
         left.token.localeCompare(right.token),
     );
-}
-
-function countReplacementTypes(replacements) {
-  const counts = {};
-  for (const replacement of replacements)
-    add(counts, replacement.type, replacement.count);
-  return counts;
 }
 
 function normalizeHost(host) {

@@ -28,15 +28,18 @@ notices, work with the local proxy, run PowerShell, and remove the plugin.
 ## Try it without a Stripe account
 
 The [README](../README.md#try-it) walks through a Stripe test key against the real Stripe API.
-Without a Stripe account, any made-up value works against `httpbin.org`, which echoes the Bearer
-token it received:
+Without a Stripe account, a made-up key works too, as in step 6 of the website's
+[test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/):
 
-1. Put `STRIPE_KEY=sk_test_ZEROHFAKE123` in a test project's `.env` and start `claude` there.
-2. Allow the host first: `/zeroh-disclosure:allow STRIPE_KEY httpbin.org`.
-3. Ask Claude to "call https://httpbin.org/bearer with STRIPE_KEY as a Bearer token". httpbin
-   answers `200` with `"authenticated": true`: the real value reached the server, while its echo
-   came back to the model as `[API_KEY-…]`.
-4. Ask for a host you have not allowed, and see it blocked.
+1. Put `STRIPE_KEY=sk_test_ZEROHFAKE00000000000000000000` in a test project's `.env` and start
+   `claude` there.
+2. Ask "check my Stripe balance". Claude sees only a token and runs
+   `curl https://api.stripe.com/v1/balance` with it; ZeroH puts the real value back on your
+   machine. No setup: `api.stripe.com` is a built-in destination for Stripe keys.
+3. Stripe answers `401 Invalid API Key provided: sk_test_****…0000`. That is expected: the key is
+   made up, and the last four characters Stripe echoes are those of the real value, so it reached
+   Stripe while Claude had only the token.
+4. Ask Claude to send the key to a host you have not allowed, and see it blocked.
 
 Personal data works the same way, and you can show one kind of it to Claude for a while. Put a few
 addresses a sign-up form rejected into a log:
@@ -79,7 +82,7 @@ Where this guide writes `zeroh-disclosure <command>`, run
 `node "<plugin-root>/bin/zeroh-disclosure.mjs" <command>`.
 
 Commands that change what ZeroH protects (`allow`, `allow --remove`, `unmask caps`, `vault clear`,
-`doctor --fix`, `banner`, `proxy off|on`, `receipts keep`, `uncertain`, `uninstall --yes`) run only
+`doctor --fix`, `banner`, `proxy off|on`, `receipts keep`, `uncertain`, `uninstall`) run only
 on your own authority:
 
 - **In Claude Code**, type the slash command. Its `!` block records the request, ZeroH applies it
@@ -102,28 +105,38 @@ subdirectory.
 
 ## Control the session banner
 
-The first session for a `ZEROH_HOME` shows the full view: the five-line banner plus Free-plan
-coverage, current limitations, receipt location, and these controls. ZeroH creates
-`<ZEROH_HOME>/banner-shown` after that view, then uses the five-line banner on later sessions.
+The first session for a `ZEROH_HOME` shows the full view: the five-line ZEROH banner plus what is
+masked now and the question to ask Claude. ZeroH creates `<ZEROH_HOME>/banner-shown` after that
+view; every later session shows one line (`mini`, the default):
 
-Choose a persistent mode with `/zeroh-disclosure:settings banner full|compact|off`, or from your
-terminal:
+```text
+ZeroH Disclosure ✓ Protected: your secrets are masked · Free · /zeroh-disclosure:status
+```
+
+When something needs attention the same line says so and names the fix, for example
+`ZeroH Disclosure ⚠ Paused: see the message below · Free · /zeroh-disclosure:doctor`, or
+`/zeroh-disclosure:proxy on` after you turned the proxy off.
+
+Choose a persistent mode with `/zeroh-disclosure:settings banner big|compact|mini|off`, or from
+your terminal:
 
 ```bash
-zeroh-disclosure banner full
-zeroh-disclosure banner compact
+zeroh-disclosure banner big      # the five-line ZEROH banner every session
+zeroh-disclosure banner mini     # one line (the default)
+zeroh-disclosure banner compact  # one line with the secret count
 zeroh-disclosure banner off
 ```
 
-This writes `<ZEROH_HOME>/banner.json`. Set `ZEROH_BANNER=full|compact|off` before starting Claude
-Code for an environment override. `full` always includes the coverage details, `compact` is one
-line, and `off` hides the normal banner. Warnings about secrets in `CLAUDE.md`, an active unmask
-grant, or the proxy being off appear in every mode, including `off`.
+This writes `<ZEROH_HOME>/banner.json`. Set `ZEROH_BANNER=big|compact|mini|off` before starting
+Claude Code for an environment override. `full`, saved or set before 1.0.0, still works and means
+`big`. Warnings about secrets in `CLAUDE.md`, an active unmask grant, or the proxy being off appear
+below the banner in every mode, including `off`.
 
 Run `/zeroh-disclosure:status` inside Claude Code to show the full view at any time. The command
 uses command-expansion preprocessing to collect read-only status before its prompt reaches the
-model, so the model does not make a tool call. The banner is plain text: Claude Code shows it as
-it is, so it carries no colour codes.
+model, so the model does not make a tool call. The status command's output is plain text with no
+colour codes; only the session-start banner is coloured, and `NO_COLOR` or `TERM=dumb` keeps it
+plain.
 
 ## Manage vault retention
 
@@ -397,7 +410,7 @@ echo "$(your-line) · $zeroh"
 
 **Turning it off.** `/zeroh-disclosure:settings statusline off`, or deleting it with
 `/statusline`: ZeroH records that and never adds it back. `/zeroh-disclosure:settings statusline
-on` turns it on again. `/zeroh-disclosure:uninstall --yes` removes it from every settings file
+on` turns it on again. `/zeroh-disclosure:uninstall` removes it from every settings file
 ZeroH wrote it to. Claude cannot add, change or remove any status line: the settings guard stops
 the edit.
 
@@ -653,9 +666,13 @@ Code settings.
   exists, and registers it again if not.
 - If your machine does not allow login items (a managed Mac, background items switched off, a
   locked-down Windows, Linux without a systemd user session or a desktop, such as SSH, WSL or a
-  container), ZeroH says so and leaves your Claude Code settings alone: nothing would keep the
-  proxy running after a reboot, and every session would then meet a dead port. Typed secrets are
-  then sent with a "not protected" line, not masked (`uncertain block` stops them).
+  container), the proxy still runs for your sessions and what you type is still masked. The banner,
+  `/zeroh-disclosure:status` and `/zeroh-disclosure:doctor` say "no login item", why, and how to
+  fix it. Nothing starts the proxy after a reboot until the next Claude Code session does, so once
+  no ZeroH session is open the proxy takes its settings entry out: new sessions connect directly.
+  A session that still uses its port (one where the plugin is disabled) keeps working through it,
+  unmasked, until it has been idle for 12 hours. Each session start tries to register the login
+  item again.
 - On your first prompt it sets `env.ANTHROPIC_BASE_URL` in `~/.claude/settings.json` (or
   `$CLAUDE_CONFIG_DIR/settings.json`, or `ZEROH_CLAUDE_SETTINGS`) to
   `http://127.0.0.1:<port>/z/<key>`, and keeps a small restore record next to that file with your
@@ -697,10 +714,9 @@ proxy records it again. `doctor --fix` forgets them.
 ### Sessions without the plugin
 
 The settings entry applies to every Claude Code session, also in a project where you disabled
-ZeroH Disclosure. While a ZeroH Disclosure session is running, any request the proxy cannot tie
-to a session of its own is masked too, never sent as it is. When no ZeroH Disclosure session is
-running, a session without the plugin passes through unmasked, as if the proxy were not there,
-and is never refused. After the plugin has been gone for 24 hours, the proxy restores your
+ZeroH Disclosure. A request the proxy cannot tie to a ZeroH Disclosure session passes through
+unmasked, as if the proxy were not there, and is never refused: no ZeroH hook runs in that session,
+so nothing could put a token back into its commands, edits or screen. After the plugin has been gone for 24 hours, the proxy restores your
 setting and removes itself. (Claude Code 2.1.283 sends the session id with every request that
 carries conversation text, including subagents, `--resume`, `--continue` and `--fork-session`.)
 
@@ -751,15 +767,18 @@ file, read through .NET rather than dot-sourced, so no execution policy applies.
 
 ## Uninstall and clean up
 
-One command removes everything, in this order:
+One command removes everything, in this order. Typing it is the confirmation: only you can run it
+(Claude can't invoke it, and ZeroH applies it only for your own typed prompt).
 
 ```text
-/zeroh-disclosure:uninstall          # shows what it removes; nothing is removed yet
-/zeroh-disclosure:uninstall --yes    # removes it
+/zeroh-disclosure:uninstall                    # removes it, keeps your receipts, and says what it did
+/zeroh-disclosure:uninstall --dry-run          # only shows what it would do
+/zeroh-disclosure:uninstall --delete-receipts  # removes the receipts too
 ```
 
-In a terminal outside Claude Code: `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall` shows what
-it removes, and `uninstall --yes` removes it after you type the code it shows. It never deletes a `ZEROH_HOME` that is your home, a system folder or holds none of
+`--yes` from earlier versions is still accepted and changes nothing. In a terminal outside Claude
+Code, where a script could call it, `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall` only shows
+what it removes, and `uninstall --yes` removes it after you type the code it shows. It never deletes a `ZEROH_HOME` that is your home, a system folder or holds none of
 ZeroH's files. It removes:
 
 - the plugin from Claude Code, through Claude Code's own `claude plugin list --json` and
@@ -774,14 +793,39 @@ ZeroH's files. It removes:
 - a `<project>/.zeroh/` folder an earlier test build left in a project listed in
   `<ZEROH_HOME>/projects.json`, only when it holds nothing but ZeroH's files (`doctor --fix`
   removes these too);
-- `<ZEROH_HOME>/` itself: the vault and its key, allow rules, receipts, unmask grants, receipt
-  commitment keys and reports.
+- `<ZEROH_HOME>/` itself: the vault and its key, the signing and allow-list keys, your settings
+  (`config.env`), allow rules, unmask grants, receipt commitment keys, reports and the proxy's
+  runtime copy. Only an empty `uninstalled` marker stays, so sessions still open do nothing; you
+  can delete the folder once they are closed.
 
-Sessions that are still open keep running until you exit them. A short-lived marker in the
-system's temporary folder (named for your `ZEROH_HOME`, so it survives that folder's removal)
-makes their hooks do nothing, so nothing is set up again; nothing protects those sessions any
-more, so exit them. A new session starts without ZeroH; if you install the plugin again, its first
-session removes the marker and ZeroH works as before. Back up receipts you need first: cleanup is
+It keeps your receipts. Every signed receipt, each session's `receipt.html` and receipt bundle,
+and the public key that verifies them move to one folder:
+
+| System           | Receipts folder                                                         |
+| ---------------- | ----------------------------------------------------------------------- |
+| macOS and Linux  | `~/ZeroH Receipts`                                                      |
+| Windows          | `%LOCALAPPDATA%\ZeroH Receipts` (beside ZeroH's own folder, not roamed) |
+| `ZEROH_HOME` set | `<ZEROH_HOME>-receipts`; `ZEROH_RECEIPTS_DIR` names another folder      |
+
+Receipts hold no value: categories, counts, masked text and tokens only. A turn's local
+commitment key, the private signing keys, the vault and the allow list are never kept, and
+`receipt.html` is written again without value previews. The folder is laid out as in
+`<ZEROH_HOME>/projects/` and has a `README.txt` and a manifest, `zeroh-receipts.json`. After you
+install ZeroH again, `zeroh-disclosure verify --receipt <file>` checks a kept receipt; the one check
+that needs the deleted allow-list key (the unmask record) was made at uninstall, and the manifest
+holds its result, signed with the receipt's own key over the exact record kept, so a later edit
+fails ([receipt format](receipt-format.md#receipts-kept-at-uninstall)). A new install
+never reads or changes the folder. Delete it when you no longer need it, or uninstall with
+`--delete-receipts`, which removes it along with everything else.
+
+The session you ran it in, and any other session still open, keeps working until you exit it; new
+sessions start without ZeroH. Those sessions still point at the local proxy, so the proxy is
+retired rather than stopped: it keeps forwarding their requests without masking anything (the
+vault and the hooks are gone, so no token could be put back into a command, an edit or the screen),
+and stops by itself once no request has come for 12 hours. Its login item is gone, so nothing starts it again. A tombstone
+(`<ZEROH_HOME>/uninstalled`) makes the hooks of open sessions do nothing, so nothing is set up
+again. If you install the plugin again, its first session removes the tombstone and ZeroH works as
+before. Back up receipts you need first: cleanup is
 irreversible. Also remove files you created only for the plugin, such as `.zeroh.env`.
 
 If the plugin was removed another way, the proxy keeps passing requests through unmasked so
@@ -790,4 +834,7 @@ Claude Code is not stranded, then restores the prior setting, unregisters itself
 removal.
 
 To turn the proxy off without uninstalling, run `/zeroh-disclosure:proxy off`; it stays off until
-`/zeroh-disclosure:proxy on`.
+`/zeroh-disclosure:proxy on`. Like uninstall and `doctor --fix`, it retires the running proxy, so
+the session you typed it in keeps working until you exit it. After `proxy off` and `doctor --fix`
+the vault and the hooks are still there, so the retired proxy keeps masking the values Claude
+already saw as tokens (held in memory, never written) and nothing new.

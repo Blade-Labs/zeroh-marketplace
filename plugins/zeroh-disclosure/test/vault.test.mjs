@@ -6,16 +6,14 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { Vault, vaultRetention } from '../lib/vault.js';
 import { restore } from '../lib/secrets.js';
 import { reportMiss } from '../lib/report-miss.js';
 import { tempProject } from './helpers.mjs';
 import { asUser } from './as-user.mjs';
 
-const VAULT_URL = pathToFileURL(
-  new URL('../lib/vault.js', import.meta.url).pathname,
-).href;
+const VAULT_URL = new URL('../lib/vault.js', import.meta.url).href;
 const CLI = fileURLToPath(
   new URL('../bin/zeroh-disclosure.mjs', import.meta.url),
 );

@@ -22,6 +22,7 @@ import {
   REVEAL_EXTENSION_MARKER,
 } from '../lib/unmask.js';
 import { POLICY, policyById } from '../lib/policy.js';
+import { signTurnSummary } from '../lib/turn-summary.js';
 import {
   decodeCompactReceipt,
   decodeDisclosure,
@@ -81,6 +82,12 @@ test('legacy anchor fields are ignored without network access', async () => {
       anchor: { anchored: true, type: 'legacy' },
       anchor_intent: { type: 'legacy' },
     };
+    // Stop signs the turn summary a 1.0.0 receipt requires.
+    ledger.turn_summary = await signTurnSummary({
+      ledger,
+      turn: 1,
+      signer: session.signingKey,
+    });
     globalThis.fetch = () => {
       throw new Error('verification must not access the network');
     };
@@ -220,6 +227,12 @@ test('the default policy masks personal data under its own neutral rule', async 
       decoded.replace(/[A-Za-z0-9_-]{16,}/gu, ''),
       /qcb|qatar central|non-qatar|cross.border|approval|regulator|jurisdiction|wallet|sd-jwt|sdjwt|presentations/iu,
     );
+    // Stop signs the turn summary a 1.0.0 receipt requires.
+    ledger.turn_summary = await signTurnSummary({
+      ledger,
+      turn: 1,
+      signer: session.signingKey,
+    });
     const verification = await verifyReceiptArtifactObject(
       receiptRecordToArtifact(ledger, 'ZEROHFAKE-default.json'),
     );
@@ -258,6 +271,12 @@ test('receipts are signed by a local ES256 key and name it without claiming SD-J
     assert.ok(existsSync(path.join(dir, 'signing-key.json')));
     assert.ok(existsSync(path.join(dir, 'signing-key.private.json')));
     assert.equal(existsSync(path.join(dir, 'wallet.json')), false);
+    // Stop signs the turn summary a 1.0.0 receipt requires.
+    ledger.turn_summary = await signTurnSummary({
+      ledger,
+      turn: 1,
+      signer: session.signingKey,
+    });
     const verification = await verifyReceiptArtifactObject(
       receiptRecordToArtifact(ledger, 'ZEROHFAKE-signer.json'),
     );

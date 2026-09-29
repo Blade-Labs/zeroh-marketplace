@@ -16,6 +16,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -32,6 +33,29 @@ const NOT_WRITABLE = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EDQUOT']);
 
 export function notWritable(error) {
   return NOT_WRITABLE.has(error?.code);
+}
+
+// The one spelling of a project folder that every key is made from: the
+// absolute path with symbolic links resolved (a missing tail is kept as
+// written). macOS reports /var and /tmp as /private/var and /private/tmp to
+// a process's own working directory, and any project may sit under a linked
+// folder; Claude Code, a terminal and the hooks can each spell the same
+// folder differently, and all must find the same vault, allow list, grants
+// and sessions. Windows short names (RUNNER~1) are left as they are.
+export function canonicalProjectPath(root) {
+  const absolute = path.resolve(root);
+  const tail = [];
+  let cursor = absolute;
+  for (;;) {
+    try {
+      return path.join(realpathSync(cursor), ...tail);
+    } catch {
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return absolute;
+      tail.unshift(path.basename(cursor));
+      cursor = parent;
+    }
+  }
 }
 
 function sleepSync(milliseconds) {
@@ -84,7 +108,8 @@ export function zerohHome(
       'ZeroH',
     );
   }
-  return path.join(homedir(), '.zeroh');
+  // A POSIX home, joined as POSIX whatever system asks.
+  return path.posix.join(homedir(), '.zeroh');
 }
 
 // A path under the user's home written as ~/… in messages (D-15); any other
@@ -131,6 +156,15 @@ export function protectWindowsPath(
     );
     const sid = /"(S-1-[0-9-]+)"/u.exec(csv)?.[1];
     if (!sid) return false;
+    // First drop the folder's own entries: /inheritance:r removes only the
+    // inherited ones, so a folder made with explicit entries (a temporary
+    // folder, one on a shared drive with Everyone or Administrators) kept
+    // them next to the user's.
+    execute(windowsSystemTool('icacls.exe', env), [target, '/reset'], {
+      stdio: 'ignore',
+      windowsHide: true,
+      env,
+    });
     execute(
       windowsSystemTool('icacls.exe', env),
       [
@@ -155,6 +189,17 @@ export function protectWindowsPath(
 // records it, so it is done once, and tried again by the next process when
 // it failed. Everything under the home inherits the ACL.
 const PROTECTED_MARKER = '.acl-protected';
+// The marker's content: a home an earlier build marked (whose own explicit
+// entries it left in place) is protected again.
+const PROTECTED_MARKER_VERSION = '2\n';
+
+function readTextOr(file, fallback = null) {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return fallback;
+  }
+}
 const protectedHomes = new Set();
 export function protectZerohHome(
   directory,
@@ -167,7 +212,7 @@ export function protectZerohHome(
   if (protectedHomes.has(home)) return true;
   protectedHomes.add(home);
   const marker = path.join(home, PROTECTED_MARKER);
-  if (existsSync(marker)) return true;
+  if (readTextOr(marker) === PROTECTED_MARKER_VERSION) return true;
   mkdirSync(home, { recursive: true, mode: 0o700 });
   if (
     !protectWindowsPath(home, {
@@ -179,7 +224,7 @@ export function protectZerohHome(
     return false;
   }
   try {
-    writeFileSync(marker, '', { mode: 0o600 });
+    writeFileSync(marker, PROTECTED_MARKER_VERSION, { mode: 0o600 });
   } catch {
     // Applied again by the next process.
   }

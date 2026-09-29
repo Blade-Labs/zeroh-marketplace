@@ -4,6 +4,7 @@
 // warnings.
 import {
   activeUnmaskStatus,
+  proxyStatusLines,
   renderBanner,
   warningLines,
 } from '../../lib/banner.js';
@@ -11,6 +12,7 @@ import { scanSessionContext } from '../../lib/context-scan.js';
 import { retentionLine } from '../../lib/receipt-retention.js';
 import { projectDir, proxyState } from '../../lib/hook-io.js';
 import { loadKnownSecrets } from '../../lib/secrets.js';
+import { proxyRuntimeStatus } from '../../lib/proxy-manager.js';
 import { loadConfig, uncertainMode } from '../../lib/config.js';
 import { commandSessionId } from './_helpers.js';
 
@@ -22,6 +24,13 @@ const sessionId = commandSessionId();
 const proxy = await proxyState({ sessionId });
 const unmask = await activeUnmaskStatus({ root, sessionId });
 const contextFindings = scanSessionContext({ cwd: root, known });
+const runtime = await proxyRuntimeStatus().catch(() => null);
+
+const extra = proxyStatusLines({
+  proxy,
+  runtime,
+  uncertain: uncertainMode(),
+});
 
 process.stdout.write(
   `${renderBanner({
@@ -37,5 +46,5 @@ process.stdout.write(
       proxy,
       uncertain: uncertainMode(),
     }),
-  })}\n`,
+  })}\n${extra.length ? `\n${extra.join('\n')}\n` : ''}`,
 );

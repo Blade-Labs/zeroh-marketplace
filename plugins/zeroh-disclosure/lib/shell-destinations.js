@@ -32,6 +32,55 @@ import {
   readOptions,
   sedProgram,
 } from './shell-programs.js';
+import { TOKEN_PATTERN } from './token-pattern.js';
+
+const TOKEN_SPLIT_RE = new RegExp(`(${TOKEN_PATTERN})`, 'u');
+const TOKEN_ANY_RE = new RegExp(TOKEN_PATTERN, 'u');
+
+// Programs that look names up. A value restored anywhere in their
+// arguments (a query name, a search domain such as `dig +domain=` or
+// `nslookup -domain=`, a server) goes to the name servers, which are never
+// on an allow list: each such argument is a destination, as the name it
+// makes where that can be read, else as written. An IP address looked up as
+// itself is its own destination (see lib/secrets.js).
+const DNS_PROGRAMS = new Set([
+  'dig',
+  'nslookup',
+  'host',
+  'drill',
+  'delv',
+  'kdig',
+  'getent',
+  'resolvectl',
+  'dscacheutil',
+  'nmap',
+  'resolve-dnsname',
+]);
+
+function dnsDisclosures(entry, result) {
+  const args = entry.args ?? [];
+  if (
+    entry.program === 'getent' &&
+    !/^a?hosts/u.test(String(args[0]?.value ?? ''))
+  )
+    return;
+  for (const word of args) {
+    const value = String(word.value);
+    if (!TOKEN_ANY_RE.test(value)) continue;
+    const name = value
+      .replace(/^[+-]{1,2}[A-Za-z][A-Za-z0-9-]*[=:]/u, '')
+      .replace(/^@/u, '')
+      .replace(/\.$/u, '');
+    result.network = true;
+    result.destinations.push(
+      tokenName(name) ??
+        name
+          .split(TOKEN_SPLIT_RE)
+          .map((piece, i) => (i % 2 ? piece : piece.toLowerCase()))
+          .join(''),
+    );
+  }
+}
 
 // Options that take a value, per network command. Anything else starting
 // with `-` is a flag. A long option may also carry its value after `=`.
@@ -116,6 +165,19 @@ const POWERSHELL_SWITCHES = new Set(
   ].map((name) => `-${name}`),
 );
 
+const HTTPIE = Object.freeze({
+  style: 'httpie',
+  values: HTTPIE_VALUE_OPTIONS,
+  // `--proxy http:http://host:3128`: the proxy URL after the protocol.
+  proxy: ['--proxy'],
+});
+const TRACEROUTE = Object.freeze({
+  style: 'all',
+  values: new Set(['-f', '-g', '-i', '-m', '-p', '-q', '-s', '-t', '-w', '-z']),
+  // -g: a gateway the packets are routed through.
+  dest: ['-g'],
+});
+
 // How each network program names its destination.
 //   url       every operand is a URL (curl, wget)
 //   httpie    the first operand that is not a method is the URL
@@ -138,6 +200,8 @@ const NETWORK = Object.freeze({
       '--socks5',
       '--socks5-hostname',
       '--doh-url',
+      '--dns-servers',
+      '--ipfs-gateway',
     ],
     unseen: ['-K', '--config'],
     pairs: ['--resolve', '--connect-to'],
@@ -145,37 +209,60 @@ const NETWORK = Object.freeze({
   wget: {
     style: 'url',
     values: WGET_VALUE_OPTIONS,
-    unseen: ['-i', '--input-file', '-e', '--execute', '--config'],
+    dest: ['-B', '--base'],
+    // `-e http_proxy=URL` names a proxy (read); any other command is unseen.
+    wgetrc: ['-e', '--execute'],
+    unseen: ['-i', '--input-file', '--config'],
   },
   aria2c: {
     style: 'url',
-    values: new Set(['-d', '-o', '-i', '--dir', '--out', '--input-file']),
+    values: new Set([
+      '-d',
+      '-o',
+      '-i',
+      '--dir',
+      '--out',
+      '--input-file',
+      '--all-proxy',
+      '--http-proxy',
+      '--https-proxy',
+      '--ftp-proxy',
+    ]),
+    dest: ['--all-proxy', '--http-proxy', '--https-proxy', '--ftp-proxy'],
     unseen: ['-i', '--input-file'],
   },
   lynx: { style: 'url', values: new Set() },
   links: { style: 'url', values: new Set() },
   w3m: { style: 'url', values: new Set() },
-  http: { style: 'httpie', values: HTTPIE_VALUE_OPTIONS },
-  https: { style: 'httpie', values: HTTPIE_VALUE_OPTIONS },
-  httpie: { style: 'httpie', values: HTTPIE_VALUE_OPTIONS },
-  xh: { style: 'httpie', values: HTTPIE_VALUE_OPTIONS },
-  xhs: { style: 'httpie', values: HTTPIE_VALUE_OPTIONS },
+  http: HTTPIE,
+  https: HTTPIE,
+  httpie: HTTPIE,
+  xh: HTTPIE,
+  xhs: HTTPIE,
   ssh: {
     style: 'first',
     values: SSH_VALUE_OPTIONS,
     dest: ['-J'],
+    // -W host:port, -L/-R [bind:]port:host:hostport: the far end connects.
+    forwards: ['-W', '-L', '-R'],
     sshOptions: true,
   },
   mosh: {
     style: 'first',
     values: new Set(['-p', '--ssh', '--port', '--server', '--client']),
+    shellCode: ['--ssh'],
   },
   telnet: { style: 'first', values: new Set(['-b', '-e', '-l', '-n', '-X']) },
   nc: { style: 'first', values: NC_VALUE_OPTIONS, dest: ['-x'], listen: true },
   ncat: {
     style: 'first',
-    values: NC_VALUE_OPTIONS,
-    dest: ['-x', '--proxy'],
+    values: new Set([
+      ...NC_VALUE_OPTIONS,
+      ...'--proxy --proxy-type --proxy-auth --proxy-dns --source --source-port --exec --sh-exec --lua-exec --wait --idle-timeout --output --hex-dump --allow --allowfile --deny --denyfile --max-conns --ssl-cert --ssl-key --ssl-trustfile --ssl-ciphers --ssl-servername --ssl-alpn'.split(
+        ' ',
+      ),
+    ]),
+    dest: ['-x', '--proxy', '--ssl-servername'],
     listen: true,
   },
   netcat: {
@@ -189,6 +276,7 @@ const NETWORK = Object.freeze({
     style: 'first',
     values: SSH_VALUE_OPTIONS,
     dest: ['-J'],
+    unseen: ['-S'],
     sshOptions: true,
   },
   tftp: { style: 'first', values: new Set(['-m', '-c']) },
@@ -215,24 +303,37 @@ const NETWORK = Object.freeze({
     style: 'all',
     values: new Set(['-c', '-i', '-I', '-l', '-p', '-s', '-t', '-w', '-W']),
   },
-  traceroute: {
+  traceroute: TRACEROUTE,
+  traceroute6: TRACEROUTE,
+  tracepath: { style: 'all', values: new Set(['-l', '-m', '-p']) },
+  mtr: {
     style: 'all',
-    values: new Set([
-      '-f',
-      '-g',
-      '-i',
-      '-m',
-      '-p',
-      '-q',
-      '-s',
-      '-t',
-      '-w',
-      '-z',
-    ]),
+    values: new Set(
+      '-a -B -c -f -F -G -i -I -L -m -M -P -Q -s -Z -y --address --first-ttl --filename --gracetime --interval --interface --localport --max-ttl --port --psize --report-cycles --timeout --tos'.split(
+        ' ',
+      ),
+    ),
+    unseen: ['-F', '--filename'],
   },
+  // A DNS program sends every name it looks up (-q, -x and the operands) to
+  // the name servers: the whole name is the destination.
   dig: {
     style: 'all',
     values: new Set(['-b', '-c', '-f', '-k', '-p', '-q', '-t', '-x', '-y']),
+    dest: ['-q', '-x'],
+    unseen: ['-f'],
+    dns: true,
+  },
+  delv: {
+    style: 'all',
+    values: new Set(['-a', '-b', '-c', '-d', '-p', '-q', '-t', '-x']),
+    dest: ['-q', '-x'],
+    dns: true,
+  },
+  kdig: {
+    style: 'all',
+    values: new Set(['-b', '-c', '-k', '-p', '-q', '-t', '-x', '-y', '-E']),
+    dest: ['-q', '-x'],
     dns: true,
   },
   nslookup: { style: 'all', values: new Set(), dns: true },
@@ -243,7 +344,8 @@ const NETWORK = Object.freeze({
   },
   drill: {
     style: 'all',
-    values: new Set(['-c', '-k', '-p', '-q', '-s', '-y']),
+    values: new Set('-b -c -f -i -k -o -p -q -r -V -w -y'.split(' ')),
+    unseen: ['-f', '-i'],
     dns: true,
   },
   whois: { style: 'all', values: new Set(['-h', '-p']), dest: ['-h'] },
@@ -251,6 +353,7 @@ const NETWORK = Object.freeze({
     style: 'remote',
     values: SSH_VALUE_OPTIONS,
     dest: ['-J'],
+    unseen: ['-S'],
     sshOptions: true,
   },
   rsync: {
@@ -305,6 +408,7 @@ const NETWORK = Object.freeze({
       '--address',
       '--outbuf',
     ]),
+    shellCode: ['-e', '--rsh'],
   },
   socat: {
     style: 'socat',
@@ -318,6 +422,7 @@ const NETWORK = Object.freeze({
   'test-netconnection': { style: 'ps', params: ['-computername'] },
   tnc: { style: 'ps', params: ['-computername'] },
   'test-connection': { style: 'ps', params: ['-computername', '-targetname'] },
+  'resolve-dnsname': { style: 'ps', params: ['-name', '-server'] },
   'send-mailmessage': {
     style: 'ps',
     params: ['-smtpserver'],
@@ -364,8 +469,11 @@ const INTERPRETERS = new Set(
 // `host:port`, `user@host`, `[v6]:port`, or a bare host. Null when the value
 // names no host (a relative path, a port, `-`). { dynamic } when the host is
 // only known at run time: an expansion before the host ends, a token inside
-// the host (a restored value would become part of a host name), or URL
-// globbing (`{a,b}`, `[1-3]`, which curl expands).
+// a host that is only a token (it may stand for a URL or an address), or
+// URL globbing (`{a,b}`, `[1-3]`, which curl expands). A token that is a
+// label, or part of one, of a longer name (`[API_KEY-3f9a1c].evil.example`)
+// is sent to the name servers that resolve it: the whole name, token as
+// written, is the destination.
 export function operandHost(word) {
   const value = word.value;
   const scheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.exec(value);
@@ -382,6 +490,8 @@ export function operandHost(word) {
   if (!authority) return null;
   const at = authority.lastIndexOf('@');
   let host = at >= 0 ? authority.slice(at + 1) : authority;
+  const named = tokenName(host.replace(/:\d*$/u, ''));
+  if (named && !word.brace) return { host: named };
   if (host.startsWith('[')) {
     const close = host.indexOf(']');
     if (close < 0) return { dynamic: true };
@@ -395,6 +505,23 @@ export function operandHost(word) {
   if (/[[\]{}*?$`]/u.test(host) || word.brace) return { dynamic: true };
   if (!scheme && !/^[A-Za-z0-9._-]+$/u.test(host)) return null;
   return { host: host.toLowerCase() };
+}
+
+// `name` with the tokens in it as written and the rest in lower case, when
+// it is a DNS name of two or more labels with a token in at least one of
+// them; else null.
+function tokenName(name) {
+  const pieces = name.split(TOKEN_SPLIT_RE);
+  if (pieces.length < 3) return null;
+  const labels = pieces
+    .map((piece, i) => (i % 2 ? 'x' : piece))
+    .join('')
+    .split('.');
+  if (labels.length < 2 || !labels.every((l) => /^[A-Za-z0-9_-]+$/u.test(l)))
+    return null;
+  return pieces
+    .map((piece, i) => (i % 2 ? piece : piece.toLowerCase()))
+    .join('');
 }
 
 function sshOptionDestinations(value, result, word) {
@@ -433,6 +560,37 @@ function addOperand(result, word, { allowSingleLabel = true } = {}) {
   )
     return;
   result.destinations.push(found.host);
+}
+
+// ssh -W host:port, -L / -R [bind:]port:host:hostport: the host the far end
+// connects to (a `-L`/`-R` to a socket path names none).
+function forwardDestination(word, result) {
+  const value = String(word.value);
+  if (word.dynamic) {
+    result.uncertain.push({
+      reason: 'dynamic-destination',
+      detail: 'ssh forward',
+    });
+    return;
+  }
+  const parts = value.match(/\[[^\]]*\]|[^:]+/gu) ?? [];
+  const host =
+    parts.length >= 3 ? parts.at(-2) : parts.length === 2 ? parts[0] : null;
+  if (host && !/^\d+$/u.test(host))
+    addOperand(result, { ...word, value: host.replace(/^\[|\]$/gu, '') });
+}
+
+// wget -e COMMAND: a wgetrc command. `http_proxy=`, `https_proxy=` and
+// `ftp_proxy=` name a proxy; any other could fetch from anywhere
+// (`input=…`), so it stays unseen.
+function wgetCommand(word, result, command) {
+  const rc = /^\s*(?:https?|ftp)_proxy\s*=\s*(.+)$/iu.exec(String(word.value));
+  if (rc && !word.dynamic) addOperand(result, { ...word, value: rc[1].trim() });
+  else
+    result.uncertain.push({
+      reason: 'dynamic-destination',
+      detail: `${command.program} -e`,
+    });
 }
 
 // The destinations of one network command.
@@ -504,6 +662,24 @@ function networkCommand(command, spec, result) {
     }
     if (spec.sshOptions && name === '-o')
       sshOptionDestinations(optionValue.value, result, optionValue);
+    if (spec.forwards?.includes(name)) forwardDestination(optionValue, result);
+    if (spec.proxy?.includes(name))
+      addOperand(result, {
+        ...optionValue,
+        value: String(optionValue.value).replace(/^[A-Za-z]+:(?!\/\/)/u, ''),
+      });
+    if (spec.wgetrc?.includes(name)) wgetCommand(optionValue, result, command);
+    if (spec.shellCode?.includes(name)) {
+      // rsync -e 'ssh -J jump', mosh --ssh='ssh -p 2222': a command line.
+      const inner = shellDestinations(String(optionValue.value));
+      result.destinations.push(...inner.destinations);
+      result.uncertain.push(...inner.uncertain);
+      if (optionValue.dynamic)
+        result.uncertain.push({
+          reason: 'dynamic-destination',
+          detail: `${command.program} ${name}`,
+        });
+    }
   }
   for (const word of read.operands) {
     if (spec.dns && String(word.value).startsWith('+')) continue;
@@ -570,8 +746,15 @@ function networkCommand(command, spec, result) {
       break;
     case 'socat':
       for (const word of operands) {
+        if (/^(?:EXEC|SYSTEM|SHELL):/iu.test(word.value)) {
+          result.uncertain.push({
+            reason: 'script-or-interpreter',
+            detail: 'socat EXEC',
+          });
+          continue;
+        }
         const address =
-          /^(?:TCP[46]?|TCP[46]?-CONNECT|OPENSSL|OPENSSL-CONNECT|SSL|UDP[46]?|UDP[46]?-CONNECT|SCTP[46]?-CONNECT|SOCKS4A?|PROXY|PROXY-CONNECT|DCCP[46]?-CONNECT)[:](.*)$/iu.exec(
+          /^(TCP[46]?|TCP[46]?-CONNECT|OPENSSL|OPENSSL-CONNECT|SSL|UDP[46]?|UDP[46]?-(?:CONNECT|SENDTO|DATAGRAM)|SCTP[46]?(?:-CONNECT)?|SOCKS4A?|SOCKS5(?:-CONNECT)?|PROXY|PROXY-CONNECT|DCCP[46]?-CONNECT)[:](.*)$/iu.exec(
             word.value,
           );
         if (!address) continue;
@@ -582,8 +765,13 @@ function networkCommand(command, spec, result) {
           });
           continue;
         }
-        const host = address[1].split(/[:,]/u)[0];
-        if (host) addOperand(result, { ...word, value: host });
+        // SOCKS and PROXY: the proxy, then the host it connects to.
+        const fields = address[2].split(',')[0].split(':');
+        const hosts = /^(?:SOCKS|PROXY)/iu.test(address[1])
+          ? fields.slice(0, 2)
+          : fields.slice(0, 1);
+        for (const host of hosts)
+          if (host) addOperand(result, { ...word, value: host });
       }
       break;
     default:
@@ -599,7 +787,12 @@ function networkCommand(command, spec, result) {
 // and fall through to the generic case below.
 function gitDestinations(entry, result) {
   const git = gitCommand(entry);
-  if (git.kind === 'network') {
+  // `remote add` / `set-url` store where later pushes and fetches go.
+  const stored =
+    git.subcommand === 'remote' &&
+    git.urls.length > 0 &&
+    ['add', 'set-url'].includes(git.remoteSubcommand);
+  if (git.kind === 'network' || stored) {
     result.network = true;
     for (const word of git.urls) {
       // `user@host:repo` (scp syntax) names the host before the colon.
@@ -611,7 +804,7 @@ function gitDestinations(entry, result) {
           : word,
       );
     }
-    if (!git.urls.length)
+    if (!git.urls.length && git.kind === 'network')
       result.uncertain.push({
         reason: 'dynamic-destination',
         detail: `git ${git.subcommand}`,
@@ -751,6 +944,23 @@ export function shellDestinations(command, { shell = 'bash' } = {}) {
     if (entry.inlineParsed && !entry.dynamicCode && !entry.foreignCode)
       continue;
     const spec = Object.hasOwn(NETWORK, program) ? NETWORK[program] : null;
+    if (DNS_PROGRAMS.has(program)) {
+      dnsDisclosures(entry, result);
+      if (spec && (entry.args ?? []).some((w) => TOKEN_ANY_RE.test(w.value))) {
+        // The tokens are read above; the rest as for any network program.
+        const before = result.uncertain.length;
+        networkCommand({ ...entry, program }, spec, result);
+        result.uncertain.splice(
+          before,
+          Infinity,
+          ...result.uncertain
+            .slice(before)
+            .filter((u) => u.detail !== 'host known only at run time'),
+        );
+        result.network = true;
+        continue;
+      }
+    }
     if (spec) {
       result.network = true;
       if (entry.stdinArgs) {

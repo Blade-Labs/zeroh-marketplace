@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Isolated temporary homes for every test (see helpers.mjs).
-import { runHook, tempProject } from './helpers.mjs';
+import { bashPath, runHook, tempProject } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
@@ -497,10 +497,13 @@ test('the plugin directory, installed plugins and restore records are not writab
     [
       'Bash',
       {
-        command: `sed -i s/deny/allow/ ${path.join(plugin, 'hooks', 'pre-tool-use.js')}`,
+        command: `sed -i s/deny/allow/ ${bashPath(path.join(plugin, 'hooks', 'pre-tool-use.js'))}`,
       },
     ],
-    ['Bash', { command: `cp /tmp/x.js ${plugin}/lib/settings-guard.js` }],
+    [
+      'Bash',
+      { command: `cp /tmp/x.js ${bashPath(plugin)}/lib/settings-guard.js` },
+    ],
     ['Bash', { command: 'rm -rf "$CLAUDE_PLUGIN_ROOT/hooks"' }],
     [
       'Bash',
@@ -652,7 +655,7 @@ test('Monitor gets exactly the Bash result from every settings guard', () => {
     'echo \'{"hooks":{"Elicitation":[]}}\' > .claude/settings.local.json',
     'python3 writer.py .claude/settings.json Elicitation',
     `printf '%s' ANTHROPIC_BASE_URL > .claude/settings.json`,
-    `cp /tmp/x.js ${plugin}/lib/settings-guard.js`,
+    `cp /tmp/x.js ${bashPath(plugin)}/lib/settings-guard.js`,
     'rm -rf "$CLAUDE_PLUGIN_ROOT/hooks"',
     'claude plugin disable zeroh-disclosure@zeroh',
     'claude plugins uninstall zeroh-disclosure',
@@ -701,13 +704,19 @@ test('Monitor gets exactly the Bash result from every settings guard', () => {
 // the model may read them there, never write them, and the rest of the home
 // (the allow list beside them included) stays closed.
 test('the model may read receipts under the home, and nothing else there', () => {
+  // A POSIX home and project, judged as on macOS or Linux on every system.
+  const posix = { platform: 'linux', pathImpl: path.posix };
   const home = '/home/alice/.zeroh';
   const root = '/work/shop';
   const receipt = `${home}/projects/-work-shop/sessions/s1/turn-1.json`;
-  assert.equal(isZeroHSettingsPath(receipt, root, { home, read: true }), false);
-  assert.equal(isZeroHSettingsPath(receipt, root, { home }), true);
+  assert.equal(
+    isZeroHSettingsPath(receipt, root, { ...posix, home, read: true }),
+    false,
+  );
+  assert.equal(isZeroHSettingsPath(receipt, root, { ...posix, home }), true);
   assert.equal(
     isZeroHSettingsPath(`${home}/projects/-work-shop/allow.json`, root, {
+      ...posix,
       home,
       read: true,
     }),
@@ -717,7 +726,7 @@ test('the model may read receipts under the home, and nothing else there', () =>
     isZeroHSettingsPath(
       `${home}/projects/-work-other/sessions/s1/turn-1.json`,
       root,
-      { home, read: true },
+      { ...posix, home, read: true },
     ),
     true,
   );
@@ -986,4 +995,42 @@ test('quoted CLI text is a command only where an interpreter runs it (Astra R6)'
   );
   assert.notEqual(decision('echo "zeroh-disclosure proxy off"'), 'deny');
   assert.equal(decision('bash -c "zeroh-disclosure proxy off"'), 'deny');
+});
+
+// Git Bash, Claude Code's Bash on Windows, names drives /c/… (its own `pwd`
+// prints /c/Users/…): a command that writes the plugin or Claude's settings
+// through that spelling is the same write as through C:\…. Judged with
+// Windows path rules, so it runs on every system.
+test('on Windows, Git Bash drive paths (/c/…) to the plugin and settings are protected', () => {
+  const options = {
+    env: { HOME: 'C:\\Users\\me', USERPROFILE: 'C:\\Users\\me' },
+    pluginDir: 'C:\\Users\\me\\plugin',
+    platform: 'win32',
+    pathImpl: path.win32,
+  };
+  for (const command of [
+    'cp /tmp/x.js /c/Users/me/plugin/lib/settings-guard.js',
+    'cp /tmp/x.js /C/Users/me/plugin/lib/settings-guard.js',
+    'sed -i s/deny/allow/ /c/Users/me/plugin/hooks/pre-tool-use.js',
+    'rm -rf /c/Users/me/plugin/hooks',
+    'echo {} > /c/Users/me/.claude/settings.json',
+    'find /c/Users/me/.claude -exec rm {} +',
+  ]) {
+    assert.equal(
+      deniesClaudeControlChange('Bash', { command }, 'C:\\work', options),
+      true,
+      command,
+    );
+  }
+  for (const command of [
+    'cat /c/Users/me/notes.txt',
+    'cat /c/Users/me/plugin/README.md',
+    'cp /c/Users/me/a.txt /c/Users/me/b.txt',
+  ]) {
+    assert.equal(
+      deniesClaudeControlChange('Bash', { command }, 'C:\\work', options),
+      false,
+      command,
+    );
+  }
 });

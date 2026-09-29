@@ -84,6 +84,11 @@ counts rather than the whole list unless they ask for it.
   For a status line script of the user's own, use `zeroh-disclosure statusline --json` (schema in
   the plugin's docs/statusline.md); never change `statusLine` in Claude Code's settings yourself:
   write the script and tell the user the one line to add.
+- **Session banner**: the first session after the install shows the big ZEROH banner; later
+  sessions show one line, for example
+  `ZeroH Disclosure ✓ Protected: your secrets are masked · Free · /zeroh-disclosure:status`, or the
+  state that needs attention and its fix. The user picks `/zeroh-disclosure:settings banner
+big|compact|mini|off` (mini is the default); warnings show in every mode.
 - **The local proxy** runs as a per-user login item, needs no administrator rights, and is turned
   off with `/zeroh-disclosure:proxy off`.
 
@@ -91,6 +96,10 @@ counts rather than the whole list unless they ask for it.
 
 `/zeroh-disclosure:status`, `:mask-show`, `:mask-receipt`, `:report`, `:unmask`, `:report-miss`,
 `:mask-config`. The README lists the rest.
+
+When the user says ZeroH or its protection isn't working, or a ZeroH notice or the status line
+shows 🟡 or 🔴, suggest `/zeroh-disclosure:doctor` (and `/zeroh-disclosure:doctor --fix` if it finds
+a problem).
 
 Only the user can run `/zeroh-disclosure:allow`, `:proxy`, `:doctor`, `:settings` and
 `:uninstall`: never invoke them yourself. Tell the user the exact line to type.
@@ -111,10 +120,10 @@ test guide, https://witty-river-07cbf8503.1.azurestaticapps.net/try/:
    sees the one line that allows it: `/zeroh-disclosure:allow STRIPE_KEY staging.pay-internal.dev`.
 4. `/zeroh-disclosure:allow` alone lists where each value may go.
 
-Without a Stripe account: put any `STRIPE_KEY=sk_test_…` value in `.env`, have the user allow
-`/zeroh-disclosure:allow STRIPE_KEY httpbin.org` first, then ask Claude to call
-`https://httpbin.org/bearer` with it as a Bearer token: 200 `"authenticated": true`, and the echoed
-token comes back masked. Then try a host that is not allowed.
+Without a Stripe account: put the made-up `STRIPE_KEY=sk_test_ZEROHFAKE00000000000000000000` in
+`.env` and ask "check my Stripe balance". Stripe answers 401 `Invalid API Key provided`, which is
+expected: the last four characters it echoes are the real value's, so the key reached Stripe
+while Claude had only the token. Then try a host that is not allowed.
 
 For personal data: a `signup-errors.log` with addresses such as `anna.o'neil@example.co.uk`,
 `lars+work@example.com` and `"quoted name"@example.com`, then ask Claude why `validateEmail`

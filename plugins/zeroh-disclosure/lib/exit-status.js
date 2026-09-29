@@ -146,7 +146,10 @@ export function wrapBashExitStatus(command, { original = command } = {}) {
     return `${command.slice(0, point.at)} || echo '${BASH_FAILURE_LINE}'${command.slice(point.at)}`;
   }
   return [
-    `trap 'zh_status=$?; trap - EXIT; printf "\\n[ZeroH: the command failed with exit status %s]\\n" "$zh_status"; exit 0' EXIT`,
+    // An early `exit 0` is a success, not a failure. (macOS Bash 3.2 also
+    // hands the trap 0 after a `set -u` or `${VAR:?}` error; Bash's own
+    // message then says what failed.)
+    `trap 'zh_status=$?; trap - EXIT; [ "$zh_status" -eq 0 ] || printf "\\n[ZeroH: the command failed with exit status %s]\\n" "$zh_status"; exit 0' EXIT`,
     command,
     `zh_status=$?; trap - EXIT; [ "$zh_status" -eq 0 ] || printf '\\n[ZeroH: the command failed with exit status %s]\\n' "$zh_status"`,
   ].join('\n');

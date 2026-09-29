@@ -60,6 +60,7 @@ import {
   hasActivePlugin,
   healthProof,
   installFor,
+  liveMaskingRoots,
   markSessionDown,
   ORPHAN_AFTER_MS,
   proxyPaths,
@@ -75,7 +76,12 @@ import {
   zerohPorts,
 } from './proxy-state.js';
 import { isAnthropicCredentialEnvName } from './secrets.js';
-import { createServiceManager } from './service-manager.js';
+import {
+  createServiceManager,
+  loginItemFix,
+  loginItemReason,
+  loginItemRefusal,
+} from './service-manager.js';
 
 const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const START_TIMEOUT_MS = 8_000;
@@ -219,6 +225,42 @@ async function shutdownDaemon(port, controlToken) {
   }
 }
 
+// Retires the daemon (bin/proxy-daemon.mjs): it keeps serving the Claude
+// Code sessions that still name its URL and exits by itself once idle. With
+// `masking` (proxy off, doctor --fix: the vault and hooks remain) it keeps
+// masking the values it masked before, and nothing new; without it
+// (uninstall: nothing could put a token back) it masks nothing (rule 8).
+// False when it isn't there or is a build without retirement (the caller
+// then stops it as before).
+async function retireDaemon(port, controlToken, { masking = true } = {}) {
+  if (!port || !controlToken) return false;
+  try {
+    const response = await request({
+      url: `${portUrl(port)}/_zeroh/retire${masking ? '' : '?masker=none'}`,
+      method: 'POST',
+      headers: { 'x-zeroh-control': controlToken },
+      // It reads its vaults before it answers.
+      timeoutMs: 5_000,
+    });
+    return response.statusCode === 204;
+  } catch {
+    return false;
+  }
+}
+
+// Retire (sessions still open keep working) or stop the daemon; `retire`
+// is what the user's commands ask for. Returns { stopped, retired }.
+async function leaveDaemon(
+  port,
+  controlToken,
+  { retire = false, masking = true } = {},
+) {
+  if (retire && (await retireDaemon(port, controlToken, { masking }))) {
+    return { stopped: false, retired: true };
+  }
+  return { stopped: await shutdownDaemon(port, controlToken), retired: false };
+}
+
 function portInUse(port) {
   return new Promise((resolve) => {
     const socket = net.connect(port, '127.0.0.1');
@@ -300,11 +342,46 @@ export function pluginBuild(pluginRoot = PLUGIN_ROOT) {
   return { version, hash: hash.digest('hex').slice(0, 16) };
 }
 
-function versionParts(version) {
-  return String(version || '0')
-    .split(/[.+-]/u)
-    .slice(0, 3)
-    .map((part) => Number.parseInt(part, 10) || 0);
+// Semantic version order: 1.0.0-rc.2 < 1.0.0 < 1.0.1 (a release candidate
+// sorts below its release, so an rc session left open never replaces the
+// release's daemon). -1, 0 or 1.
+export function compareVersions(left, right) {
+  const parse = (version) => {
+    const [core, pre = ''] = String(version || '0')
+      .split('+')[0]
+      .split(/-(.*)/su);
+    return {
+      core: core.split('.').map((part) => Number.parseInt(part, 10) || 0),
+      pre: pre ? pre.split('.') : [],
+    };
+  };
+  const a = parse(left);
+  const b = parse(right);
+  for (let index = 0; index < 3; index += 1) {
+    const x = a.core[index] ?? 0;
+    const y = b.core[index] ?? 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  if (!a.pre.length || !b.pre.length) {
+    return a.pre.length === b.pre.length ? 0 : a.pre.length ? -1 : 1;
+  }
+  for (
+    let index = 0;
+    index < Math.max(a.pre.length, b.pre.length);
+    index += 1
+  ) {
+    const x = a.pre[index];
+    const y = b.pre[index];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const nx = /^\d+$/u.test(x);
+    const ny = /^\d+$/u.test(y);
+    if (nx && ny && Number(x) !== Number(y))
+      return Number(x) > Number(y) ? 1 : -1;
+    if (nx !== ny) return nx ? -1 : 1;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
 }
 
 // Whether `candidate` should replace `running`: different code, and never an
@@ -312,14 +389,9 @@ function versionParts(version) {
 export function newerBuild(candidate, running) {
   if (!running?.hash) return true;
   if (running.hash === candidate.hash) return false;
-  const [a, b] = [
-    versionParts(candidate.version),
-    versionParts(running.version),
-  ];
-  for (let index = 0; index < 3; index += 1) {
-    if (a[index] !== b[index]) return a[index] > b[index];
-  }
-  return true;
+  const order = compareVersions(candidate.version, running.version);
+  // The same version with other code (an edited checkout) replaces it.
+  return order >= 0;
 }
 
 // Copies lib/, the vendored libraries it loads and the daemon into
@@ -611,14 +683,20 @@ async function ensureDefaultProxyLocked({
   const networkChanged =
     health &&
     health.network !== networkFingerprint(network, config.controlToken);
-  if (health && (newerBuild(build, health.build) || networkChanged)) {
+  // A daemon draining after the session-only exit (bin/proxy-daemon.mjs)
+  // masks nothing new: it hands its port to a new one, like an update.
+  if (
+    health &&
+    (health.retired || newerBuild(build, health.build) || networkChanged)
+  ) {
     // New code, or a new network environment (a corporate proxy or CA the
     // daemon does not use yet, LP-B1): the old daemon hands over its port,
     // finishes its open requests and leaves.
+    const draining = Boolean(health.retired);
     await shutdownDaemon(config.port, config.controlToken);
     await waitForPortFree(config.port, PORT_RELEASE_WAIT_MS);
     health = null;
-    upgraded = true;
+    upgraded = !draining;
   }
   refreshRuntime(paths.runtime, pluginRoot, build);
   let restarted = false;
@@ -634,18 +712,20 @@ async function ensureDefaultProxyLocked({
     restarted = true;
   }
 
-  // The settings entry sends every Claude Code session to the proxy, with
-  // the plugin or without it, so it may exist only while something keeps
-  // the daemon running after a reboot: the login item. A machine that
-  // refuses login items (a managed Mac, background items switched off, a
-  // locked-down Windows) gets no entry, and typed secrets are stopped
-  // instead of masked (T-27: a session must never meet a dead port).
+  // The login item keeps the daemon running after a reboot. A machine that
+  // refuses it (a managed Mac, background items switched off, a locked-down
+  // Windows, SSH or a container) still gets the proxy for its sessions: the
+  // daemon runs detached, the entry is written, and the daemon takes the
+  // entry out and leaves once no plugin session is live (evaluateSessionOnlyExit),
+  // so a later Claude Code session never meets a dead port (T-27). Each
+  // SessionStart tries to register it again.
   let warning = null;
   let loginItem = false;
   if (!optedOut) {
     const manager = serviceManager || createServiceManager({ env });
     const target = { runtime: paths.runtime, config: paths.config };
     loginItem = manager.isRegistered(target);
+    if (loginItem && config.loginItemRefused) delete config.loginItemRefused;
     if (!loginItem && registerLoginItem) {
       try {
         manager.register(target);
@@ -665,12 +745,11 @@ async function ensureDefaultProxyLocked({
             deadline: Math.max(deadline, Date.now() + START_TIMEOUT_MS),
           }));
       } catch (error) {
-        // Said once (LP-B3); the banner keeps saying only what is masked.
+        const refusal = loginItemRefusal(error);
+        // Said once as a notice (LP-B3); the banner, status and doctor say
+        // it every time from the record below.
         if (!config.loginItemRefused) {
-          warning =
-            error.code === 'ENOLOGINITEM'
-              ? "this system has nothing that starts programs at login (no systemd user session and no desktop session), so ZeroH's local proxy can't be kept running and what you type can't be masked; a typed secret is sent with a 'not protected' line (stopped with uncertain block). Files and command output are still masked."
-              : `your system did not let ZeroH register the login item that keeps its local proxy running after a restart (${error.code || 'refused'}), so what you type can't be masked; a typed secret is sent with a 'not protected' line (stopped with uncertain block). Files and command output are still masked.`;
+          warning = `ZeroH could not register the login item that starts its local proxy after a restart: ${loginItemReason(refusal)}. The proxy runs for this session only and what you type is still masked; a new session starts it again. To fix: ${loginItemFix(refusal)}.`;
           writeProxyDiagnostic({
             env,
             event: 'login-item-failed',
@@ -681,17 +760,13 @@ async function ensureDefaultProxyLocked({
             install,
           });
         }
-        config.loginItemRefused = new Date().toISOString();
+        config.loginItemRefused = refusal;
       }
     }
   }
   const proxyUrl = `${portUrl(config.port)}/z/${install.key}`;
   let wroteSettings = false;
-  if (!optedOut && !loginItem) {
-    // Take out an entry an earlier start wrote.
-    takeEntryOut(target, install, { match: 'zeroh' });
-    install.proxyUrl = null;
-  } else if (
+  if (
     !optedOut &&
     (writeSettings || isZeroHProxyUrl(settingsBaseUrl(target)))
   ) {
@@ -702,7 +777,11 @@ async function ensureDefaultProxyLocked({
   }
   writeProxyConfig(paths, config);
   return {
-    enabled: !optedOut && loginItem,
+    enabled: !optedOut,
+    loginItem: !optedOut && loginItem,
+    // No login item: the proxy lives while plugin sessions do.
+    sessionOnly: !optedOut && !loginItem,
+    loginItemRefused: loginItem ? null : config.loginItemRefused || null,
     optedOut,
     installed: created,
     restarted,
@@ -772,6 +851,8 @@ function removeProxyState(paths) {
 // `proxy off` for one settings file. With `remember` (the command, LP-B2)
 // the choice is recorded next to the settings file, so no hook, SessionStart
 // or later prompt sets the proxy up again until `proxy on` or `doctor --fix`.
+// With `retire` (the command) the daemon is retired rather than stopped, so
+// the sessions still open keep working (retireDaemon).
 export async function stopDefaultProxy(options = {}) {
   const env = options.env || process.env;
   const paths = proxyPaths(env);
@@ -796,31 +877,41 @@ export async function stopDefaultProxy(options = {}) {
       writeProxyConfig(paths, config);
       return { ...restored, stopped: false, loginItem: null, remaining };
     }
-    const stopped = await shutdownDaemon(config?.port, config?.controlToken);
+    const left = await leaveDaemon(config?.port, config?.controlToken, {
+      retire: options.retire,
+    });
     const loginItem = (
       options.serviceManager || createServiceManager({ env })
-    ).unregister();
+    ).unregister({ keepRunning: left.retired });
     removeProxyState(paths);
-    return { ...restored, stopped, loginItem, remaining };
+    return { ...restored, ...left, loginItem, remaining };
   });
 }
 
 // `zeroh-disclosure uninstall`: every settings file ZeroH wrote to gets the
 // user's own setting back (and loses its restore record), the daemon stops
-// and the login item goes. The caller then deletes ZEROH_HOME.
+// (or, with `retire`, keeps serving the sessions still open, masking
+// nothing: the caller deletes the vault and hooks next, so no token could
+// be put back) and the login item goes. The caller then deletes ZEROH_HOME.
 // Under the manager lock, so no SessionStart or prompt sets the proxy up
 // again half-way.
 export async function removeProxyEverywhere({
   env = process.env,
   serviceManager,
+  retire = false,
 } = {}) {
   const paths = proxyPaths(env);
   return withProxyLock(paths, () =>
-    removeProxyEverywhereLocked({ env, paths, serviceManager }),
+    removeProxyEverywhereLocked({ env, paths, serviceManager, retire }),
   );
 }
 
-async function removeProxyEverywhereLocked({ env, paths, serviceManager }) {
+async function removeProxyEverywhereLocked({
+  env,
+  paths,
+  serviceManager,
+  retire,
+}) {
   const config = readProxyConfig(paths);
   const files = new Set([
     ...Object.values(config?.installs || {}).map((install) =>
@@ -834,11 +925,19 @@ async function removeProxyEverywhereLocked({ env, paths, serviceManager }) {
     if (result.restored) restored.push(settingsPath);
     removeRestoreRecord(settingsPath);
   }
-  const stopped = await shutdownDaemon(config?.port, config?.controlToken);
+  // Retired masking nothing: ZEROH_HOME (the vault) and the hooks go next.
+  const left = await leaveDaemon(config?.port, config?.controlToken, {
+    retire,
+    masking: false,
+  });
   const loginItem = (
     serviceManager || createServiceManager({ env })
-  ).unregister();
-  return { restored, stopped, loginItemRemoved: Boolean(loginItem?.removed) };
+  ).unregister({ keepRunning: left.retired });
+  return {
+    restored,
+    ...left,
+    loginItemRemoved: Boolean(loginItem?.removed),
+  };
 }
 
 // `proxy on`: forgets a `proxy off` for this settings file. The next prompt or
@@ -885,8 +984,8 @@ export async function sessionProxyState({
 // requests to that proxy, so a session that started behind it is protected
 // from its first prompt. The caller has already proven the daemon healthy
 // and masking this session (sessionProxyState); a request the daemon cannot
-// attribute is masked too while a plugin session is live (bin/proxy-daemon.mjs
-// decideRoute). A session switched mid-prompt does not name the proxy yet.
+// attribute passes through unmasked (bin/proxy-daemon.mjs decideRoute). A
+// session switched mid-prompt does not name the proxy yet.
 export function sessionNamesInstallProxy(env = process.env) {
   const base = env.ANTHROPIC_BASE_URL;
   if (!isZeroHProxyUrl(base)) return false;
@@ -934,14 +1033,15 @@ export function baseUrlOverridden(env = process.env) {
 // changed settings file to a running session, so the first prompt of a
 // session that does not use the proxy yet writes the entry and waits until
 // Claude Code has picked it up; the prompt's own request then goes through
-// the proxy. A secret in that very first prompt is still stopped, not masked:
-// until the daemon has seen the session, the prompt might go out directly
-// (LP-B5). Returns { routed, state }:
+// the proxy. A secret in that very first prompt is still treated as not
+// masked (sent with a "not protected" line; stopped with `uncertain
+// block`): until the daemon has seen the session, the prompt might go out
+// directly. Without a login item the proxy runs for the session all the
+// same (session-only). Returns { routed, state }:
 //   routed         the entry was just written (or by a session moments ago)
 //   configured     the session already uses a ZeroH URL (the guard's case)
 //   not-configured ZEROH_PROXY=off, or Bedrock, Vertex or Foundry
 //   overridden     another source sets ANTHROPIC_BASE_URL
-//   no-login-item  nothing keeps the proxy running (told at SessionStart)
 //   not-written    the proxy did not start, or the user removed the entry
 //   not-applied    the entry is there but this session never switched
 export async function routeSession({
@@ -980,10 +1080,6 @@ export async function routeSession({
     return { routed: false, state: 'not-written' };
   }
   const target = resolveClaudeSettingsPath({ env });
-  // No login item: the user was told at SessionStart, once (LP-B3).
-  if (!result.enabled && !result.optedOut) {
-    return { routed: false, state: 'no-login-item' };
-  }
   if (!result.enabled || settingsBaseUrl(target) !== result.proxyUrl) {
     return { routed: false, state: 'not-written' };
   }
@@ -1170,6 +1266,11 @@ export async function checkSessionProxy({
     ? await probeProxy(base, { controlToken: config.controlToken })
     : null;
   if (health) return { block: false, state: 'up' };
+  // Retired by `proxy off`, uninstall or doctor --fix: it still serves this
+  // session until the session ends, so the prompt goes on.
+  if ((await probeProxy(base))?.retired) {
+    return { block: false, state: 'retired' };
+  }
   if (proxyTurnedOffByUser(env)) {
     // `proxy off` ran while this session still points at the proxy: never
     // start it again, and never let Claude Code retry a closed port.
@@ -1264,6 +1365,87 @@ export async function evaluateOrphanCleanup({
   );
 }
 
+// --- no login item: the proxy lives while plugin sessions do ----------------
+
+// Run by the daemon every minute. Where the system refused the login item,
+// nothing starts the daemon after a reboot, so its settings entries may exist
+// only while a plugin session uses them. Once no live plugin session is left
+// (every route ended, gone or opted out), the entries that still name this
+// daemon come out and `leave` runs under the manager lock, so a SessionStart
+// never finds a daemon that is about to go. The next session's SessionStart
+// starts a daemon again and its first prompt writes the entry.
+export async function evaluateSessionOnlyExit({
+  env = process.env,
+  controlToken,
+  leave = () => {},
+  now = Date.now,
+  pathExists = existsSync,
+} = {}) {
+  const paths = proxyPaths(env);
+  return withProxyLock(
+    paths,
+    async () => {
+      const config = readProxyConfig(paths);
+      if (!config?.loginItemRefused) return { leave: false };
+      // Replaced by another daemon: it owns the entries now.
+      if (controlToken && !sameSecret(config.controlToken, controlToken)) {
+        return { leave: false };
+      }
+      if (liveMaskingRoots(paths, { now: now(), pathExists }).size) {
+        return { leave: false };
+      }
+      let restored = 0;
+      for (const install of Object.values(config.installs || {})) {
+        const url = `${portUrl(config.port)}/z/${install.key}`;
+        try {
+          if (
+            takeEntryOut(install.settingsPath, install, { match: url }).removed
+          )
+            restored += 1;
+        } catch {
+          // An unreadable settings file is left as it is.
+        }
+      }
+      if (restored) writeProxyConfig(paths, config);
+      await leave();
+      return { leave: true, restored };
+    },
+    { waitMs: 100 },
+  );
+}
+
+// What /zeroh-disclosure:status says about the proxy itself: whether this
+// home's daemon answers now, and whether a login item starts it after a
+// restart (or why the system refused one). Read-only.
+export async function proxyRuntimeStatus({
+  env = process.env,
+  serviceManager,
+} = {}) {
+  const paths = proxyPaths(env);
+  const config = readProxyConfig(paths);
+  if (!config) return { installed: false, running: false, loginItem: false };
+  const health = config.port
+    ? await probeProxy(portUrl(config.port), {
+        controlToken: config.controlToken,
+      })
+    : null;
+  let loginItem = false;
+  try {
+    loginItem = (serviceManager || createServiceManager({ env })).isRegistered({
+      runtime: paths.runtime,
+      config: paths.config,
+    });
+  } catch {
+    loginItem = false;
+  }
+  return {
+    installed: true,
+    running: Boolean(health),
+    loginItem,
+    loginItemRefused: loginItem ? null : config.loginItemRefused || null,
+  };
+}
+
 // --- doctor -----------------------------------------------------------------
 
 // Every loopback port that may hold a ZeroH daemon for this settings file.
@@ -1285,6 +1467,9 @@ export async function diagnoseProxy({
   env = process.env,
   fix = false,
   serviceManager,
+  // The command: this home's own daemon is retired, not stopped, so the
+  // sessions still open keep working.
+  retire = false,
 } = {}) {
   const paths = proxyPaths(env);
   const settingsPath = path.resolve(resolveClaudeSettingsPath({ env }));
@@ -1296,7 +1481,8 @@ export async function diagnoseProxy({
   const daemons = [];
   for (const port of candidatePorts(env, paths, settingsPath, current)) {
     const body = await probeProxy(portUrl(port));
-    if (!body) continue;
+    // A retired daemon serves the sessions still open and leaves by itself.
+    if (!body || body.retired) continue;
     const ours =
       config &&
       (await probeProxy(portUrl(port), { controlToken: config.controlToken }));
@@ -1332,14 +1518,23 @@ export async function diagnoseProxy({
     }
   })();
   if (leftovers.length) findings.push('files-from-an-earlier-build');
-  if (manager.isRegistered() && !Object.keys(config?.installs || {}).length) {
+  const loginItem = manager.isRegistered();
+  if (loginItem && !Object.keys(config?.installs || {}).length) {
     findings.push('login-item-without-install');
+  }
+  // The system refused the login item: the proxy runs only while plugin
+  // sessions do (evaluateSessionOnlyExit). Told with the reason and the fix.
+  const loginItemRefused =
+    !loginItem && config?.loginItemRefused ? config.loginItemRefused : null;
+  if (loginItemRefused && Object.keys(config?.installs || {}).length) {
+    findings.push('login-item-refused');
   }
   const report = {
     settingsPath,
     entry: entry ? (entryLive ? 'live' : 'dead') : 'none',
     daemons: daemons.length,
-    loginItem: manager.isRegistered(),
+    loginItem,
+    ...(loginItemRefused ? { loginItemRefused } : {}),
     findings,
     fixed: false,
   };
@@ -1356,9 +1551,18 @@ export async function diagnoseProxy({
     if (latest) delete latest.installs[installId(settingsPath)];
     const remaining = Object.keys(latest?.installs || {}).length;
     let stopped = 0;
+    let retired = 0;
     for (const daemon of daemons) {
       // This home's daemon still serves other Claude profiles (LP-F3).
       if (daemon.ours && remaining) continue;
+      if (
+        daemon.ours &&
+        retire &&
+        (await retireDaemon(daemon.port, latest?.controlToken))
+      ) {
+        retired += 1;
+        continue;
+      }
       let down =
         (await shutdownDaemon(daemon.port, latest?.controlToken)) &&
         (await waitForPortFree(daemon.port, 1_000));
@@ -1379,7 +1583,7 @@ export async function diagnoseProxy({
       writeProxyConfig(paths, latest);
       removeRoutesOf(paths, installId(settingsPath));
     } else {
-      loginItem = manager.unregister();
+      loginItem = manager.unregister({ keepRunning: retired > 0 });
       removeProxyState(paths);
     }
     return {
@@ -1387,6 +1591,7 @@ export async function diagnoseProxy({
       fixed: true,
       restored: restored.restored,
       stopped,
+      retired,
       loginItemRemoved: Boolean(loginItem?.removed),
     };
   });

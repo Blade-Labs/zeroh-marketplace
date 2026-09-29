@@ -28,9 +28,16 @@ matching of your own values is the plugin's (`lib/secrets.js`).
   `db_password = …`, `AUTH_TOKEN=<random>`), private keys (PEM, OpenSSH, PuTTY, age),
   `Authorization` headers, credentials in URLs and connection strings, signed URLs, OTP seeds and
   password hashes. A value next to a key-like name counts only when it looks like a value: code
-  after the name (`process.env.X`, `API_KEY`, a type, a call, a package version, a template
-  placeholder) and plain names made only of letters are left alone. These rules mask what the
-  model reads; they do not rewrite what the model writes, which can only hold tokens.
+  after the name (`process.env.X`, `API_KEY`, a type, a call, a package version, a format
+  placeholder) and plain names made only of letters are left alone. A variable reference (`$KEY`,
+  `${KEY}`, `$env:KEY`, `%KEY%`, `{{ x }}`, `${{ secrets.KEY }}`) is masked like a value: whether it
+  is expanded depends on the program that reads it, which the detector can't know, and a masked
+  reference is put back where it is used. In a Bash or PowerShell command, a value that is only
+  variable references is not stopped as a raw secret; the command runs with a notice when it sends
+  something somewhere (`uncertain block` stops it), because ZeroH can't see what the variable holds.
+  A plain word found this way (`password=<word>`) is masked where the name is beside it, and not
+  matched anywhere else. These rules mask what the model reads; they do not rewrite what the
+  model writes, which can only hold tokens.
 - **Your own values**: every value in your project's `.env` and `.env.*` files (not
   `.env.example`, `.sample`, `.template`, `.dist` or `.defaults`), secret-named environment
   variables, and credentials in AWS, GitHub CLI, npm, PyPI, `.netrc`, `.git-credentials` and
@@ -151,3 +158,11 @@ birth, Saudi and Qatar IDs and crypto addresses find nothing in tool output, typ
 normal-work sample. Without their context word, dates of birth would match 149 times (numeric
 forms in 28 files, month names in 23: versions such as `4.1.10`, release dates) and passports 47
 times in 15 files.
+
+Variable references are masked on purpose. On a 145-case corpus of shell, PowerShell, cmd, env,
+YAML, JSON, connection-string and CI forms (the detection engine's
+`test/exceptions-corpus.test.mjs`), 23 texts that hold only a reference (`$STRIPE_KEY`,
+`${DB_PASS}`, `$env:DB_PASS`, `%DB_PASS%`, `${{ secrets.X }}`, `$(cat file)`) are masked in place;
+15 real values are still missed there (plain words under a secret key in env and config files,
+JDBC `&password=`, `redis://:pw@`, Go `:=`, `mysql --password=`, some curl forms gitleaks' rule
+does not match).

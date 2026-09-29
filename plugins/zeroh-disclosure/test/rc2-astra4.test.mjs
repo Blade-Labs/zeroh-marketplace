@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { runHook, tempProject } from './helpers.mjs';
+import { bashPath, runHook, tempProject } from './helpers.mjs';
 import { shellDestinations } from '../lib/shell-destinations.js';
 import { interpreterCode, readCode } from '../lib/shell-programs.js';
 import { analyzeBash } from '../lib/shell-scan.js';
@@ -51,20 +51,33 @@ function preToolUse(p, command, extraEnv = {}) {
   };
 }
 
+// Git Bash on Windows (no /bin/bash there), the system Bash elsewhere.
+const BASH = process.platform === 'win32' ? 'bash' : '/bin/bash';
+
+// GNU sed has options and commands BSD sed (macOS) lacks: `--expression`
+// and its abbreviations, `e` and `W`. The guard must stop those spellings
+// everywhere; only GNU sed can show that they are real writes.
+const GNU_SED =
+  spawnSync('sed', ['--version'], { encoding: 'utf8' }).status === 0;
+
 function bash(command, cwd, home) {
-  return spawnSync('/bin/bash', ['--noprofile', '--norc', '-c', command], {
+  return spawnSync(BASH, ['--noprofile', '--norc', '-c', command], {
     cwd,
     env: { PATH: process.env.PATH, HOME: home },
     encoding: 'utf8',
-    timeout: 10_000,
+    // A cold interpreter start on a Windows runner (antivirus scanning
+    // python.exe) has taken more than 10 s.
+    timeout: process.platform === 'win32' ? 60_000 : 10_000,
   });
 }
 
 const available = (program) =>
-  spawnSync('/bin/sh', ['-c', `command -v ${program}`]).status === 0;
+  spawnSync(BASH, ['-c', `command -v ${program}`]).status === 0;
 
 test('V1/V2: attached Perl -l/-0 code, continued or regex-bearing awk, and abbreviated sed options that write settings are stopped, and are real writes', () => {
-  const { p, target } = settingsProject();
+  const { p, target: file } = settingsProject();
+  // The path as a working Git Bash command writes it on Windows (C:/…).
+  const target = bashPath(file);
   const perl = `open(F, ">", "${target}"); print F '${DISABLE}';`;
   const awkValue = JSON.stringify(DISABLE);
   const cases = [
@@ -77,16 +90,16 @@ test('V1/V2: attached Perl -l/-0 code, continued or regex-bearing awk, and abbre
       'awk',
       `awk ${quote(`BEGIN {print (1 ? ${awkValue} : /;/) > "${target}"}`)}`,
     ],
-    ['sed', `sed --expr=${quote(`w ${target}`)} disable.json`],
-    ['sed', `sed --exp ${quote(`w ${target}`)} disable.json`],
+    ['sed', `sed --expr=${quote(`w ${target}`)} disable.json`, 'gnu'],
+    ['sed', `sed --exp ${quote(`w ${target}`)} disable.json`, 'gnu'],
   ];
-  for (const [program, command] of cases) {
-    if (!available(program)) continue;
+  for (const [program, command, gnuOnly] of cases) {
     for (const mode of ['pass', 'block']) {
       const out = preToolUse(p, command, { ZEROH_UNCERTAIN: mode });
       assert.equal(out.decision, 'deny', `${mode}: ${command}`);
       assert.equal(out.updated, null, command);
     }
+    if (!available(program) || (gnuOnly && !GNU_SED)) continue;
     writeFileSync(target, '{}\n');
     const run = bash(command, p.dir, p.home);
     assert.equal(run.status, 0, `${command}: ${run.stderr}`);
@@ -148,16 +161,20 @@ test("V4: interpreter code that names settings but whose effect can't be read ru
       command,
     );
   }
-  // Recognised writes stay stops, spelled any way.
+  // Recognised writes stay stops, spelled any way. The path is written as
+  // a string literal of the language: on Windows its backslashes are escaped,
+  // as in any working program ("C:\Users" is a syntax error in Python).
+  const lit = JSON.stringify(target);
+  const inner = JSON.stringify(`rm ${target.replaceAll('\\', '/')}`);
   for (const command of [
-    `python3 -c ${quote(`open("${target}", "w").write("{}")`)}`,
-    `python3 -c ${quote(`from pathlib import Path; Path("${target}").write_text("{}")`)}`,
-    `python3 -c ${quote(`import shutil; shutil.copy("disable.json", "${target}")`)}`,
-    `python3 -c ${quote(`import os; os.system("rm ${target}")`)}`,
-    `python3 -c ${quote(`import subprocess; subprocess.run(["rm", "${target}"])`)}`,
-    `node -e ${quote(`require("fs").rmSync("${target}")`)}`,
-    `perl -e ${quote(`unlink "${target}";`)}`,
-    `ruby -e ${quote(`File.write("${target}", "{}")`)}`,
+    `python3 -c ${quote(`open(${lit}, "w").write("{}")`)}`,
+    `python3 -c ${quote(`from pathlib import Path; Path(${lit}).write_text("{}")`)}`,
+    `python3 -c ${quote(`import shutil; shutil.copy("disable.json", ${lit})`)}`,
+    `python3 -c ${quote(`import os; os.system(${inner})`)}`,
+    `python3 -c ${quote(`import subprocess; subprocess.run(["rm", ${lit}])`)}`,
+    `node -e ${quote(`require("fs").rmSync(${lit})`)}`,
+    `perl -e ${quote(`unlink ${lit};`)}`,
+    `ruby -e ${quote(`File.write(${lit}, "{}")`)}`,
   ])
     assert.equal(preToolUse(p, command).decision, 'deny', command);
 });

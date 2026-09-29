@@ -335,8 +335,9 @@ function liveRoute(route, now, pathExists) {
 }
 
 // The project roots of the live plugin sessions of one settings file
-// (`install`; null: any). A request the daemon cannot tie to its own session
-// is masked while this is not empty (LP-B5).
+// (`install`; null: any). The session-only daemon stays while this is not
+// empty (evaluateSessionOnlyExit); the daemon logs it for a request it
+// cannot attribute, which passes through unmasked.
 export function liveMaskingRoots(
   paths,
   { install = null, now = Date.now(), pathExists = existsSync } = {},

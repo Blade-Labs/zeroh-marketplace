@@ -1,0 +1,6 @@
+# The plugin's files are authored with LF line ends and are read as such: its
+# tests compare the README, CHANGELOG, commands and skills with what the code
+# writes, and a release is checked file by file against its git blobs. Git for
+# Windows checks text out with CRLF by default (core.autocrlf=true); this keeps
+# a Windows checkout byte-identical to the release.
+* text=auto eol=lf

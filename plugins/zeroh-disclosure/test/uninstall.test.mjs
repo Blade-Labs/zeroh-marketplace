@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Isolated temporary homes for every test (see helpers.mjs).
-import './helpers.mjs';
+import { fakeProgram } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -22,7 +22,7 @@ function fakeClaude(listing) {
     `#!/usr/bin/env node\nif (process.argv[3] === 'list') console.log(${JSON.stringify(JSON.stringify(listing))});\n`,
     { mode: 0o755 },
   );
-  return { ...process.env, ZEROH_CLAUDE_BIN: bin };
+  return { ...process.env, ZEROH_CLAUDE_BIN: fakeProgram(bin) };
 }
 
 // T-38: the plugin's installed ids come from Claude Code's own listing,

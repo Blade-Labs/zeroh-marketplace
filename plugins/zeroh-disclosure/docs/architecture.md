@@ -187,15 +187,16 @@ missing module) still stops the prompt, denies the tool call or withholds the to
 that fails while it runs (`hooks/fail-closed.js`). That is `uncertain block`; by default (pass)
 the loader lets the event through with a "not protected" line.
 
-| Hook               | Responsibility                                                                                                                                                                                                                                                                                                               |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SessionStart`     | Removes stale run files, opens the local session, loads known values into the vault, checks the signed allow list, scans `CLAUDE.md`, imports, and memory, and gives Claude token-handling instructions.                                                                                                                     |
-| `UserPromptSubmit` | Applies the disclosure policy and creates the turn ledger. When the daemon confirms that this session's requests pass through the proxy, the proxy is the masking boundary and the prompt goes on; otherwise a sensitive prompt is sent with a notice (pass) or blocked with a masked copy offered for resubmission (block). |
-| `PreToolUse`       | Applies the settings and sensitive-file guards before loading configuration, passes background shells and Monitor without the proxy with a notice, checks tool input policy, restores known tokens, enforces destinations, late-binds Bash or PowerShell values, and adds the exit-status wrapper.                           |
-| `PostToolUse`      | Deletes any values file for the tool call (best effort), handles PDF, image, and notebook responses, and recursively masks strings in other tool output. An error, and output over 1 MB, pass the output with a notice (pass) or replace it with a notice in the tool's own shape (block).                                   |
-| `MessageDisplay`   | Replaces known tokens in display deltas with vault values unless `ZEROH_DISPLAY_REAL_VALUES=0`. It does not change the stored assistant message; a vault error leaves tokens visible.                                                                                                                                        |
-| `Stop`             | Finalizes ledgers (which never hold the typed prompt, only masked text), writes signed receipts, writes `receipt.html`, and builds the session receipt bundle.                                                                                                                                                               |
-| `SessionEnd`       | Applies vault retention with the policy `SessionStart` stored: under `session` retention it removes the values the ending session used; under `7d` or `30d` it removes values past the window.                                                                                                                               |
+| Hook                                     | Responsibility                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart`                           | Removes stale run files, opens the local session, loads known values into the vault, checks the signed allow list, scans `CLAUDE.md`, imports, and memory, and gives Claude token-handling instructions.                                                                                                                     |
+| `UserPromptSubmit`                       | Applies the disclosure policy and creates the turn ledger. When the daemon confirms that this session's requests pass through the proxy, the proxy is the masking boundary and the prompt goes on; otherwise a sensitive prompt is sent with a notice (pass) or blocked with a masked copy offered for resubmission (block). |
+| `PreToolUse`                             | Applies the settings and sensitive-file guards before loading configuration, passes background shells and Monitor without the proxy with a notice, checks tool input policy, restores known tokens, enforces destinations, late-binds Bash or PowerShell values, and adds the exit-status wrapper.                           |
+| `PostToolUse`                            | Deletes any values file for the tool call (best effort), handles PDF, image, and notebook responses, and recursively masks strings in other tool output. An error, and output over 1 MB, pass the output with a notice (pass) or replace it with a notice in the tool's own shape (block).                                   |
+| `PostToolUseFailure`, `PermissionDenied` | For Bash and PowerShell: deletes the values file of a command that failed, was interrupted, or was refused by auto mode.                                                                                                                                                                                                     |
+| `MessageDisplay`                         | Replaces known tokens in display deltas with vault values unless `ZEROH_DISPLAY_REAL_VALUES=0`. It does not change the stored assistant message; a vault error leaves tokens visible.                                                                                                                                        |
+| `Stop`                                   | Finalizes ledgers (which never hold the typed prompt, only masked text), writes signed receipts, writes `receipt.html`, and builds the session receipt bundle.                                                                                                                                                               |
+| `SessionEnd`                             | Applies vault retention with the policy `SessionStart` stored: under `session` retention it removes the values the ending session used; under `7d` or `30d` it removes values past the window.                                                                                                                               |
 
 ### Naming a token
 
@@ -249,15 +250,16 @@ per-session route file (`<ZEROH_HOME>/proxy/routes/`) holding the project root, 
 it belongs to and the session's `ZEROH_PROXY=off` choice; `SessionEnd` marks it ended. A request
 with a body is masked with the project vault of the live route of its `x-claude-code-session-id`,
 and the daemon records that it has seen the session. A request without a session header, or of a
-session no hook registered, is masked while any plugin session of the same settings file is live
-and not ended (with that project's vault, or with each live project's vault in turn), and passes
-through unmasked only when none is: the plugin is disabled or removed everywhere. A session
-opted out passes through. Routes older than 36 hours are pruned. Hooks decide whether typed secrets
+session no hook registered, passes through unmasked: ZeroH's hooks don't run in that session (the
+plugin is disabled there, or Claude Code started it without plugins), so nothing could put a token
+back into its commands, edits or screen ([rule 8](product-principles.md)). Before 1.0.0 such a
+request was masked while another plugin session was live, and a git author email from `CLAUDE.md`
+was committed as a token. A session opted out passes through. Routes older than 36 hours are pruned. Hooks decide whether typed secrets
 are masked by asking the daemon about their own session (with a nonce proof), and then either by
 the daemon's record that it has seen a request under that session id, or by the hook's own
 environment naming this install's proxy URL for the active settings file: Claude Code then
-sends the session's requests there, and the daemon masks the session's own requests and, while it
-is live, any it cannot attribute. Only a session put behind the proxy by the current prompt (its
+sends the session's requests there, and the daemon masks the session's own requests (one it cannot
+attribute passes through unmasked). Only a session put behind the proxy by the current prompt (its
 environment does not name the proxy yet) waits for "seen". Nothing in the environment alone can
 claim masking, and Bedrock, Vertex and Foundry count as unmasked. Measured on Claude Code 2.1.283: every request
 with a body carries the session id (subagents, `--resume`, `--continue` and `--fork-session`
@@ -278,6 +280,26 @@ That session's next prompt restarts the daemon. While the home exists it decides
 manager lock; when someone else holds the lock (a re-registered login item boots the daemon out
 during `SessionStart`), it keeps every entry. A leaving daemon releases its port at once and drains
 open requests for up to ten minutes.
+
+A daemon is retired instead of stopped when a running session may still use its port: `proxy off`,
+`doctor --fix` and uninstall retire it (`POST /_zeroh/retire`), and a daemon without a login item
+retires itself once no live plugin session is left, after taking its settings entries out. A
+retired daemon keeps serving, writes nothing under `ZEROH_HOME`, never restarts, removes its pid
+file and exits after 12 hours without a request. What it masks follows
+[rule 8](product-principles.md): after `proxy off` and `doctor --fix` (the vault and hooks remain) a
+session it masked keeps its known values masked to the tokens it already saw, from memory, and
+nothing new; after uninstall (`?masker=none`) and the session-only exit it masks nothing; a session
+it never masked always passes. Each session keeps the masker of its own project: a value known
+only in another project is never masked with that project's token, which this session's hooks
+could not put back. A `SessionStart` that finds a retired daemon of its own home on the
+port shuts it down and starts a new one.
+
+When the project vault opens but can't be saved, the daemon masks only the values already on disk
+and passes every new one unmasked, in `uncertain block` mode too: refusing the request would end
+the running session (Claude Code retries, then gives up), so this is a deliberate exception to
+block mode ([rule 8](product-principles.md)). The pass is recorded as `vault-unsaveable` and shown
+by the turn's Stop line; `UserPromptSubmit` records the prompt's new values as sent as typed
+(`raw_content_sent_to_ai_provider`, `values_sent`), never as masked.
 
 The daemon reaches its upstream with explicit agents built
 from the network environment (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`,
@@ -350,13 +372,30 @@ existing value.
 
 ## Destination enforcement
 
-Destination enforcement extracts scheme and scheme-less URLs, bare public-looking domains,
-IPv4/IPv6 literals, `user@host`, `host:port`, and PowerShell `-Uri` values from the complete restored
-tool input, without the file paths of local file tools. Words ending in a source/data extension
-that is also a TLD (`.py`, `.sh`, `.md`, `.tf`, `.zip` …) are files unless a URL, `user@` or a
-network command's operand makes them a host; path-shaped dotted words, calls, member access on
-common receivers (`user.email`), and loopback hosts are excluded. Each discovered host must be
-allowed for every restored token. Subagent (Agent) input and the WebFetch `prompt` are never
+Destination enforcement reads the complete restored tool input, without the file paths of local
+file tools. A network command's operands are destinations whatever they look like (the shell
+reader below). Elsewhere a host counts only where its spelling makes it one: a URL
+(`https://host/…`, `//host/…`), `user@host`, `host:port` or `[v6]:port`, and PowerShell `-Uri`
+values. A bare dotted word or address anywhere else is a field, a setting, a file or a name,
+never a destination, even when its last label is a real TLD: `--query sku.name`, `-o
+jsonpath={.status}`, `--set image.tag=…`, `gcloud config set compute.zone …`,
+`app.kubernetes.io/name`, `config.yaml`, `@scope/pkg.name`, `--source-address-prefixes
+198.51.100.0/24`. The program that reads it is either one ZeroH knows (its operands are read) or an
+uncertain destination (pass with a notice, `block` mode denies). `name.ext:N` with a source or
+data extension that is also a TLD (`app.py:12`) is a file and a line. Loopback hosts are
+excluded. Each discovered host must be allowed for every restored token, with two exceptions for
+values that name the destination rather than travel to it. An email address ZeroH restored is
+data, not a destination (`git -c user.email=<token> commit`, a form field): its domain counts only
+as a network command's operand (`ssh <token>`), which the shell reader finds. An IP address ZeroH
+restored is not checked against its own host: exactly that address (`https://<ip>:8443/`,
+`ssh root@<ip>`, `[v6]`) or its name on an address-mapping service with the exact suffix
+(`<ip>.sslip.io`, `<a-b-c-d>.sslip.io`, `pm.<ip>.sslip.io`, `pm-<a-b-c-d>.nip.io`, IPv6 as
+`2001-db8--1.sslip.io`; `sslip.io` and `nip.io` only): it is where the call goes, and as data
+to that host it reaches the server that has it. Any other host, including one that merely
+contains the address (`<ip>.evil.example`), is checked for it. A secret inside a host name is
+checked too (resolving the name sends it to the name servers): every option of a network program
+whose value is a host, a name or a URL is a destination, a name with a token in one of its labels
+is the destination as a whole, and a deny shows such a name with the token. Subagent (Agent) input and the WebFetch `prompt` are never
 restored. MCP input (other than ZeroH's own tools, which always keep tokens) is restored only for
 values the user allowed for that MCP server with a signed `mcp:<server>` rule; hosts or loopback
 URLs the input mentions never count, and other tokens pass through with a note to the model. The
@@ -412,15 +451,32 @@ variables. The real values go into:
 <ZEROH_HOME>/run/<session-id>/<tool-use-id>.sh
 ```
 
-The directory is requested as `0700` and the file as `0600`. The final command sources the file,
-deletes it, and then runs the rewritten command in a group. A file that cannot be sourced prints
-`[ZeroH could not load the restored values, so the command did not run]` and the command does not
-run; a file that cannot be deleted (a read-only run directory) does not stop the command, and
-`PostToolUse` removes it.
+The directory is requested as `0700` and the file as `0600`. The final command is
+`if . '<file>'; then rm -f '<file>'` / the rewritten command / `else echo '[…]'; rm -f '<file>'; false; fi`:
+it sources the file, deletes it, and runs the rewritten command in the `then` branch. A file that
+cannot be sourced prints `[ZeroH could not load the restored values, so the command did not run]`
+and the command does not run; a file that cannot be deleted (a read-only run directory) does not
+stop the command, and `PostToolUse` removes it.
+
+The command is never wrapped in a `{ … }` group. Claude Code (checked in 2.1.281 to 2.1.283)
+refuses a Bash command with an unquoted `{` followed by a quote before the next `}` ("Contains brace
+with quote character (expansion obfuscation)"): it matches no allow rule, so a headless run refuses
+it and an interactive one asks. `late-bind.js` carries a copy of that rule
+(`claudeCodeBraceQuoteRefusal`) and `test/claude-code-shell-check.test.mjs` runs every rewrite
+through Claude Code's own code. When a token sits inside the user's own unquoted `{ … }` (a group,
+or `${VAR:-…}`), a value with no whitespace and no glob characters is put back unquoted (the same
+word); any other value there is not bound, and the command runs with the token (denied in block
+mode).
+
+A values file whose command never runs does not wait for the next session:
+`PostToolUseFailure` and `PermissionDenied` (auto mode's refusals) remove the call's file at once;
+`Stop` and the next prompt remove the session's files older than a minute (a refusal no hook hears
+about, such as a headless run that cannot ask); `SessionEnd` removes all of the session's files;
+and every hook removes any run file older than ten minutes.
 
 | Bash token context                   | Rewrite behaviour                                                                         |
 | ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Unquoted                             | Insert a double-quoted parameter expansion.                                               |
+| Unquoted                             | Insert a double-quoted parameter expansion (unquoted inside a `{ … }`, see above).        |
 | Inside double quotes                 | Insert a parameter expansion without adding another quote pair.                           |
 | Inside ordinary single quotes        | Close the single-quoted text, insert a double-quoted parameter expansion, then reopen it. |
 | Inside `$(...)` or backticks         | Apply the same context rules inside the nested substitution.                              |
@@ -437,15 +493,17 @@ runs with the token (denied in block mode).
 
 ## PowerShell late binding
 
-PowerShell uses the same lifecycle with a values file of `NAME=<base64 of the UTF-8 value>` lines:
+PowerShell uses the same lifecycle with a UTF-8 CSV values file (`"Name","Value"` and one quoted
+row per value):
 
 ```text
-<ZEROH_HOME>/run/<session-id>/<tool-use-id>.b64
+<ZEROH_HOME>/run/<session-id>/<tool-use-id>.csv
 ```
 
 | PowerShell token context   | Rewrite behaviour                                                                                  |
 | -------------------------- | -------------------------------------------------------------------------------------------------- |
 | Unquoted or double-quoted  | Insert the braced `${ZH_TYPE_hash}` form, including next to variable-name characters.              |
+| A string that is one token | `'<token>'` or `"<token>"` standing alone becomes the bare `${ZH_TYPE_hash}`.                      |
 | ASCII single-quoted string | Convert the whole literal to double quotes, escape its literal metacharacters, and interpolate.    |
 | Single-quoted here-string  | Convert it to a double-quoted here-string, escape literal backticks and dollar signs, interpolate. |
 | Double-quoted here-string  | Insert the braced variable form.                                                                   |
@@ -456,11 +514,15 @@ PowerShell typographic quote characters are not bound because their parsing is n
 to prove a safe rewrite; neither are unterminated strings, here-strings, and block comments. Such a
 command runs with the token (denied in block mode).
 
-The final command reads the file with `[IO.File]::ReadAllLines` (no execution policy applies and
-Windows PowerShell 5.1 cannot misread its encoding), removes it without failing if it cannot, sets
-the variables, and then runs the rewritten command. If the file cannot be read, the command throws
-`ZeroH could not load the restored values, so the command did not run: <reason>`, which the
-exit-status wrapper prints. PowerShell 7 or later is required as `pwsh` for opt-in PowerShell use
+The final command loads each value with cmdlets only
+(`Import-Csv -LiteralPath '<file>' -Encoding UTF8 -ErrorAction Stop | Where-Object Name -CEQ '<name>' | Select-Object -ExpandProperty Value | Set-Variable -Name <name>`
+inside `try`), removes the file without failing if it cannot, and then runs the rewritten command.
+No execution policy applies, the explicit encoding reads the file the same way in Windows
+PowerShell 5.1 and PowerShell 7, and the loader has none of the constructs Claude Code's
+PowerShell checks ask about (.NET method calls, type literals, `$()`, script blocks). If the file
+cannot be read, the command throws `ZeroH could not load the restored values, so the command did
+not run`, which the exit-status wrapper prints. A token inside a longer string still becomes an
+expandable string (`"Bearer ${ZH_…}"`), which Claude Code asks about unless PowerShell is allowed. PowerShell 7 or later is required as `pwsh` for opt-in PowerShell use
 on macOS and Linux.
 
 ## Literal restore
@@ -531,11 +593,18 @@ destination check alike: options as getopt reads them (`-sKcfg` is `-s -K cfg`, 
 heredoc or here-string on stdin), a sed script's commands (`w`, `W`, `s///w` write a file; `e`
 and `s///e` run one), an awk program's output redirections, pipes and `system()` (from an awk
 lexer: continuations, regex literals, parentheses), inline code's read, write and exec calls, and
-git's subcommand after its global options. Program-specific grammars decide what an option takes:
+git's subcommand after its global options, and the options of `tar`, `rg`, `sort`, `zip`, `less`
+and `more` that run another program (`localProgramReach`) or write their value (`optionWrites`).
+The guard has no reader of its own for these; `test/guard-program-agreement.test.mjs` checks that
+the guard and the destination check classify a corpus of such commands identically.
+Program-specific grammars decide what an option takes:
 Perl's `-l[octal]` and `-0[octal]` go on with the cluster, GNU long options may be abbreviated. For a command that names a protected path:
 
 - **Both modes:** a command that clearly writes, deletes or executes against it is denied (rm,
-  mv, `sed -i`, tee, `>` redirection, chmod, `rg --pre` in any spelling, `find -exec`, a shell
+  mv, `sed -i`, tee, `>` redirection, chmod, an option that runs a program (`rg --pre`, `tar
+--to-command` or `-I`, `sort --compress-program`, `zip -TT`, `less +!cmd`, in any spelling) or
+  writes its value (`sort -o`, `tar -cf`), `git rm`/`mv`/`checkout`/`restore`/`apply`/`clean`
+  after any global options (`git -C /tmp rm …`), `find -exec`, a shell
   given the file as its script, a sed `w`/`e` or an awk redirection, pipe or `system()` whose
   target resolves to it, inline interpreter code whose write, delete or command call names it, and
   the same under launchers and in `bash -c`). Reading ZeroH's own state (vault, keys) is denied

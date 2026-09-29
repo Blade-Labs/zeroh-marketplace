@@ -58,3 +58,39 @@ test('a typed secret without the proxy is stopped in block mode', () => {
   assert.match(res.stderr, /ZeroH stopped this prompt/u);
   assert.ok(!res.stderr.includes(FAKE_STRIPE));
 });
+
+// Windows re-test (rc.2), finding 3: two values typed, the status line said
+// 4 sent (a detector and a known-value match of the same key both counted).
+// "Sent" is distinct values that reached the model in plain text; the status
+// line and the turn record agree.
+test('a typed key that is also in .env and an email count as two values sent', () => {
+  const p = tempProject();
+  const email = ['zerohfake.buyer', 'example.com'].join('@');
+  const res = runHook(
+    'user-prompt-submit',
+    {
+      session_id: 'a1-count',
+      prompt: `Refund ${email} using ${FAKE_STRIPE}, and again ${FAKE_STRIPE}`,
+    },
+    { project: p },
+  );
+  assert.equal(res.code, 0, res.stderr);
+  const dir = path.join(stateDirOf(p), 'sessions', 'a1-count');
+  const ledger = JSON.parse(
+    readFileSync(path.join(dir, 'turn-1.json'), 'utf8'),
+  );
+  assert.equal(ledger.phase, 'sent_unmasked_no_proxy');
+  assert.equal(ledger.audit.sent_unmasked.count, 2);
+  assert.equal(
+    Object.values(ledger.audit.sent_unmasked.by_type).reduce(
+      (sum, n) => sum + n,
+      0,
+    ),
+    2,
+  );
+  const statusFile = filesUnder(stateDirOf(p)).find(
+    (file) => path.basename(file) === 'status.json',
+  );
+  assert.ok(statusFile, 'the session status is written');
+  assert.equal(JSON.parse(readFileSync(statusFile, 'utf8')).sent, 2);
+});

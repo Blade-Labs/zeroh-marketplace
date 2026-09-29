@@ -7,6 +7,11 @@ import path from 'node:path';
 import { loadConfig, uncertainMode } from '../lib/config.js';
 import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
 import { shellDestinations } from '../lib/shell-destinations.js';
+import {
+  bracedReference,
+  inlineReferences,
+  referenceFindings,
+} from '../lib/shell-references.js';
 import { hmacKeyBytes, loadSession, writeJson } from '../lib/session.js';
 import {
   applyMasked,
@@ -17,6 +22,7 @@ import {
   tokenMapLines,
 } from '../lib/tool-policies.js';
 import { saveQuietly, Vault } from '../lib/vault.js';
+import { saveRestorably, UNSAVEABLE_REASON } from '../lib/restorable.js';
 import {
   bashSensitiveReason,
   checkDestinations,
@@ -24,6 +30,7 @@ import {
   destinationText,
   expiredTokens,
   hostsIn,
+  maskedHost,
   isSensitivePath,
   isZeroHSecretPath,
   loadAllowRules,
@@ -64,6 +71,8 @@ import { shellOf } from '../lib/shell-tools.js';
 import { claimUnmaskMcpSession } from '../lib/unmask.js';
 import { terminalCommand } from '../lib/fix-command.js';
 import { TOKEN_RE } from '../lib/token-pattern.js';
+
+const SAVE_LABEL = 'ZeroH Disclosure (PreToolUse)';
 
 // Fail closed (hooks/run.js): any unexpected error denies the call instead of
 // letting the tool run unguarded.
@@ -292,12 +301,53 @@ if (expired.length && mode !== 'block') {
 
 const session = await loadSession({ cwd, sessionId });
 
-const pii = await evaluateToolUse({
+let pii = await evaluateToolUse({
   toolName,
   toolInput,
   hmacKeyBytes: hmacKeyBytes(session),
   vault,
 });
+// Rule 8 (lib/restorable.js): a token written into the input (a file, a
+// subagent prompt, the model's context) must be one ZeroH can put back. When
+// the vault can't be saved, only the values already on disk become tokens;
+// the rest stay as the model wrote them, with the notice. A raw secret in a
+// command or an MCP call is never swapped (its tokens are for the
+// destination check only), so it needs no save here.
+if (
+  (pii.action === 'rewrite' || pii.action === 'warn') &&
+  pii.perField.some((field) => field.replacements?.length)
+) {
+  const { fallback } = saveRestorably(vault, SAVE_LABEL);
+  if (fallback) {
+    if (mode === 'block') {
+      // deny-inventory: vault-unsaveable-tool
+      emitDeny(
+        '🛡  ZeroH Disclosure denied this tool call because it could not save its vault, so a value it would mask here could never be put back. Try again; if it keeps happening, ask the user to run `/zeroh-disclosure:doctor`.',
+      );
+      process.exit(0);
+    }
+    const kept = await evaluateToolUse({
+      toolName,
+      toolInput,
+      hmacKeyBytes: hmacKeyBytes(session),
+      vault: fallback,
+    });
+    const perField = kept.perField
+      .filter((field) => field.replacements.length)
+      .map((field) => ({
+        ...field,
+        findings: field.findings.filter((finding) =>
+          field.replacements.some(
+            (replacement) => replacement.start === finding.start,
+          ),
+        ),
+      }));
+    pii = perField.length
+      ? { ...kept, perField }
+      : { action: 'allow', policy: kept.policy, perField: [] };
+    await passUnchecked(UNSAVEABLE_REASON, { subject: subjectOf(toolName) });
+  }
+}
 
 if (pii.action === 'allow') {
   await finish(toolInput, null, false);
@@ -315,6 +365,58 @@ await writeToolAudit({
   perField: pii.perField,
 });
 
+// A secret finding in a Bash or PowerShell command whose whole value, as
+// that shell parses it, is variable references (`curl -u "$STRIPE_KEY:"`,
+// `-u "$USER:$PASS"`, `$env:KEY`) is not a raw secret the model wrote: it
+// names where a value lives (lib/shell-references.js). The detector masks
+// references like any value (it cannot know the interpreter); the stop is
+// decided here. What a reference sends is whatever the variable holds,
+// which ZeroH cannot see, so a command that sends anything anywhere (a
+// host, or a destination it cannot read) is an uncertain destination:
+// `pass` mode runs it with a notice, `block` mode stops it, whatever the
+// host. A command with no destination runs as it is. A literal anywhere in
+// the finding (single quotes, `%X%` or `{{x}}` in Bash, a default, a
+// command substitution) keeps it a raw secret.
+const references =
+  pii.action === 'deny' ? referenceFindings(pii.perField, shell) : new Set();
+const isReference = (index, entry) => references.has(`${index}:${entry.start}`);
+const onlyReferences =
+  references.size > 0 &&
+  pii.perField.every((field, index) =>
+    (field.replacements || []).every((entry) => isReference(index, entry)),
+  );
+const referenceSent =
+  onlyReferences &&
+  (() => {
+    const command = String(toolInput.command ?? '');
+    return (
+      hostsIn(destinationText(toolName, toolInput)).length > 0 ||
+      networkHostsIn(command, { shell }).length > 0 ||
+      shellDestinations(command, { shell }).uncertain.length > 0
+    );
+  })();
+if (onlyReferences && !referenceSent) {
+  await finish(toolInput, null, false);
+  process.exit(0);
+}
+if (onlyReferences) {
+  const valueName = referenceName(pii.perField);
+  if (mode === 'block') {
+    // deny-inventory: variable-in-command
+    emitDeny(
+      [
+        uncheckedNotice('variable-in-command', { mode: 'block', valueName }),
+        '',
+        'ZeroH cannot see what the variable holds or check where it goes. Ask the user to run the command, or to allow it with /zeroh-disclosure:settings uncertain pass.',
+      ].join('\n'),
+    );
+    process.exit(0);
+  }
+  await passUnchecked('variable-in-command', { valueName });
+  await finish(toolInput, null, false);
+  process.exit(0);
+}
+
 // D-23: a raw known secret the model wrote into a shell command or an MCP
 // call is not swapped and not denied: it gets the same destination rules as
 // a restored token. A known-disallowed destination is blocked; an allowed one
@@ -329,10 +431,13 @@ const rawPass =
     (!pii.perField.some((field) => field.urlField) &&
       (shell !== null || toolName.startsWith('mcp__'))));
 if (rawPass) {
+  // References beside a literal are left out: the literal decides.
   const raw = [
     ...new Set(
-      pii.perField.flatMap((field) =>
-        (field.replacements || []).map((entry) => entry.replacement),
+      pii.perField.flatMap((field, index) =>
+        (field.replacements || [])
+          .filter((entry) => !isReference(index, entry))
+          .map((entry) => entry.replacement),
       ),
     ),
   ].map((token) => ({ token }));
@@ -341,15 +446,12 @@ if (rawPass) {
     const command = String(toolInput.command ?? '');
     const text = destinationText(toolName, toolInput);
     const hosts = [
-      ...new Set([
-        ...hostsIn(text, { cwd: root }),
-        ...networkHostsIn(command, { shell }),
-      ]),
+      ...new Set([...hostsIn(text), ...networkHostsIn(command, { shell })]),
     ];
     const check = checkDestinations(raw, text, vault, rules, { hosts });
     await recordDestinationCheck({
       session,
-      hosts,
+      hosts: hosts.map((host) => maskedHost(host, raw, vault)),
       blockedHosts: check.violations.map((violation) => violation.host),
     });
     if (!check.ok) {
@@ -483,7 +585,7 @@ async function finish(baseInput, context, changed = false) {
   let restored = plan.restored;
   let restoredInput = plan.input;
   // Last-use bookkeeping only; a failed write must not stop the restore.
-  saveQuietly(vault, 'ZeroH Disclosure (PreToolUse)');
+  saveQuietly(vault, SAVE_LABEL);
   const notes = context ? [context] : [];
   notes.push(...modelNotes);
   if (plan.held.length && plan.scope.mode === 'mcp') {
@@ -525,23 +627,81 @@ async function finish(baseInput, context, changed = false) {
     // command's destination operands, whatever launcher or quoting (rc.2).
     const shellCommand =
       shell && typeof baseInput.command === 'string' ? baseInput.command : null;
+    // An email address put back as data is not a destination (ssh-style
+    // operands still are): a local `git -c user.email=<token> commit` must
+    // run with the real value (product rule 1).
+    const addresses = restored
+      .filter((entry) => tokenType(entry.token) === 'EMAIL')
+      .map((entry) => vault.valueOf(entry.token))
+      .filter(Boolean);
     const hosts = [
       ...new Set([
-        ...hostsIn(destinations, { cwd: root }),
+        ...hostsIn(destinations, { values: addresses }),
         ...(shellCommand ? networkHostsIn(shellCommand, { shell }) : []),
       ]),
     ];
-    const check = checkDestinations(restored, destinations, vault, rules, {
-      hosts,
-    });
+    // A restored value that is itself only a variable reference in this
+    // shell (`$STRIPE_KEY:` typed by the user, masked like any value) is
+    // judged like a reference the model wrote (above): not a raw secret, an
+    // uncertain destination. It is a variable's name, not a value, so it is
+    // put back inline, where the token stands, and the shell expands it as
+    // the user wrote it (product rule 1): occurrence by occurrence, only
+    // where the tokenizer reads `${…}` at that place as an expansion, and
+    // braced so the name keeps its boundary (`${STRIPE_KEY}_SUFFIX`). A
+    // token with any other occurrence (single quotes, after `--%` …) is a
+    // literal there: it is checked and late-bound like any value.
+    const braced = new Map();
+    if (shellCommand)
+      for (const { token } of restored) {
+        const text = bracedReference(vault.valueOf(token), shell);
+        if (text) braced.set(token, text);
+      }
+    const inline = braced.size
+      ? inlineReferences(shellCommand, shell, braced)
+      : { command: shellCommand, inlined: new Set() };
+    const references = restored.filter((entry) =>
+      inline.inlined.has(entry.token),
+    );
+    const check = checkDestinations(
+      restored.filter((entry) => !inline.inlined.has(entry.token)),
+      destinations,
+      vault,
+      rules,
+      { hosts },
+    );
     await recordDestinationCheck({
       session,
-      hosts,
+      hosts: hosts.map((host) => maskedHost(host, restored, vault)),
       blockedHosts: check.violations.map((violation) => violation.host),
     });
     if (!check.ok) {
       emitDestinationDeny(check.violations);
       return;
+    }
+    if (
+      references.length &&
+      (hosts.length ||
+        shellDestinations(shellCommand, { shell }).uncertain.length)
+    ) {
+      const valueName =
+        /\$\{?(?:env:)?([A-Za-z_][A-Za-z0-9_]*)/iu.exec(
+          String(vault.valueOf(references[0].token)),
+        )?.[1] ?? null;
+      if (mode === 'block') {
+        // deny-inventory: variable-in-command
+        emitDeny(
+          [
+            uncheckedNotice('variable-in-command', {
+              mode: 'block',
+              valueName,
+            }),
+            '',
+            'ZeroH cannot see what the variable holds or check where it goes. Ask the user to run the command, or to allow it with /zeroh-disclosure:settings uncertain pass.',
+          ].join('\n'),
+        );
+        return;
+      }
+      await passUnchecked('variable-in-command', { valueName });
     }
     // Where the value goes cannot always be read: a $HOST, a script, an
     // unknown launcher, a command the tokenizer cannot parse. In `pass` mode
@@ -579,8 +739,9 @@ async function finish(baseInput, context, changed = false) {
         shell === 'powershell'
           ? preparePowerShellLateBinding
           : prepareBashLateBinding;
+      const inlined = inline.command;
       const lateBinding = prepareLateBinding({
-        command: baseInput.command,
+        command: inlined,
         vault,
         sessionId,
         toolUseId,
@@ -607,6 +768,8 @@ async function finish(baseInput, context, changed = false) {
         restoredForTool = false;
       } else if (lateBinding.bindings.length > 0) {
         allowedInput = { ...baseInput, command: lateBinding.command };
+      } else if (inlined !== baseInput.command) {
+        allowedInput = { ...baseInput, command: inlined };
       } else {
         allowedInput = baseInput;
         restoredForTool = false;
@@ -672,6 +835,19 @@ function emitDestinationDeny(violations) {
 
 // The name (or type) of the values in `entries` for a notice: the first
 // named one.
+// The name of the first variable a reference finding names (`STRIPE_KEY`
+// from `$STRIPE_KEY:`), for the notice; lib/unchecked.js shows only an
+// upper-case identifier.
+function referenceName(perField) {
+  for (const field of perField)
+    for (const entry of field.replacements || []) {
+      const text = String(field.original ?? '').slice(entry.start, entry.end);
+      const name = /\$\{?(?:env:)?([A-Za-z_][A-Za-z0-9_]*)/iu.exec(text);
+      if (name) return name[1];
+    }
+  return null;
+}
+
 function valueNameOf(entries) {
   for (const { token } of entries) {
     const entry = vault.entryOf(token);

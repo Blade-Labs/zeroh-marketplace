@@ -26,8 +26,10 @@ import {
   hasUsefulPdfText,
 } from '../lib/pdf-text.js';
 import { loadKnownSecrets, scrub, scrubDeep } from '../lib/secrets.js';
-import { saveQuietly, Vault } from '../lib/vault.js';
+import { Vault } from '../lib/vault.js';
+import { saveRestorably, UNSAVEABLE_REASON } from '../lib/restorable.js';
 import { activeGrants, recordRevealedUnderGrant } from '../lib/unmask.js';
+import { addSent, updateSessionStatus } from '../lib/session-status.js';
 import { recordMaskedOutput, recordMissReported } from '../lib/report.js';
 import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
 import { NAMING_REMINDER, namingReminder } from '../lib/token-pattern.js';
@@ -40,6 +42,9 @@ const MAX_SCANNED_OUTPUT_BYTES = 1024 * 1024;
 
 const VAULT_WITHHELD =
   'ZeroH Disclosure could not open its vault, so this tool output was withheld. Ask the user to run `/zeroh-disclosure:doctor --fix`.';
+const VAULT_UNSAVEABLE_WITHHELD =
+  'ZeroH Disclosure could not save its vault, so this tool output was withheld: a value masked now could never be put back. Try again; if it keeps happening, ask the user to run `/zeroh-disclosure:doctor`.';
+const SAVE_LABEL = 'ZeroH Disclosure (PostToolUse)';
 
 // An error in the try below passes the output with a notice by default and
 // withholds it in `block` mode; an error outside it is the loader's
@@ -61,6 +66,9 @@ try {
 }
 const mode = uncertainMode(process.env);
 let vault;
+// The read-only view of the values on disk after a failed save
+// (lib/restorable.js): receipt labels are masked with it from then on.
+let labelVault = null;
 let vaultFailed = false;
 let readPath;
 let grants = [];
@@ -119,36 +127,54 @@ try {
   }
 
   const known = loadKnownSecrets(root);
-  const replacements = [];
-  const revealed = [];
-  const masked = scrubDeep(
-    event.tool_response,
-    { vault, known, profile: piiProfile(), unmaskedTypes },
-    replacements,
-    revealed,
-  );
-  recordReveals(revealed);
+  const maskOutput = (maskWith) => {
+    const replacements = [];
+    const revealed = [];
+    const masked = scrubDeep(
+      event.tool_response,
+      { vault: maskWith, known, profile: piiProfile(), unmaskedTypes },
+      replacements,
+      revealed,
+    );
+    return { masked, replacements, revealed };
+  };
+  let result = maskOutput(vault);
   // Image blocks in any other tool's output (an MCP screenshot): their
   // strings were scanned, the picture was not.
   const images = imageBlocks(event.tool_response);
   const imageLine = images ? await noteUncheckedFormat(images) : null;
-  if (!replacements.length) {
+  if (!result.replacements.length) {
+    recordReveals(result.revealed);
     emitNotice(imageLine);
     process.exit(0);
   }
   // Labels are masked before the vault is saved: masking can mint a token.
-  const observations = tokenObservations(replacements);
-  const auditPath = event.tool_name === 'Read' ? maskLabel(readPath) : null;
-  saveQuietly(vault, 'ZeroH Disclosure (PostToolUse)');
+  let observations = tokenObservations(result.replacements);
+  let auditPath = event.tool_name === 'Read' ? maskLabel(readPath) : null;
+  let notice = imageLine;
+  if (!(await savedOrFallback())) process.exit(0);
+  if (labelVault) {
+    // Rule 8: only the values on disk stay masked; the new ones go as the
+    // tool returned them.
+    result = maskOutput(labelVault);
+    observations = tokenObservations(result.replacements);
+    auditPath = event.tool_name === 'Read' ? maskLabel(readPath) : null;
+    notice = joinLines(await unsaveableNotice(), imageLine);
+  }
+  recordReveals(result.revealed);
+  if (!result.replacements.length) {
+    emitNotice(notice);
+    process.exit(0);
+  }
   await recordMaskedOutput({
     cwd: root,
     sessionId: event.session_id,
     channel: channelForTool(event.tool_name),
-    replacements,
+    replacements: result.replacements,
     filePath: auditPath,
     observations,
   });
-  await emitMasked(masked, replacements, imageLine);
+  await emitMasked(result.masked, result.replacements, notice);
 } catch {
   if (mode === 'block') {
     // deny-inventory: output-check-failed
@@ -159,6 +185,43 @@ try {
     // the line (owner decision 2026-09-27).
     await passUnscanned(vaultFailed ? 'vault-unavailable' : 'check-failed');
   }
+}
+
+// Saves the vault after masking (rule 8, lib/restorable.js). True when the
+// masking stands, or when the save failed and `labelVault` now holds the
+// view of the values on disk to mask with again. False when block mode
+// withheld the output instead (already answered).
+async function savedOrFallback() {
+  const { fallback } = saveRestorably(vault, SAVE_LABEL);
+  if (!fallback) return true;
+  if (mode === 'block') {
+    // deny-inventory: vault-unsaveable-output
+    emitWithheld(VAULT_UNSAVEABLE_WITHHELD);
+    return false;
+  }
+  labelVault = fallback;
+  return true;
+}
+
+// The one-line notice for new values that went unmasked because the vault
+// could not be saved, recorded on the turn (lib/unchecked.js).
+async function unsaveableNotice() {
+  try {
+    const { notice } = await recordUnchecked({
+      reason: UNSAVEABLE_REASON,
+      tool: event.tool_name,
+      cwd: root,
+      sessionId: event.session_id,
+      subject: 'tool output',
+    });
+    return notice;
+  } catch {
+    return uncheckedNotice(UNSAVEABLE_REASON, { subject: 'tool output' });
+  }
+}
+
+function joinLines(...lines) {
+  return lines.filter(Boolean).join('\n') || null;
 }
 
 // The output goes to the model as the tool returned it, with the one-line
@@ -224,17 +287,19 @@ async function handlePdf() {
   }
   const name = displayName(maskLabel(filePath), 'PDF');
   const known = loadKnownSecrets(root);
-  const result = extraction.text
-    ? scrub(extraction.text, {
-        vault,
-        known,
-        profile: piiProfile(),
-        unmaskedTypes,
-      })
-    : { text: '', replacements: [], revealed: [] };
-  recordReveals(result.revealed);
+  const maskText = (maskWith) =>
+    extraction.text
+      ? scrub(extraction.text, {
+          vault: maskWith,
+          known,
+          profile: piiProfile(),
+          unmaskedTypes,
+        })
+      : { text: '', replacements: [], revealed: [] };
+  let result = maskText(vault);
 
   if (!result.replacements.length && !hasUsefulPdfText(extraction)) {
+    recordReveals(result.revealed);
     await recordFormatOutcome({
       cwd: root,
       sessionId: event.session_id,
@@ -251,9 +316,17 @@ async function handlePdf() {
     return;
   }
 
-  const observations = tokenObservations(result.replacements);
-  const maskedPath = maskLabel(filePath);
-  saveQuietly(vault, 'ZeroH Disclosure (PostToolUse)');
+  let observations = tokenObservations(result.replacements);
+  let maskedPath = maskLabel(filePath);
+  if (result.replacements.length && !(await savedOrFallback())) return;
+  let unsaved = null;
+  if (labelVault) {
+    result = maskText(labelVault);
+    observations = tokenObservations(result.replacements);
+    maskedPath = maskLabel(filePath);
+    unsaved = await unsaveableNotice();
+  }
+  recordReveals(result.revealed);
   const content = result.text;
   const lines = content.length === 0 ? 0 : content.split(/\r?\n/u).length;
   await recordFormatOutcome({
@@ -261,17 +334,22 @@ async function handlePdf() {
     sessionId: event.session_id,
     withheld: { 'pdf sent as masked text': 1 },
   });
-  await recordMaskedOutput({
-    cwd: root,
-    sessionId: event.session_id,
-    channel: 'file read',
-    replacements: result.replacements,
-    filePath: maskedPath,
-    observations,
-  });
-  const notice = await once(
-    'pdf-masked-text',
-    `ZeroH Disclosure: ${name} was sent as masked text; its layout and images were left out.`,
+  if (result.replacements.length) {
+    await recordMaskedOutput({
+      cwd: root,
+      sessionId: event.session_id,
+      channel: 'file read',
+      replacements: result.replacements,
+      filePath: maskedPath,
+      observations,
+    });
+  }
+  const notice = joinLines(
+    unsaved,
+    await once(
+      'pdf-masked-text',
+      `ZeroH Disclosure: ${name} was sent as masked text; its layout and images were left out.`,
+    ),
   );
   await emitMasked(
     {
@@ -307,36 +385,31 @@ async function handleImage() {
 
 async function handleNotebook() {
   const known = loadKnownSecrets(root);
-  const replacements = [];
-  const revealed = [];
-  const masked = structuredClone(event.tool_response);
-  const cells = masked.file?.cells;
-  let imageOutputs = 0;
+  let { masked, replacements, revealed, imageOutputs } = maskNotebook(vault);
   let formatLine = null;
-
-  if (Array.isArray(cells)) {
-    for (const cell of cells) {
-      if ('source' in cell) cell.source = maskValue(cell.source);
-      if (!Array.isArray(cell.outputs)) continue;
-      for (const output of cell.outputs) {
-        if (hasImage(output)) imageOutputs += 1;
-        maskOutput(output);
-      }
-    }
-  }
+  let unsaved = null;
 
   if (replacements.length) {
-    const observations = tokenObservations(replacements);
-    const maskedPath = maskLabel(readPath || masked.file?.filePath);
-    saveQuietly(vault, 'ZeroH Disclosure (PostToolUse)');
-    await recordMaskedOutput({
-      cwd: root,
-      sessionId: event.session_id,
-      channel: 'file read',
-      replacements,
-      filePath: maskedPath,
-      observations,
-    });
+    let observations = tokenObservations(replacements);
+    let maskedPath = maskLabel(readPath || masked.file?.filePath);
+    if (!(await savedOrFallback())) return;
+    if (labelVault) {
+      ({ masked, replacements, revealed, imageOutputs } =
+        maskNotebook(labelVault));
+      observations = tokenObservations(replacements);
+      maskedPath = maskLabel(readPath || masked.file?.filePath);
+      unsaved = await unsaveableNotice();
+    }
+    if (replacements.length) {
+      await recordMaskedOutput({
+        cwd: root,
+        sessionId: event.session_id,
+        channel: 'file read',
+        replacements,
+        filePath: maskedPath,
+        observations,
+      });
+    }
   }
   if (imageOutputs) {
     await recordFormatOutcome({
@@ -347,42 +420,67 @@ async function handleNotebook() {
     formatLine = await noteUncheckedFormat(imageOutputs);
   }
   const filePath = readPath || masked.file?.filePath;
-  const notice = imageOutputs
-    ? ((await once(
-        'image',
-        `ZeroH Disclosure: ${displayName(maskLabel(filePath), 'notebook')} image output was sent unmasked. Images aren't masked in the free plugin.`,
-      )) ?? formatLine)
-    : null;
+  const notice = joinLines(
+    unsaved,
+    imageOutputs
+      ? ((await once(
+          'image',
+          `ZeroH Disclosure: ${displayName(maskLabel(filePath), 'notebook')} image output was sent unmasked. Images aren't masked in the free plugin.`,
+        )) ?? formatLine)
+      : null,
+  );
 
   recordReveals(revealed);
   if (replacements.length) await emitMasked(masked, replacements, notice);
   else emitNotice(notice);
 
-  function maskValue(value) {
-    return scrubDeep(
-      value,
-      { vault, known, profile: piiProfile(), unmaskedTypes },
-      replacements,
-      revealed,
-    );
-  }
-
-  function maskOutput(output) {
-    if (!output || typeof output !== 'object') return;
-    if ('text' in output) output.text = maskValue(output.text);
-    if ('traceback' in output) output.traceback = maskValue(output.traceback);
-    if ('evalue' in output) output.evalue = maskValue(output.evalue);
-    for (const container of [output, output.data]) {
-      if (!container || typeof container !== 'object') continue;
-      for (const type of [
-        'text/plain',
-        'text/html',
-        'text/markdown',
-        'application/json',
-      ]) {
-        if (type in container) container[type] = maskValue(container[type]);
+  // The notebook with every text field masked with `maskWith`.
+  function maskNotebook(maskWith) {
+    const found = [];
+    const shown = [];
+    const copy = structuredClone(event.tool_response);
+    const cells = copy.file?.cells;
+    let images = 0;
+    const maskValue = (value) =>
+      scrubDeep(
+        value,
+        { vault: maskWith, known, profile: piiProfile(), unmaskedTypes },
+        found,
+        shown,
+      );
+    const maskOutput = (output) => {
+      if (!output || typeof output !== 'object') return;
+      if ('text' in output) output.text = maskValue(output.text);
+      if ('traceback' in output) output.traceback = maskValue(output.traceback);
+      if ('evalue' in output) output.evalue = maskValue(output.evalue);
+      for (const container of [output, output.data]) {
+        if (!container || typeof container !== 'object') continue;
+        for (const type of [
+          'text/plain',
+          'text/html',
+          'text/markdown',
+          'application/json',
+        ]) {
+          if (type in container) container[type] = maskValue(container[type]);
+        }
+      }
+    };
+    if (Array.isArray(cells)) {
+      for (const cell of cells) {
+        if ('source' in cell) cell.source = maskValue(cell.source);
+        if (!Array.isArray(cell.outputs)) continue;
+        for (const output of cell.outputs) {
+          if (hasImage(output)) images += 1;
+          maskOutput(output);
+        }
       }
     }
+    return {
+      masked: copy,
+      replacements: found,
+      revealed: shown,
+      imageOutputs: images,
+    };
   }
 }
 
@@ -461,13 +559,25 @@ function maskedContext(replacements) {
   return lines.join('\n');
 }
 
+// Values shown under a grant reached the model in plain text: they count as
+// "sent" on the status line too (docs/receipt-format.md, values sent).
 function recordReveals(revealed) {
-  recordRevealedUnderGrant({
+  const entries = recordRevealedUnderGrant({
     root,
     sessionId: event.session_id,
     grants,
     revealed,
   });
+  if (!entries) return;
+  const kinds = new Set(grants.map((grant) => grant.kind));
+  const shown = (revealed ?? [])
+    .filter((item) => kinds.has(item.type))
+    .reduce((sum, item) => sum + (item.count ?? 1), 0);
+  if (shown > 0) {
+    updateSessionStatus({ cwd: root, sessionId: event.session_id }, (status) =>
+      addSent(status, shown),
+    );
+  }
 }
 
 function channelForTool(toolName) {
@@ -520,7 +630,7 @@ function maskLabel(text) {
   try {
     labelKnown ??= loadKnownSecrets(root);
     return scrub(String(text), {
-      vault,
+      vault: labelVault ?? vault,
       known: labelKnown,
       profile: piiProfile(),
     }).text;

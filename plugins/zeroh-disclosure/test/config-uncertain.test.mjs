@@ -10,6 +10,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { pathToFileURL } from 'node:url';
 import { PLUGIN } from './helpers.mjs';
 import { uncertainMode } from '../lib/config.js';
 
@@ -51,7 +52,7 @@ function loaded({ environment, user, repo }) {
     [
       '--input-type=module',
       '-e',
-      `const c = await import(${JSON.stringify(path.join(PLUGIN, 'lib', 'config.js'))});
+      `const c = await import(${JSON.stringify(pathToFileURL(path.join(PLUGIN, 'lib', 'config.js')).href)});
        const r = await c.loadConfig({ cwd: ${JSON.stringify(project)} });
        console.log(JSON.stringify({ mode: c.uncertainMode(), ignored: r.ignored }));`,
     ],

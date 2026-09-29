@@ -30,9 +30,11 @@ export const UNCHECKED_REASONS = Object.freeze([
   'unknown-format',
   'proxy-not-running',
   'raw-secret-in-command',
+  'variable-in-command',
   'sensitive-file-masked',
   'too-large',
   'vault-unavailable',
+  'vault-unsaveable',
   'config-unreadable',
   'check-failed',
   'token-vault-unavailable',
@@ -64,9 +66,11 @@ export const UNCHECKED_TEXT = Object.freeze({
   'unknown-format': 'unknown format',
   'proxy-not-running': 'proxy not running',
   'raw-secret-in-command': 'a known secret written into the command',
+  'variable-in-command': 'a variable whose value ZeroH cannot see',
   'sensitive-file-masked': 'private key or credential file read (masked)',
   'too-large': 'too large to scan',
   'vault-unavailable': "ZeroH couldn't open its vault",
+  'vault-unsaveable': "ZeroH couldn't save its vault",
   'config-unreadable': "couldn't read .zeroh.env; using defaults",
   'check-failed': 'check failed',
   'token-vault-unavailable':
@@ -87,9 +91,11 @@ export const UNCHECKED_LABELS = Object.freeze({
   'unknown-format': 'unreadable format (image, scan)',
   'proxy-not-running': 'local proxy not running',
   'raw-secret-in-command': 'a known secret written into the command',
+  'variable-in-command': 'a variable sent, value unseen',
   'sensitive-file-masked': 'private key or credential file read (masked)',
   'too-large': 'prompt too large to scan',
-  'vault-unavailable': 'vault could not be opened or saved',
+  'vault-unavailable': 'vault could not be opened',
+  'vault-unsaveable': 'vault could not be saved, new values sent',
   'config-unreadable': '.zeroh.env unreadable, defaults used',
   'check-failed': 'output check failed, passed as is',
   'token-vault-unavailable': 'ran with the token: vault unavailable',
@@ -108,9 +114,11 @@ const CHECK_TEXT = Object.freeze({
   'unknown-format': 'a check',
   'proxy-not-running': 'masking',
   'raw-secret-in-command': 'masking',
+  'variable-in-command': 'a destination check',
   'sensitive-file-masked': 'a check beyond masking',
   'too-large': 'a check',
   'vault-unavailable': 'masking',
+  'vault-unsaveable': 'masking',
   'config-unreadable': 'its project settings',
   'check-failed': 'masking',
 });
@@ -118,6 +126,7 @@ const CHECK_TEXT = Object.freeze({
 // A fix named on the line itself, in place of its full stop.
 const FIX_SUFFIX = Object.freeze({
   'vault-unavailable': ' · /zeroh-disclosure:doctor',
+  'vault-unsaveable': ' · /zeroh-disclosure:doctor',
 });
 
 // How to tighten, shown with a notice at most once per session (per kind).
@@ -140,6 +149,9 @@ const SUBJECTS = Object.freeze({
   'tool call': 'this tool call',
   'tool output': 'this tool output',
   prompt: 'this prompt',
+  // A request the local proxy sent to the model (it can't show a line
+  // itself; the turn's Stop does, see deferNotice).
+  'model request': 'a request to Claude',
 });
 
 // A value's name or type for the notice (`STRIPE_KEY`, `API_KEY`), or null:
@@ -208,7 +220,11 @@ function toolLabel(tool) {
 // The first notice of the session carries the hint (claimSessionHint); a
 // missed raw secret has its own hint, also once per session.
 // Without a turn to record on, nothing is recorded and the notice is still
-// returned; an unknown reason gives { recorded: false, notice: null }. Never
+// returned; an unknown reason gives { recorded: false, notice: null }.
+// deferNotice: the caller can't show a line (the local proxy): the pass is
+// recorded, and the reason, unless already shown this turn, is kept in
+// audit.unchecked_deferred for the turn's Stop to show (takeDeferredNotices);
+// the notice returned is null. Never
 // throws, and waits at most `waitMs` for the turn's lock (the hook watchdog
 // calls it with little time left). The hook-side call is one line:
 //   const { notice } = await recordUnchecked({ reason, tool, cwd, sessionId,
@@ -223,6 +239,7 @@ export async function recordUnchecked({
   env = process.env,
   waitMs = 500,
   count = 1,
+  deferNotice = false,
 } = {}) {
   if (!UNCHECKED_REASONS.includes(reason)) {
     return { recorded: false, notice: null };
@@ -241,13 +258,13 @@ export async function recordUnchecked({
     const state = await readJson(path.join(dir, 'state.json'));
     const turn = Number(state?.turnCount ?? 0);
     if (!Number.isInteger(turn) || turn < 1) {
-      return { recorded: false, notice: noticeNow() };
+      return { recorded: false, notice: deferNotice ? null : noticeNow() };
     }
     const file = path.join(dir, `turn-${turn}.json`);
     lock = acquireFileLock(`${file}.lock`, { waitMs });
     const ledger = await readJson(file);
     if (!ledger || typeof ledger !== 'object') {
-      return { recorded: false, notice: noticeNow() };
+      return { recorded: false, notice: deferNotice ? null : noticeNow() };
     }
     const audit = (ledger.audit ??= {});
     const unchecked = (audit.unchecked ??= {});
@@ -256,7 +273,19 @@ export async function recordUnchecked({
     byTool[label] = (Number(byTool[label]) || 0) + add;
     if (!Array.isArray(audit.unchecked_noticed)) audit.unchecked_noticed = [];
     const shown = audit.unchecked_noticed.includes(reason);
-    if (!shown) audit.unchecked_noticed.push(reason);
+    if (deferNotice) {
+      if (!Array.isArray(audit.unchecked_deferred))
+        audit.unchecked_deferred = [];
+      if (
+        !shown &&
+        !audit.unchecked_deferred.some((item) => item?.reason === reason)
+      ) {
+        audit.unchecked_deferred.push({
+          reason,
+          subject: Object.hasOwn(SUBJECTS, subject) ? subject : 'command',
+        });
+      }
+    } else if (!shown) audit.unchecked_noticed.push(reason);
     await writeJson(file, ledger);
     // The status line's "N not protected" for this turn.
     if (!PROTECTED_REASONS.has(reason)) {
@@ -270,11 +299,14 @@ export async function recordUnchecked({
         (status) => addUnchecked(status, turn, add),
       );
     }
-    return { recorded: true, notice: shown ? null : noticeNow() };
+    return {
+      recorded: true,
+      notice: shown || deferNotice ? null : noticeNow(),
+    };
   } catch {
     // Recording is best effort: the content has already been passed, and
     // the user is still told.
-    return { recorded: false, notice: noticeNow() };
+    return { recorded: false, notice: deferNotice ? null : noticeNow() };
   } finally {
     if (lock) {
       try {
@@ -303,4 +335,61 @@ export function uncheckedCounts(...audits) {
     }
   }
   return counts;
+}
+
+// The lines a caller that can't show one (the local proxy) left for this
+// turn (recordUnchecked, deferNotice), each reason at most once per turn:
+// they move to audit.unchecked_noticed and are returned for the Stop hook to
+// show. Never throws; [] when there is nothing to show.
+export async function takeDeferredNotices({
+  cwd,
+  sessionId,
+  env = process.env,
+  waitMs = 500,
+} = {}) {
+  let lock = null;
+  try {
+    const dir = sessionDir(path.resolve(cwd || process.cwd()), sessionId, env);
+    const state = await readJson(path.join(dir, 'state.json'));
+    const turn = Number(state?.turnCount ?? 0);
+    if (!Number.isInteger(turn) || turn < 1) return [];
+    const file = path.join(dir, `turn-${turn}.json`);
+    lock = acquireFileLock(`${file}.lock`, { waitMs });
+    const ledger = await readJson(file);
+    const audit = ledger?.audit;
+    const deferred = Array.isArray(audit?.unchecked_deferred)
+      ? audit.unchecked_deferred
+      : [];
+    if (!deferred.length) return [];
+    if (!Array.isArray(audit.unchecked_noticed)) audit.unchecked_noticed = [];
+    const lines = [];
+    for (const item of deferred) {
+      const reason = item?.reason;
+      if (
+        !UNCHECKED_REASONS.includes(reason) ||
+        audit.unchecked_noticed.includes(reason)
+      )
+        continue;
+      audit.unchecked_noticed.push(reason);
+      lines.push(
+        uncheckedNotice(reason, {
+          subject: item.subject,
+          hint: claimSessionHint(dir, hintKind(reason)),
+        }),
+      );
+    }
+    delete audit.unchecked_deferred;
+    await writeJson(file, ledger);
+    return lines;
+  } catch {
+    return [];
+  } finally {
+    if (lock) {
+      try {
+        releaseFileLock(lock);
+      } catch {
+        // A lock left behind is reclaimed when it goes stale.
+      }
+    }
+  }
 }

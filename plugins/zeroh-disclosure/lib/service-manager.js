@@ -188,10 +188,13 @@ function windowsUserId(env) {
 }
 
 // Per-user logon task: runs as the signed-in user without elevation, keeps
-// running on battery and has no 72-hour execution limit.
+// running on battery and has no 72-hour execution limit. It declares UTF-16:
+// the file is written as UTF-16LE with a byte order mark (encodeWindowsTask),
+// the only form `schtasks /Create /XML` accepts ("The task XML is malformed
+// ... unable to switch the encoding" for a UTF-8 file; Windows 11 re-test).
 export function windowsTaskDefinition(command, { userId }) {
   return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<?xml version="1.0" encoding="UTF-16"?>',
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
     '  <RegistrationInfo><Description>ZeroH Disclosure local masking proxy</Description></RegistrationInfo>',
     `  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>${xml(userId)}</UserId></LogonTrigger></Triggers>`,
@@ -208,6 +211,23 @@ export function windowsTaskDefinition(command, { userId }) {
     '</Task>',
     '',
   ].join('\n');
+}
+
+const UTF16LE_BOM = Buffer.from([0xff, 0xfe]);
+
+// The bytes schtasks reads: a UTF-16LE byte order mark, then the text.
+export function encodeWindowsTask(text) {
+  return Buffer.concat([UTF16LE_BOM, Buffer.from(String(text), 'utf16le')]);
+}
+
+// A definition file's text: UTF-16 with a byte order mark (the task), or
+// UTF-8 (every other kind, and a task file an older release wrote).
+export function readDefinitionText(file) {
+  const bytes = readFileSync(file);
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return bytes.subarray(2).toString('utf16le');
+  }
+  return bytes.toString('utf8');
 }
 
 function safeUnlink(file) {
@@ -236,9 +256,25 @@ export function createServiceManager({
 } = {}) {
   const paths = definitionPaths({ env, home, definitionRoot });
 
+  // A refusal carries the tool's first error line (error.detail), so the
+  // warning and doctor can say why; it is never put in a shareable report.
   function run(file, args) {
     if (!executeCommands) return;
-    execute(file, args, { stdio: 'ignore', env });
+    try {
+      execute(file, args, { stdio: ['ignore', 'ignore', 'pipe'], env });
+    } catch (error) {
+      const text = Buffer.isBuffer(error?.stderr)
+        ? error.stderr.toString(platform === 'win32' ? 'latin1' : 'utf8')
+        : String(error?.stderr ?? '');
+      const line = text
+        .split(/\r?\n/u)
+        .map((part) => part.trim())
+        .find(Boolean);
+      if (line && error && typeof error === 'object') {
+        error.detail = line.slice(0, 240);
+      }
+      throw error;
+    }
   }
 
   function tryRun(file, args) {
@@ -278,9 +314,11 @@ export function createServiceManager({
       definition = paths.task;
       writeDefinition(
         definition,
-        windowsTaskDefinition(windowsHeadlessCommand(command, env), {
-          userId: windowsUserId(env),
-        }),
+        encodeWindowsTask(
+          windowsTaskDefinition(windowsHeadlessCommand(command, env), {
+            userId: windowsUserId(env),
+          }),
+        ),
       );
       try {
         run(windowsSystemTool('schtasks.exe', env), [
@@ -334,21 +372,31 @@ export function createServiceManager({
     return null;
   }
 
-  function unregister({ stop = true } = {}) {
+  // keepRunning: the login item goes, but a daemon it started keeps running
+  // (a retired daemon serves the sessions still open, then exits by itself):
+  // no `launchctl bootout` (it ends the job's process) and no `systemctl
+  // --now`. It exits 0, which neither KeepAlive (SuccessfulExit false) nor
+  // Restart=on-failure restarts, and nothing starts it at the next login.
+  // A scheduled task's running instance is never stopped by /Delete.
+  function unregister({ stop = true, keepRunning = false } = {}) {
     const kind = registeredKind();
     if (kind === 'launch-agent') {
       // Definitions first: bootout ends the calling daemon during orphan
       // cleanup. bootout before disable, so a later bootstrap works.
       for (const file of Object.values(paths)) safeUnlink(file);
-      tryRun('launchctl', ['bootout', `gui/${uid}/${LAUNCH_LABEL}`]);
-      if (!stop) tryRun('launchctl', ['disable', `gui/${uid}/${LAUNCH_LABEL}`]);
+      if (!keepRunning) {
+        tryRun('launchctl', ['bootout', `gui/${uid}/${LAUNCH_LABEL}`]);
+      }
+      if (!stop || keepRunning) {
+        tryRun('launchctl', ['disable', `gui/${uid}/${LAUNCH_LABEL}`]);
+      }
       return { removed: true, kind };
     }
     if (kind === 'systemd') {
       tryRun('systemctl', [
         '--user',
         'disable',
-        ...(stop ? ['--now'] : []),
+        ...(stop && !keepRunning ? ['--now'] : []),
         `${SERVICE_ID}.service`,
       ]);
       tryRun('systemctl', ['--user', 'daemon-reload']);
@@ -422,7 +470,7 @@ export function createServiceManager({
       }[kind];
       let node;
       try {
-        node = recordedNode(kind, target, readFileSync(file, 'utf8'));
+        node = recordedNode(kind, target, readDefinitionText(file));
       } catch {
         return false;
       }
@@ -451,4 +499,57 @@ export function createServiceManager({
   }
 
   return { paths, register, unregister, registeredKind, isRegistered };
+}
+
+// --- a refused login item ----------------------------------------------------
+
+// What proxy.json records when the system refuses the login item (an older
+// release recorded only the time, as a string).
+export function loginItemRefusal(error, { platform = process.platform } = {}) {
+  return {
+    at: new Date().toISOString(),
+    platform,
+    code: error?.code ? String(error.code) : 'refused',
+    ...(error?.detail ? { detail: String(error.detail).slice(0, 240) } : {}),
+  };
+}
+
+function refusalRecord(record, platform) {
+  if (!record) return null;
+  if (typeof record === 'string')
+    return { at: record, platform, code: 'refused' };
+  return { platform, code: 'refused', ...record };
+}
+
+// The step that fixes a refused login item on this system.
+export function loginItemFix(record, { platform = process.platform } = {}) {
+  const refusal = refusalRecord(record, platform);
+  const system = refusal?.platform || platform;
+  if (refusal?.code === 'ENOLOGINITEM') {
+    return 'run `loginctl enable-linger "$USER"` once (it gives your user a systemd session that starts the proxy at login), then start a new Claude Code session';
+  }
+  if (system === 'darwin') {
+    return 'allow it in System Settings > General > Login Items & Extensions (Allow in the Background), then start a new Claude Code session';
+  }
+  if (system === 'win32') {
+    return 'update ZeroH Disclosure (`claude plugin update zeroh-disclosure@zeroh`) and start a new Claude Code session; if Task Scheduler is blocked on this PC, ask your administrator to allow per-user scheduled tasks';
+  }
+  return 'run `systemctl --user status` to see why your user session refused it, then start a new Claude Code session';
+}
+
+// Why the login item is missing, in one plain sentence (no paths, no user
+// names): the tool's own words when it gave any.
+export function loginItemReason(record, { platform = process.platform } = {}) {
+  const refusal = refusalRecord(record, platform);
+  if (!refusal) return null;
+  if (refusal.code === 'ENOLOGINITEM') {
+    return 'this system has nothing that starts programs at login (no systemd user session and no desktop session)';
+  }
+  const tool =
+    { darwin: 'launchctl', win32: 'schtasks', linux: 'systemctl --user' }[
+      refusal.platform
+    ] || 'the system';
+  return refusal.detail
+    ? `${tool} refused it: "${refusal.detail}"`
+    : `${tool} refused it (${refusal.code})`;
 }

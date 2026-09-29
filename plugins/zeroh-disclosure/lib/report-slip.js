@@ -141,13 +141,25 @@ export function sessionSlip(summaries, { turn = null } = {}) {
         : `${date} · turn ${turn}`,
     rows: slipRows(mergedCounts(summaries.map((item) => item.masked_by_type))),
     sent: summaries.reduce((sum, item) => sum + item.values_sent, 0),
+    sent_typed: summaries.reduce(
+      (sum, item) => sum + (item.sent_typed ?? 0),
+      0,
+    ),
     unchecked_files: sumCounts(
       mergedCounts(summaries.map((item) => item.formats_passed_unmasked)),
     ),
     receipt_id: latest?.receipt_id ?? '-',
     signing: latest?.signing ?? null,
-    verified: summaries.filter((item) => item.verified).length,
-    receipts: summaries.length,
+    // A turn still running has only its prompt signed; its summary is
+    // signed at Stop, so it is counted apart, not as verified.
+    verified: summaries.filter(
+      (item) => item.verified && item.coverage !== 'pending',
+    ).length,
+    receipts: summaries.filter((item) => item.coverage !== 'pending').length,
+    pending: summaries.filter((item) => item.coverage === 'pending').length,
+    // Receipts written before 1.0.0 sign the typed prompt only.
+    prompt_only: summaries.filter((item) => item.coverage === 'typed-prompt')
+      .length,
     failed_checks: [
       ...new Set(summaries.flatMap((item) => item.failed_checks ?? [])),
     ],
@@ -171,6 +183,7 @@ export function reportSlip(report) {
       ),
     ),
     sent: totals.values_sent,
+    sent_typed: totals.values_sent_typed ?? 0,
     unchecked_files: totals.files_passed_unchecked ?? 0,
     receipt_id: report.latest_receipt_id ?? '-',
     signing: report.latest_receipt_signing ?? null,
@@ -203,10 +216,17 @@ export function slipLines(slip) {
       value: String(slip.sent),
     },
   );
-  if (slip.sent > 0) {
+  const typed = Math.min(slip.sent, slip.sent_typed ?? 0);
+  if (typed > 0) {
     lines.push({
       kind: 'note',
-      text: `shown under grants you approved: ${slip.sent}`,
+      text: `typed, sent without the proxy: ${typed}`,
+    });
+  }
+  if (slip.sent - typed > 0) {
+    lines.push({
+      kind: 'note',
+      text: `shown under grants you approved: ${slip.sent - typed}`,
     });
   }
   if (slip.unchecked_files > 0) {
@@ -230,9 +250,26 @@ export function slipLines(slip) {
     kind: 'footer',
     text:
       slip.receipts === 0
-        ? 'no signed receipts yet'
+        ? slip.pending > 0
+          ? 'no finished turns yet'
+          : 'no signed receipts yet'
         : `${slip.verified === slip.receipts ? '✓' : '✗'} verified ${slip.verified} of ${slip.receipts}`,
   });
+  if (slip.pending > 0) {
+    lines.push({
+      kind: 'footer',
+      text: 'turn in progress: signed when it ends',
+    });
+  }
+  if (slip.prompt_only > 0) {
+    lines.push({
+      kind: 'footer',
+      text:
+        slip.prompt_only === 1
+          ? '1 receipt from before 1.0.0 signs the typed prompt only'
+          : `${slip.prompt_only} receipts from before 1.0.0 sign the typed prompt only`,
+    });
+  }
   if (slip.failed_checks?.length) {
     lines.push({
       kind: 'footer',

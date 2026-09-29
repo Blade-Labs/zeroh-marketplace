@@ -53,7 +53,7 @@ import {
   revokeGrants,
   writeCap,
 } from '../lib/unmask.js';
-import { writeBannerMode } from '../lib/banner.js';
+import { normalizeBannerMode, writeBannerMode } from '../lib/banner.js';
 import {
   checkVaults,
   isVaultError,
@@ -638,11 +638,25 @@ async function cmdVerify(args) {
     `policy_id: ${result.policy_id}`,
     `engine: ${result.protection_engine_id}`,
     `decision: ${result.decision_action}`,
+    `covers: ${coverageLabel(result.coverage)}`,
     `revealed_under_grant: ${formatRevealCounts(result.revealed_under_grant)}`,
     '',
     ...checkLines(result.checks),
   ]);
   if (!result.ok) process.exit(1);
+}
+
+// What a receipt's signature covers (lib/turn-summary.js). A function, so
+// it is defined before the command runs.
+function coverageLabel(coverage) {
+  return (
+    {
+      turn: 'every number the receipt shows (signed turn summary)',
+      pending:
+        'the typed prompt so far; the turn summary is signed when the turn ends',
+      'typed-prompt': 'the typed prompt only (a receipt from before 1.0.0)',
+    }[coverage] ?? coverage
+  );
 }
 
 // Name every failed check up front, so a failure is readable without
@@ -655,7 +669,8 @@ function failedLine(result) {
 
 function checkLines(checks) {
   return checks.map(
-    (c) => `${c.ok ? '✓' : '✗'} ${c.name}${c.detail ? `: ${c.detail}` : ''}`,
+    (c) =>
+      `${c.ok ? '✓' : c.status === 'unavailable' ? '?' : '✗'} ${c.name}${c.detail ? `: ${c.detail}` : ''}`,
   );
 }
 
@@ -722,7 +737,7 @@ async function cmdProxy(args) {
     return;
   }
   const { stopDefaultProxy } = await import('../lib/proxy-manager.js');
-  const result = await stopDefaultProxy({ remember: true });
+  const result = await stopDefaultProxy({ remember: true, retire: true });
   const remaining = result.remaining || [];
   print(result, args.json, [
     proxySettingsLine(result),
@@ -735,9 +750,11 @@ async function cmdProxy(args) {
           result.loginItem?.removed
             ? 'Removed the per-user login item.'
             : 'No ZeroH login item was registered.',
-          result.stopped
-            ? 'Stopped the local masking proxy.'
-            : 'The local masking proxy was already stopped.',
+          result.retired
+            ? 'This session keeps working until you exit; the proxy masks only what it masked before, then stops by itself. New sessions start without it.'
+            : result.stopped
+              ? 'Stopped the local masking proxy.'
+              : 'The local masking proxy was already stopped.',
         ]),
   ]);
 }
@@ -745,7 +762,10 @@ async function cmdProxy(args) {
 // Removes everything ZeroH Disclosure keeps on this machine (LV-F8, LP-F6):
 // the proxy entry in every Claude Code settings file it wrote to, the proxy
 // and its login item, every <project>/.zeroh it knows about, and ZEROH_HOME
-// (vault, keys, receipts' commitment keys, reports). Run it before removing
+// (vault, keys, config, allow list, grants, receipts' commitment keys,
+// reports, the proxy's runtime copy). The receipts are kept, value-free,
+// with the public keys that verify them, in a folder of their own
+// (lib/receipt-keep.js), unless --delete-receipts. Run it before removing
 // the plugin; it asks first unless --yes.
 //
 // A Claude Code session that still runs with the plugin would set ZeroH up
@@ -767,20 +787,37 @@ async function cmdUninstall(args) {
   const projects = (await legacyProjectFolders()).filter(
     (dir) => path.resolve(dir) !== home,
   );
+  const { isKeptReceiptsDir, keepReceipts, keptReceiptsDir } =
+    await import('../lib/receipt-keep.js');
+  const deleteReceipts = Boolean(args['delete-receipts']);
+  const receiptsDir = keptReceiptsDir();
   const plan = [
     'This removes ZeroH Disclosure from this machine, in this order:',
     '  - the plugin from Claude Code (claude plugin uninstall), so no new session sets ZeroH up again',
-    "  - the local proxy's entry in your Claude Code settings (your own setting goes back), the proxy and its login item",
+    "  - the local proxy's entry in your Claude Code settings (your own setting goes back), the proxy's login item and its runtime copy; a proxy still serving an open session passes it through unmasked until it is idle, then exits, and nothing starts it again",
     "  - ZeroH's status line in your Claude Code settings, if you turned it on (your own status line stays)",
-    `  - ${home} (vault, keys, receipts and reports)`,
+    deleteReceipts
+      ? `  - ${home}: the vault and its key, the signing and allow-list keys, your settings, allow rules, unmask grants, reports and receipts (--delete-receipts)`
+      : `  - ${home}: the vault and its key, the signing and allow-list keys, your settings, allow rules, unmask grants and reports`,
+    ...(deleteReceipts && isKeptReceiptsDir(receiptsDir)
+      ? [`  - ${receiptsDir}: receipts an earlier uninstall kept`]
+      : []),
     ...projects.map((dir) => `  - ${dir} (left by an earlier test build)`),
+    ...(deleteReceipts
+      ? []
+      : [
+          '',
+          `It keeps your receipts: every signed receipt, receipt.html and session receipt bundle, with the public keys that verify them, move to ${receiptsDir}. They hold no values. To delete them too, add --delete-receipts.`,
+        ]),
   ];
-  // Without --yes it only shows what it removes and how to confirm (T-38).
-  if (!args.yes) {
+  // /zeroh-disclosure:uninstall passes --yes: typing that user-only command
+  // is the confirmation. In a terminal (where a script could call it) it
+  // still takes --yes. --dry-run only shows the plan (T-38).
+  if (!args.yes || args['dry-run']) {
     print({ plan, removed: [] }, args.json, [
       ...plan,
       '',
-      'Nothing was removed yet. To remove all of it, run /zeroh-disclosure:uninstall --yes',
+      'Nothing was removed yet. To remove all of it, type /zeroh-disclosure:uninstall',
       `(in a terminal: ${terminalCommand(['uninstall', '--yes'])}).`,
     ]);
     return;
@@ -799,7 +836,7 @@ async function cmdUninstall(args) {
     // ZeroH up again until they exit (said below).
   }
   const { removeProxyEverywhere } = await import('../lib/proxy-manager.js');
-  const proxy = await removeProxyEverywhere();
+  const proxy = await removeProxyEverywhere({ retire: true });
   // Only ZeroH's own statusLine entry, from every settings file it was
   // written to; a status line of the user's stays.
   let statusline = [];
@@ -816,16 +853,40 @@ async function cmdUninstall(args) {
       `zeroh-disclosure: could not remove the status line entry (${error.message})`,
     );
   }
+  // The receipts leave ZEROH_HOME first (lib/receipt-keep.js). If that
+  // fails they stay where they are rather than being deleted.
+  let kept = { dir: null, receipts: 0, sessions: 0 };
+  let keepFailed = null;
+  if (!deleteReceipts) {
+    try {
+      const { writeSessionReceiptHtml } = await import('../lib/report.js');
+      kept = await keepReceipts({
+        home,
+        dir: receiptsDir,
+        renderHtml: (dir) =>
+          writeSessionReceiptHtml({ session: { dir }, previews: false }),
+      });
+    } catch (error) {
+      keepFailed = error;
+      console.error(
+        `zeroh-disclosure: could not keep the receipts in ${receiptsDir} (${error.code || error.message}); they stay in ${path.join(home, 'projects')}`,
+      );
+    }
+  }
   const { UNINSTALL_MARKER } = await import('../lib/uninstall-marker.js');
   const removed = [];
-  for (const dir of [home, ...projects]) {
+  // --delete-receipts: a full wipe, receipts an earlier uninstall kept too
+  // (only a folder that holds ZeroH's kept-receipts manifest).
+  const keptBefore =
+    deleteReceipts && isKeptReceiptsDir(receiptsDir) ? [receiptsDir] : [];
+  for (const dir of [home, ...projects, ...keptBefore]) {
     try {
       if (dir === home) {
         // Everything but the tombstone, which running sessions still read.
         for (const name of readdirSync(dir)) {
-          if (name !== UNINSTALL_MARKER) {
-            rmSync(path.join(dir, name), { recursive: true, force: true });
-          }
+          if (name === UNINSTALL_MARKER) continue;
+          if (keepFailed && name === 'projects') continue;
+          rmSync(path.join(dir, name), { recursive: true, force: true });
         }
       } else {
         rmSync(dir, { recursive: true, force: true });
@@ -853,22 +914,68 @@ async function cmdUninstall(args) {
         ),
       ];
   const running = Boolean(process.env.CLAUDE_CODE_SESSION_ID) || live.length;
-  print({ ...proxy, plugin, removed, statusline }, args.json, [
-    ...pluginLines,
-    ...statusline.map((file) => `Removed ZeroH's status line from ${file}.`),
-    proxy.restored.length
-      ? `Took the ZeroH entry out of ${proxy.restored.length} Claude Code settings file(s).`
-      : 'No Claude Code settings file had a ZeroH entry.',
-    `${proxy.stopped ? 'Stopped the local proxy. ' : ''}${proxy.loginItemRemoved ? 'Removed its login item.' : 'No login item was registered.'}`,
-    ...removed.map((dir) => `Removed ${dir}`),
-    ...(running
+  const reinstallId =
+    plugin.removed?.[0]?.id ??
+    plugin.failed?.[0]?.id ??
+    'zeroh-disclosure@zeroh';
+  const receiptLines = deleteReceipts
+    ? ['Deleted your receipts too (--delete-receipts).']
+    : keepFailed
       ? [
-          'Claude Code sessions that are still open keep running until you exit them. ZeroH no longer acts in them and sets nothing up again, so nothing protects them any more: exit them now. New sessions start without ZeroH.',
+          `Couldn't move your receipts to ${receiptsDir}; they stay in ${path.join(home, 'projects')}.`,
         ]
-      : [
-          'ZeroH Disclosure is removed. New Claude Code sessions start without it.',
-        ]),
-  ]);
+      : kept.receipts
+        ? [
+            `Kept your receipts: ${kept.receipts} signed receipt(s) of ${kept.sessions} session(s), with receipt.html, the session bundles and the public keys that verify them, in ${receiptsDir}. They hold no values. To delete them, remove that folder (${
+              process.platform === 'win32'
+                ? `Remove-Item -Recurse -Force "${receiptsDir}"`
+                : `rm -rf "${receiptsDir}"`
+            }).`,
+          ]
+        : ['There were no receipts to keep.'];
+  print(
+    {
+      ...proxy,
+      plugin,
+      removed,
+      statusline,
+      receipts: deleteReceipts
+        ? { kept: false, deleted: true }
+        : {
+            kept: !keepFailed && kept.receipts > 0,
+            dir: kept.dir,
+            count: kept.receipts,
+            sessions: kept.sessions,
+          },
+    },
+    args.json,
+    [
+      ...pluginLines,
+      ...statusline.map((file) => `Removed ZeroH's status line from ${file}.`),
+      proxy.restored.length
+        ? `Took the ZeroH entry out of ${proxy.restored.length} Claude Code settings file(s).`
+        : 'No Claude Code settings file had a ZeroH entry.',
+      `${proxy.stopped ? 'Stopped the local proxy. ' : ''}${proxy.retired ? 'Retired the local proxy: it stops by itself once the sessions still open are idle. ' : ''}${proxy.loginItemRemoved ? 'Removed its login item.' : 'No login item was registered.'}`,
+      ...removed.map((dir) =>
+        dir === home
+          ? `Removed ${dir}: the vault and its key, the signing and allow-list keys, your settings, allow rules, unmask grants, reports and the proxy's runtime copy. Only an empty "${UNINSTALL_MARKER}" marker stays, so sessions still open do nothing; you can delete the folder once they are closed.`
+          : `Removed ${dir}`,
+      ),
+      ...receiptLines,
+      ...(running
+        ? [
+            // The retired proxy masks nothing: with the vault and the hooks
+            // gone, no token could be put back (rule 8).
+            proxy.retired
+              ? "This session keeps working until you exit, without ZeroH's masking; new sessions start without ZeroH."
+              : 'This session keeps working until you exit; new sessions start without ZeroH.',
+          ]
+        : [
+            'ZeroH Disclosure is removed. New Claude Code sessions start without it.',
+          ]),
+      `To install it again: claude plugin install ${reinstallId}, then restart Claude Code.`,
+    ],
+  );
 }
 
 // <project>/.zeroh folders left by earlier test builds (D-15: nothing lives in
@@ -976,14 +1083,25 @@ function proxySettingsLine(result) {
   return 'The ZeroH proxy was not installed; settings were unchanged.';
 }
 
+// A function, not a module constant: the command runs before later constants
+// exist.
+function bannerModeWords(mode) {
+  return {
+    big: 'The ZEROH art block every session.',
+    mini: 'One line every session (the default).',
+    compact: 'One line with the secret count every session.',
+    off: 'No banner; warnings still show.',
+  }[mode];
+}
+
 async function cmdBanner(args) {
-  const mode = args._[1];
-  if (!['full', 'compact', 'off'].includes(String(mode || '').toLowerCase()))
-    throw new Error('banner mode must be full, compact, or off');
+  // `full` (before 1.0.0) is saved as `big`.
+  const mode = normalizeBannerMode(args._[1]);
+  if (!mode) throw new Error('banner mode must be big, compact, mini, or off');
   if (!(await authorized())) return;
   const file = writeBannerMode(mode);
   print({ mode, file }, args.json, [
-    `Banner mode: ${mode}.`,
+    `Banner mode: ${mode}. ${bannerModeWords(mode)}`,
     'ZEROH_BANNER overrides this setting.',
   ]);
 }
@@ -1106,7 +1224,7 @@ async function cmdDoctor(args, cwd) {
   const { diagnoseProxy } = await import('../lib/proxy-manager.js');
   let proxy;
   try {
-    proxy = await diagnoseProxy({ fix });
+    proxy = await diagnoseProxy({ fix, retire: true });
   } catch (error) {
     proxy = {
       findings: ['proxy-check-failed'],
@@ -1118,12 +1236,26 @@ async function cmdDoctor(args, cwd) {
     keepBackups: Boolean(args['keep-backups']),
     cwd,
   });
+  // The plugin folders Claude Code runs (this one, and every one it
+  // recorded for zeroh-disclosure, so a CLI running from ZEROH_HOME/bin
+  // checks them too): the release it installed, or a folder an earlier build
+  // left for that version, which `claude plugin update` keeps
+  // (lib/plugin-integrity.js). Told, never removed here: a session's hooks
+  // may run from it.
+  const { checkPluginIntegrity, installedRoots, integrityLines } =
+    await import('../lib/plugin-integrity.js');
+  const integrity = [
+    ...new Set([path.resolve(PLUGIN_ROOT), ...installedRoots()]),
+  ].map((pluginRoot) => checkPluginIntegrity({ pluginRoot }));
+  const stale = integrity.filter(({ state }) => state === 'stale');
+  const integrityFound = stale.map((result) => integrityLines(result)[0]);
+  const integrityFix = stale.map((result) => integrityLines(result)[1]);
   // Receipts are never touched here (D-15); only folders earlier test
   // builds left inside projects go.
   const legacy = fix ? await removeLegacyProjectFolders() : [];
   const lines = [
     `ZeroH Disclosure doctor${fix ? ' --fix' : ''}`,
-    `Checked: your Claude Code settings${proxy.settingsPath ? ` (${proxy.settingsPath})` : ''}, the local proxy and its login item, files left by earlier builds, and the vault key and every project vault in ${path.resolve(zerohHome())}.`,
+    `Checked: your Claude Code settings${proxy.settingsPath ? ` (${proxy.settingsPath})` : ''}, the plugin folders Claude Code runs, the local proxy and its login item, files left by earlier builds, and the vault key and every project vault in ${path.resolve(zerohHome())}.`,
   ];
   const fixedLines = fix
     ? [
@@ -1135,6 +1267,11 @@ async function cmdDoctor(args, cwd) {
         ...(proxy.stopped
           ? [`Stopped ${proxy.stopped} ZeroH proxy process(es).`]
           : []),
+        ...(proxy.retired
+          ? [
+              'Retired the local proxy: Claude Code sessions still open keep working through it until you exit them (it masks only what it masked before), then it stops by itself.',
+            ]
+          : []),
         ...(proxy.loginItemRemoved ? ['Removed the login item.'] : []),
         ...(proxy.findings.includes('files-from-an-earlier-build')
           ? ['Removed files left by earlier builds.']
@@ -1145,10 +1282,21 @@ async function cmdDoctor(args, cwd) {
         ),
       ]
     : [];
+  const { loginItemFix, loginItemReason } =
+    await import('../lib/service-manager.js');
+  const { staleMarketplaceName, staleMarketplaceText } =
+    await import('../lib/first-run.js');
+  const staleMarketplace = staleMarketplaceName();
   const open = [
     ...proxy.findings
       .filter((finding) => !fix || finding === 'proxy-check-failed')
-      .map(doctorFinding),
+      .map((finding) =>
+        finding === 'login-item-refused'
+          ? `No login item: ${loginItemReason(proxy.loginItemRefused)}. The local proxy runs while Claude Code does (a new session starts it again, and what you type is masked), but nothing starts it after a restart. To fix: ${loginItemFix(proxy.loginItemRefused)}.`
+          : doctorFinding(finding),
+      ),
+    ...integrityFound,
+    ...(staleMarketplace ? [staleMarketplaceText(staleMarketplace)] : []),
     ...vaults.open,
   ];
   if (fix) {
@@ -1164,10 +1312,13 @@ async function cmdDoctor(args, cwd) {
   } else if (!fix) {
     lines.push('Nothing to fix.');
   }
-  const next = [...vaults.next];
-  if (!fix && proxy.findings.length) {
+  const next = [...integrityFix, ...vaults.next];
+  if (
+    !fix &&
+    proxy.findings.some((finding) => finding !== 'login-item-refused')
+  ) {
     next.push(
-      '/zeroh-disclosure:doctor --fix resets the local proxy: it takes the ZeroH entry out of your Claude Code settings and stops every ZeroH proxy it finds. The next Claude Code session sets it up again.',
+      '/zeroh-disclosure:doctor --fix resets the local proxy: it takes the ZeroH entry out of your Claude Code settings, retires this proxy (sessions still open keep working until you exit them) and stops any other ZeroH proxy it finds. The next Claude Code session sets it up again.',
     );
   }
   if (fix && fixedLines.length) {
@@ -1179,7 +1330,13 @@ async function cmdDoctor(args, cwd) {
   print(
     {
       ...proxy,
-      findings: [...proxy.findings, ...vaults.open],
+      findings: [
+        ...proxy.findings,
+        ...(stale.length ? ['plugin-folder-stale'] : []),
+        ...(staleMarketplace ? ['marketplace-old-name'] : []),
+        ...vaults.open,
+      ],
+      plugin: integrity,
       vault: vaults.checked,
       actions: fixedLines,
     },
@@ -1208,9 +1365,16 @@ function parseArgs(argv) {
       continue;
     }
     if (
-      ['list', 'fix', 'report', 'keep-backups', 'force', 'segment'].includes(
-        key,
-      )
+      [
+        'list',
+        'fix',
+        'report',
+        'keep-backups',
+        'force',
+        'segment',
+        'dry-run',
+        'delete-receipts',
+      ].includes(key)
     ) {
       out[key] = true;
       continue;
@@ -1255,7 +1419,7 @@ function help(exit) {
   zeroh-disclosure tokens [--session ID]
   zeroh-disclosure report [--since 7d|30d|90d|all] [--project .|--all-projects] [--html path] [--json path]
   zeroh-disclosure doctor [--fix [--keep-backups]] [--report]
-  zeroh-disclosure banner full|compact|off
+  zeroh-disclosure banner big|compact|mini|off
   zeroh-disclosure proxy off|on
   zeroh-disclosure uninstall [--yes] [--force]
   zeroh-disclosure catalog [--json]

@@ -18,6 +18,7 @@ import {
 } from './crypto.js';
 import { createSignedReceipt } from './selective-disclosure.js';
 import { regexLocalProtectionEngine } from './protection-engines/regex-local.js';
+import { TURN_SUMMARY_SCHEMA } from './turn-summary.js';
 
 export async function prepareDisclosure({
   text,
@@ -146,10 +147,18 @@ export async function prepareDisclosure({
     previous_receipt_hash: previousReceiptHash,
     previous_token_hash: previousTokenHash,
     raw_content_seen_by_zeroh_saas: false,
-    raw_content_sent_to_ai_provider: false,
+    // True when the typed prompt went to the model as typed with values
+    // ZeroH found in it (no proxy in the route, uncertain: pass). The turn
+    // summary signed at Stop says the same for the whole turn (values shown
+    // under an unmask grant included).
+    raw_content_sent_to_ai_provider: decision.enforced === 'sent_unmasked',
     sanitized_content_may_be_sent_to_ai_provider: decision.action !== 'block',
     signing_key_id: signer.keyId,
     issuer_public_jwk: issuerPublic.jwk,
+    // This receipt covers the typed prompt; the rest of the turn (tool
+    // output and file reads masked, values sent, what passed unchecked) is
+    // signed at Stop as a turn summary, and verify requires it (1.0.0).
+    turn_summary_extension: TURN_SUMMARY_SCHEMA,
     ...publicClaimExtras,
   };
   const selectiveClaims = {

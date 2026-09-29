@@ -79,11 +79,31 @@ International phone numbers (`+44 …`) are found with any region.
   under JavaScript's backtracking engine: `(?i)` folds whole ranges, repeated capture groups
   become non-capturing, and unbounded leading context is checked separately); plus fixed-prefix rules for Anthropic, OpenAI, Stripe,
   GitHub, AWS, Google, Slack, npm, PyPI, Docker, HashiCorp Vault and others.
+- **Local rules** (`SECRET_RULES` in `src/detector.js`) for formats the gitleaks release does
+  not cover yet: GitHub App installation tokens (`ghs_`, the Actions `GITHUB_TOKEN` too) in the
+  stateless format GitHub rolled out from April 2026, `ghs_<app id>_<JWT>` (about 520
+  characters, two dots; gitleaks v8.30.1 matches only the 40-character form). The whole token
+  is masked. Sources: GitHub's changelog of
+  [2026-04-24](https://github.blog/changelog/2026-04-24-notice-about-upcoming-new-format-for-github-app-installation-tokens/)
+  and [2026-05-15](https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/).
+  GitHub has announced no new format for `ghp_`, `gho_`, `ghu_`, `ghr_` or `github_pat_`.
 - **Secrets next to key-like names**: `password: …`, `db_password = …`, `"apiKey": "…"`,
   `AUTH_TOKEN=<random>`. Code after the name (`process.env.X`, a type, a call, a package
-  version, a template placeholder) and plain words are left alone.
+  version) and plain words are left alone.
 - **Private keys** (PEM, OpenSSH, PuTTY, age), `Authorization` headers, credentials in URLs and
-  connection strings, signed-URL signatures, OTP seeds and password hashes.
+  connection strings, signed-URL signatures, OTP seeds and password hashes. A value after
+  `Password=` is a value, a plain word in a sentence too: syntax cannot tell a word from a
+  password, and a missed password leaks.
+- **References are values.** Whether `$VAR`, `${VAR:-x}`, `$env:VAR`, `%VAR%`, `{{ x }}` or
+  `${{ secrets.X }}` is expanded depends on which interpreter reads the text, which a detector
+  cannot know; each exemption tried before 1.0.0 let a literal password through somewhere. So
+  the detector judges no references: next to a secret-named key, in a URL password, in a
+  connection string and in `curl -u`, a reference is masked like any value (in place, and
+  restorable). Only upstream's own per-rule allowlists apply. gitleaks' global allowlist is not
+  imported (planned for 1.1, with a channel-aware reading). Code expressions and format verbs
+  after a key (`process.env.X`, `os.environ["X"]`, `%s`, `{name}`) are still not values.
+  `test/rc2-gate.test.mjs` requires everything 1.0.0-rc.2 masked in its fixtures to stay
+  masked, with no exceptions.
 - **Entropy warnings** (separate function): long random-looking values with nothing naming them.
 
 ### Personal data
@@ -170,7 +190,8 @@ commit and the IANA list version.
 2. Fetch: `node scripts/import-<name>.mjs --fetch` downloads the pinned files, verifies the
    integrity and rewrites `vendor/<name>/` and its `SOURCE.json`. For gitleaks and IANA, run
    `node scripts/import-gitleaks.mjs` or `node scripts/import-tlds.mjs` to regenerate
-   `src/rules/`.
+   `src/rules/`. For gitleaks, also update `SOURCE_METADATA.sha256` (the importer refuses any
+   other file).
 3. Check: `node scripts/import-<name>.mjs --check` fails when a vendored file or a generated
    rule file does not match its pin. The test target runs every check.
 4. Test: `pnpm nx run sensitive-data-detectors:test`, then update `NOTICE` and this README

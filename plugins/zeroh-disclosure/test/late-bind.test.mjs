@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Isolated temporary homes for every test (see helpers.mjs).
-import './helpers.mjs';
+import { assertPrivate } from './helpers.mjs';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
@@ -10,7 +10,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  statSync,
   unlinkSync,
   utimesSync,
   writeFileSync,
@@ -153,7 +152,11 @@ test('PowerShell scanner applies the context replacement matrix', () => {
   );
   assert.equal(
     rewritePowerShellCommand(`Write-Output "${TOKEN}"`, vault()).command,
-    'Write-Output "${ZH_API_KEY_7a3f9e}"',
+    'Write-Output ${ZH_API_KEY_7a3f9e}',
+  );
+  assert.equal(
+    rewritePowerShellCommand(`Write-Output "Bearer ${TOKEN}"`, vault()).command,
+    'Write-Output "Bearer ${ZH_API_KEY_7a3f9e}"',
   );
   assert.equal(
     rewritePowerShellCommand(`$value = 'before ${TOKEN} after'`, vault())
@@ -163,7 +166,12 @@ test('PowerShell scanner applies the context replacement matrix', () => {
 
   assert.equal(
     rewritePowerShellCommand(`Write-Output '${TOKEN}'`, vault()).command,
-    'Write-Output "${ZH_API_KEY_7a3f9e}"',
+    'Write-Output ${ZH_API_KEY_7a3f9e}',
+  );
+  assert.equal(
+    rewritePowerShellCommand(`$h = @{Authorization='${TOKEN}'}`, vault())
+      .command,
+    '$h = @{Authorization=${ZH_API_KEY_7a3f9e}}',
   );
   assert.equal(
     rewritePowerShellCommand(`Write-Output prefix'${TOKEN}'`, vault()).command,
@@ -209,7 +217,7 @@ test('PowerShell scanner handles comments, backtick escapes, and CRLF', () => {
   assert.match(result.command, /# \[API_KEY-7a3f9e\] stays masked\r\n/);
   assert.match(result.command, /Write-Output \$\{ZH_API_KEY_7a3f9e\}\r\n/);
   assert.match(result.command, /<# \[API_KEY-7a3f9e\] stays masked #>/);
-  assert.match(result.command, /"\$\{ZH_API_KEY_7a3f9e\}"/);
+  assert.match(result.command, /Write-Output \$\{ZH_API_KEY_7a3f9e\}$/);
   assert.ok(result.command.includes('\r\n'));
 });
 
@@ -370,11 +378,9 @@ test('wrapper preserves command-list and trailing background semantics', () => {
 
 test('values file is private, shell-quoted, and removed after execution', () => {
   const prepared = prepare(`printf '%s\\0' ${TOKEN} > argv`);
-  assert.equal(
-    statSync(path.dirname(prepared.result.file)).mode & 0o777,
-    0o700,
-  );
-  assert.equal(statSync(prepared.result.file).mode & 0o777, 0o600);
+  // In process, outside this process's ZeroH home: the modes on POSIX only.
+  assertPrivate(path.dirname(prepared.result.file), 0o700);
+  assertPrivate(prepared.result.file, 0o600);
   assert.equal(
     readFileSync(prepared.result.file, 'utf8'),
     `ZH_API_KEY_7a3f9e='fake'\\'' value $dollar'\n`,
@@ -387,15 +393,19 @@ test('values file is private, shell-quoted, and removed after execution', () => 
   assert.equal(existsSync(prepared.result.file), false);
 });
 
-test('PowerShell values file holds base64 lines read through .NET', () => {
+test('PowerShell values file is a CSV read with cmdlets, not .NET calls', () => {
   const prepared = preparePowerShell(`Write-Output ${TOKEN}`);
-  assert.equal(path.extname(prepared.result.file), '.b64');
+  assert.equal(path.extname(prepared.result.file), '.csv');
   assert.equal(
     readFileSync(prepared.result.file, 'utf8'),
-    `ZH_API_KEY_7a3f9e=${Buffer.from(VALUE, 'utf8').toString('base64')}\n`,
+    `"Name","Value"\n"ZH_API_KEY_7a3f9e","${VALUE.replaceAll('"', '""')}"\n`,
   );
   assert.ok(!prepared.result.command.includes(VALUE));
-  assert.match(prepared.result.command, /\[IO\.File\]::ReadAllLines\('/);
+  assert.match(
+    prepared.result.command,
+    /Import-Csv -LiteralPath '.*' -Encoding UTF8 -ErrorAction Stop \| Where-Object Name -CEQ 'ZH_API_KEY_7a3f9e' \| Select-Object -ExpandProperty Value \| Set-Variable -Name ZH_API_KEY_7a3f9e/,
+  );
+  assert.doesNotMatch(prepared.result.command, /::|\$\(|\[[A-Za-z.]+\]/);
   assert.match(prepared.result.command, /could not load the restored values/);
   assert.match(
     prepared.result.command,
@@ -618,4 +628,59 @@ test('an escaped quote in a heredoc delimiter is read the same way by both scann
     at: command.indexOf('\n'),
     background: false,
   });
+});
+
+// Claude Code starts Git Bash on Windows as `bash -c -l "<command>"`, and Git
+// Bash reads each pair of backslashes inside that quoted argument as one. The
+// rewrite must give the same result as the literal command there, so it never
+// turns one backslash into a new pair. On Windows the real command line does
+// the reading; elsewhere it is simulated.
+test('under Git Bash command-line reading, the rewrite prints what the literal command prints', () => {
+  const plainToken = '[API_KEY-0f0f0f]';
+  const plainValue = 'ZEROHFAKEplain42';
+  const plainVault = {
+    entryOf: (token) =>
+      token === plainToken
+        ? { type: 'API_KEY', value: plainValue, source: 'known:PLAIN' }
+        : null,
+  };
+  const gitBashReads = (command) =>
+    process.platform === 'win32' ? command : command.replace(/\\\\/gu, '\\');
+  const runAsClaudeCode = (command, cwd) => {
+    const run = spawnSync('bash', ['-c', gitBashReads(command)], {
+      cwd,
+      encoding: 'buffer',
+    });
+    assert.equal(run.status, 0, run.stderr.toString('utf8'));
+    return readFileSync(path.join(cwd, 'argv'));
+  };
+  const cases = [
+    `cat <<'EOF' > argv\nbefore\\\n${plainToken}\nEOF`,
+    `cat <<'EOF' > argv\none \\ two \\\\ three \\\\\\ ${plainToken}\nEOF`,
+    `cat <<'EOF' > argv\n\\${plainToken} \\\\${plainToken}\nEOF`,
+    `cat <<EOF > argv\n\\${plainToken}\nEOF`,
+    `printf '%s' "\\${plainToken}" > argv`,
+  ];
+  for (const command of cases) {
+    const t = temp();
+    mkdirSync(t.dir, { recursive: true });
+    const prepared = prepareBashLateBinding({
+      command,
+      vault: plainVault,
+      sessionId: 'session',
+      toolUseId: 'git-bash',
+      home: t.home,
+    });
+    assert.equal(prepared.ok, true, prepared.reason);
+    assert.equal(prepared.command.includes(plainValue), false);
+    const literal = runAsClaudeCode(
+      command.split(plainToken).join(plainValue),
+      t.dir,
+    );
+    assert.deepEqual(
+      runAsClaudeCode(prepared.command, t.dir),
+      literal,
+      command,
+    );
+  }
 });

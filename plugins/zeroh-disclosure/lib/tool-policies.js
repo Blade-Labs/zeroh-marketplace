@@ -158,6 +158,9 @@ async function maskWithVault(text, findings, { vault, hmacKeyBytes }) {
   for (const f of findings) {
     const raw = text.slice(f.start, f.end);
     const token = vault.tokenFor(f.type, raw, 'detected');
+    // A read-only view of the values on disk (lib/restorable.js) has no
+    // token for a new value: it stays as written (rule 8).
+    if (!token) continue;
     out += text.slice(cursor, f.start) + token;
     cursor = f.end;
     replacements.push({

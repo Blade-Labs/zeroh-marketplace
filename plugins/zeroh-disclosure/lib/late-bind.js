@@ -2,7 +2,11 @@
 
 // Late binding keeps restored shell values out of Claude Code's saved hook
 // output. The command sources a private, short-lived values file instead.
-import { commentStarts, readHeredocWord } from './shell-scan.js';
+import {
+  commentStarts,
+  readHeredocWord,
+  stopParsingRanges,
+} from './shell-scan.js';
 import {
   chmodSync,
   existsSync,
@@ -15,9 +19,15 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { zerohHome } from './vault.js';
+import { containsToken } from './token-pattern.js';
 
 const TOKEN_AT = /^\[([A-Z_]+)-([0-9a-f]{6})\]/;
 export const RUN_FILE_MAX_AGE_MS = 10 * 60 * 1000;
+// At a turn's end (Stop) or the next prompt, a values file of the session
+// older than this belongs to a command that was refused, denied or cancelled:
+// one that runs loads its file within milliseconds of PreToolUse. The grace
+// covers a background agent's command still waiting for its permission.
+export const TURN_END_GRACE_MS = 60 * 1000;
 const LOAD_FAILURE_TEXT =
   'ZeroH could not load the restored values, so the command did not run';
 export const LOAD_FAILURE_LINE = `[${LOAD_FAILURE_TEXT}]`;
@@ -35,10 +45,9 @@ export function valuesFilePath({
   home = zerohHome(),
   shell = 'bash',
 }) {
-  // PowerShell reads its values as base64 lines through .NET, not by
-  // dot-sourcing a script: no execution policy applies, and Windows
-  // PowerShell 5.1 cannot misread a BOM-less file's encoding.
-  const extension = shell === 'powershell' ? 'b64' : 'sh';
+  // PowerShell reads its values with Import-Csv, not by dot-sourcing a
+  // script: no execution policy applies, and no .NET call is needed.
+  const extension = shell === 'powershell' ? 'csv' : 'sh';
   return path.join(
     home,
     'run',
@@ -92,7 +101,17 @@ function heredocAt(command, start) {
   };
 }
 
-function replaceHeredocLine(line, vault, bindings, quoted) {
+// A lone backslash the rewrite must escape is written as ${ZH_BACKSLASH},
+// which the values file sets to one backslash, so the rewrite never makes a
+// new pair of backslashes out of one. Claude Code starts Git Bash on Windows
+// as `bash -c -l "<command>"`, and Git Bash reads a pair of backslashes inside
+// that quoted argument as one: a quoted heredoc's `before\` at a line end,
+// escaped as `before\\`, arrived as `before\` and joined the next line; a
+// `"\[TOKEN]"`, written `"\\${ZH_…}"`, printed the variable's name.
+const BACKSLASH_VARIABLE = 'ZH_BACKSLASH';
+const BACKSLASH = `\${${BACKSLASH_VARIABLE}}`;
+
+function replaceHeredocLine(line, vault, bindings, quoted, uses) {
   let output = '';
   for (let index = 0; index < line.length;) {
     const binding = bindingAt(line, index, vault);
@@ -106,20 +125,42 @@ function replaceHeredocLine(line, vault, bindings, quoted) {
       line[index] === '\\' ? bindingAt(line, index + 1, vault) : null;
     if (escapedBinding) {
       bindings.set(escapedBinding.token, escapedBinding);
-      output += quoted
-        ? `\\\\\${${escapedBinding.variable}}`
-        : `\\\\\${${escapedBinding.variable}}`;
+      uses.backslash = true;
+      output += `${BACKSLASH}\${${escapedBinding.variable}}`;
       index += escapedBinding.token.length + 1;
       continue;
     }
     const char = line[index];
-    output += quoted && ['\\', '$', '`'].includes(char) ? `\\${char}` : char;
+    if (quoted && char === '\\' && line[index + 1] === '\\') {
+      // A pair stays a pair of escaped backslashes: where Git Bash reads the
+      // user's pair as one, it reads this as one escaped backslash too.
+      output += '\\\\\\\\';
+      index += 2;
+      continue;
+    }
+    if (quoted && char === '\\') {
+      uses.backslash = true;
+      output += BACKSLASH;
+    } else {
+      output += quoted && ['$', '`'].includes(char) ? `\\${char}` : char;
+    }
     index += 1;
   }
   return { ok: true, text: output };
 }
 
-function bashReplacement(binding, quote) {
+// A value with no IFS whitespace and nothing a glob or extglob pattern needs
+// is the same word unquoted as quoted (expansion results get no quote removal
+// and no brace expansion); an empty one would vanish.
+const BARE_SAFE_VALUE = /^[^\s*?[\]()]+$/u;
+
+function bashReplacement(binding, quote, { bareWhenPlain = false } = {}) {
+  if (
+    quote === 'unquoted' &&
+    bareWhenPlain &&
+    BARE_SAFE_VALUE.test(String(binding.value))
+  )
+    return `\${${binding.variable}}`;
   if (quote === 'single') return `'"\${${binding.variable}}"'`;
   if (quote === 'ansi') return `'"\${${binding.variable}}"$'`;
   if (quote === 'double') return `\${${binding.variable}}`;
@@ -142,8 +183,9 @@ function bashWordAt(command, index, word) {
 
 // This is deliberately a quoting scanner rather than a shell parser. It only
 // distinguishes the contexts that change whether parameter expansion occurs.
-export function rewriteBashCommand(command, vault) {
+export function rewriteBashCommand(command, vault, options = {}) {
   const bindings = new Map();
+  const uses = { backslash: false };
   const pendingHeredocs = [];
   let heredoc = null;
   const contexts = [
@@ -173,6 +215,7 @@ export function rewriteBashCommand(command, vault) {
         vault,
         bindings,
         heredoc.quoted,
+        uses,
       );
       output += replaced.text;
       if (newline !== -1) output += '\n';
@@ -187,7 +230,7 @@ export function rewriteBashCommand(command, vault) {
       const activeCase = frame.cases?.at(-1);
       if (activeCase?.phase === 'subject-start') activeCase.phase = 'subject';
       bindings.set(binding.token, binding);
-      output += bashReplacement(binding, state);
+      output += bashReplacement(binding, state, options);
       index += binding.token.length;
       continue;
     }
@@ -277,7 +320,8 @@ export function rewriteBashCommand(command, vault) {
         const escapedBinding = bindingAt(command, index + 1, vault);
         if (escapedBinding) {
           bindings.set(escapedBinding.token, escapedBinding);
-          output += `\\\\\${${escapedBinding.variable}}`;
+          uses.backslash = true;
+          output += `${BACKSLASH}\${${escapedBinding.variable}}`;
           index += escapedBinding.token.length + 1;
           continue;
         }
@@ -454,7 +498,12 @@ export function rewriteBashCommand(command, vault) {
     );
   if (!['unquoted', 'comment'].includes(current().quote))
     return bashFailure(`${current().quote} quote is unterminated`);
-  return { ok: true, command: output, bindings: [...bindings.values()] };
+  return {
+    ok: true,
+    command: output,
+    bindings: [...bindings.values()],
+    ...(uses.backslash ? { backslash: true } : {}),
+  };
 }
 
 const POWERSHELL_TYPOGRAPHIC_QUOTES = /[‘’‚‛“”„]/u;
@@ -559,6 +608,43 @@ function powerShellHereStringAt(command, start, vault, bindings) {
   };
 }
 
+// '<token>' or "<token>" standing alone as an argument or a value: between
+// whitespace, the start or end, or ( ) , ; | = { }.
+function powerShellWholeTokenString(command, start, vault) {
+  const quote = command[start];
+  const binding = bindingAt(command, start + 1, vault);
+  if (!binding) return null;
+  const end = start + 1 + binding.token.length;
+  if (command[end] !== quote) return null;
+  const before = command[start - 1];
+  const after = command[end + 1];
+  if (before !== undefined && !/[\s(,;|={]/u.test(before)) return null;
+  if (after !== undefined && !/[\s),;|}]/u.test(after)) return null;
+  return { binding, end: end + 1 };
+}
+
+// True when a token ZeroH knows stands where PowerShell's stop-parsing
+// token `--%` makes text pass as written (the tokenizer's reading; a `--%`
+// in a string or a comment is text): `${ZH_…}` would arrive as those
+// characters. A real value is never written into the command text instead;
+// the caller's late-binding failure rule applies (pass: runs with the token
+// and a notice; block: stopped). A command the tokenizer cannot read is
+// judged the same way when a `--%` word is anywhere in it.
+function tokenAfterStopParsing(command, vault) {
+  const ranges = stopParsingRanges(command);
+  if (ranges === null)
+    return /(?:^|\s)--%(?:\s|$)/u.test(command) && containsToken(command);
+  return ranges.some(([start, end]) => {
+    for (
+      let i = command.indexOf('[', start);
+      i >= 0 && i < end;
+      i = command.indexOf('[', i + 1)
+    )
+      if (bindingAt(command, i, vault)) return true;
+    return false;
+  });
+}
+
 function powerShellFailure(reason) {
   return { ok: false, reason, bindings: [] };
 }
@@ -583,6 +669,11 @@ export function rewritePowerShellCommand(command, vault) {
   if (POWERSHELL_TYPOGRAPHIC_QUOTES.test(command)) {
     return powerShellFailure(
       'typographic PowerShell quotes are not safely rewritable',
+    );
+  }
+  if (tokenAfterStopParsing(command, vault)) {
+    return powerShellFailure(
+      'a token after --%: PowerShell passes that text as written, so no variable there is read',
     );
   }
 
@@ -719,6 +810,19 @@ export function rewritePowerShellCommand(command, vault) {
       }
       continue;
     }
+    const whole =
+      char === "'" || char === '"'
+        ? powerShellWholeTokenString(command, index, vault)
+        : null;
+    if (whole) {
+      // A string that is exactly one token becomes the bare variable: an
+      // expandable string ("${...}") is one more thing Claude Code's
+      // PowerShell check asks about.
+      bindings.set(whole.binding.token, whole.binding);
+      output += `\${${whole.binding.variable}}`;
+      index = whole.end;
+      continue;
+    }
     if (char === "'") {
       const rewritten = rewritePowerShellSingleString(
         command,
@@ -789,27 +893,141 @@ export function prepareBashLateBinding({
   toolUseId,
   home = zerohHome(),
 }) {
-  const rewritten = rewriteBashCommand(command, vault);
+  let rewritten = rewriteBashCommand(command, vault);
   if (!rewritten.ok || rewritten.bindings.length === 0) return rewritten;
+  if (
+    claudeCodeBraceQuoteRefusal(rewritten.command) &&
+    !claudeCodeBraceQuoteRefusal(command)
+  ) {
+    // A token inside an unquoted { ... } (a group, or ${var:-...}) would put a
+    // quote after the brace; a plain value needs none.
+    rewritten = rewriteBashCommand(command, vault, { bareWhenPlain: true });
+    if (!rewritten.ok) return rewritten;
+  }
 
   const file = valuesFilePath({ sessionId, toolUseId, home });
   const directory = path.dirname(file);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
-  const contents = rewritten.bindings
-    .map(({ variable, value }) => `${variable}=${singleQuote(value)}`)
-    .join('\n');
+  const contents = [
+    ...(rewritten.backslash
+      ? [`${BACKSLASH_VARIABLE}=${singleQuote('\\')}`]
+      : []),
+    ...rewritten.bindings.map(
+      ({ variable, value }) => `${variable}=${singleQuote(value)}`,
+    ),
+  ].join('\n');
   writeFileSync(file, `${contents}\n`, { mode: 0o600 });
   chmodSync(file, 0o600);
 
   const sourceFile = singleQuote(gitBashPath(file));
   // A file that cannot be read says so and the command does not run; a file
-  // that cannot be removed (a read-only run directory) does not stop it.
-  return {
-    ...rewritten,
-    file,
-    command: `if . ${sourceFile}; then rm -f ${sourceFile} 2>/dev/null; true; else echo '${LOAD_FAILURE_LINE}'; rm -f ${sourceFile} 2>/dev/null; false; fi && {\n${rewritten.command}\n}`,
-  };
+  // that cannot be removed (a read-only run directory) does not stop it. The
+  // command sits in the `then` branch rather than in a `{ … }` group: Claude
+  // Code refuses a command with an unquoted `{` followed by a quote before the
+  // next `}` (claudeCodeBraceQuoteRefusal), and the rewritten command almost
+  // always has a quote there.
+  const wrapped = `if . ${sourceFile}; then rm -f ${sourceFile} 2>/dev/null\n${rewritten.command}\nelse echo '${LOAD_FAILURE_LINE}'; rm -f ${sourceFile} 2>/dev/null; false; fi`;
+  if (
+    claudeCodeBraceQuoteRefusal(wrapped) &&
+    !claudeCodeBraceQuoteRefusal(command)
+  ) {
+    // The rewrite itself would trip the check (a token inside the user's own
+    // `{ … }` group becomes a quoted variable): Claude Code would refuse the
+    // command and the values file would wait for the sweep.
+    deleteRunFile(file);
+    return bashFailure(
+      "a token inside a { ... } group would be refused by Claude Code's shell check once put back",
+    );
+  }
+  return { ...rewritten, file, command: wrapped };
+}
+
+function deleteRunFile(file) {
+  try {
+    unlinkSync(file);
+  } catch {
+    // The sweep removes it.
+  }
+}
+
+// Claude Code's own Bash safety check, as shipped in 2.1.283 (the compiled
+// `claude` executable, function iAe with the helper that blanks quoted braces):
+//   if (rt.test(Re(e))) return { kind: "too-complex",
+//     reason: "Contains brace with quote character (expansion obfuscation)",
+//     differential: !0 };
+//   rt = /\{[^}]*['"]/
+// Re(e) replaces every `{` inside '…', "…" or `…` with a space and leaves
+// everything else (comments included) as it is. A "too-complex" command is
+// never matched by allow rules: headless runs refuse it, interactive runs ask.
+// Returns true when Claude Code 2.1.283 would refuse `command` that way.
+export function claudeCodeBraceQuoteRefusal(command) {
+  return /\{[^}]*['"]/u.test(blankQuotedBraces(String(command)));
+}
+
+function blankQuotedBraces(e) {
+  if (!e.includes('{')) return e;
+  const out = [];
+  let single = false;
+  let double = false;
+  let backtick = false;
+  let wordStart = true;
+  let i = 0;
+  const blank = (c) => (c === '{' ? ' ' : c);
+  while (i < e.length) {
+    const c = e[i];
+    if (backtick) {
+      if (c === '\\' && ['`', '\\', '$'].includes(e[i + 1])) {
+        out.push(c, e[i + 1]);
+        i += 2;
+      } else {
+        if (c === '`') backtick = false;
+        out.push(blank(c));
+        i += 1;
+      }
+    } else if (single) {
+      if (c === "'") single = false;
+      out.push(blank(c));
+      i += 1;
+    } else if (double) {
+      if (c === '\\' && ['"', '\\', '`'].includes(e[i + 1])) {
+        out.push(c, e[i + 1]);
+        i += 2;
+      } else if (c === '`') {
+        backtick = true;
+        out.push(c);
+        i += 1;
+      } else {
+        if (c === '"') double = false;
+        out.push(blank(c));
+        i += 1;
+      }
+    } else if (c === '\\' && i + 1 < e.length) {
+      out.push(c, e[i + 1]);
+      if (e[i + 1] !== '\n') wordStart = false;
+      i += 2;
+    } else if (c === '#' && wordStart) {
+      while (i < e.length && e[i] !== '\n') {
+        out.push(e[i]);
+        i += 1;
+      }
+      wordStart = true;
+    } else if (c === '`') {
+      backtick = true;
+      wordStart = false;
+      out.push(c);
+      i += 1;
+    } else {
+      if (c === "'") single = true;
+      else if (c === '"') double = true;
+      wordStart = [' ', '\t', '\n', ';', '|', '&', '(', ')', '<', '>'].includes(
+        c,
+      );
+      out.push(c);
+      i += 1;
+    }
+  }
+  return out.join('');
 }
 
 export function preparePowerShellLateBinding({
@@ -831,25 +1049,37 @@ export function preparePowerShellLateBinding({
   const directory = path.dirname(file);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
-  const contents = rewritten.bindings
-    .map(
-      ({ variable, value }) =>
-        `${variable}=${Buffer.from(String(value), 'utf8').toString('base64')}`,
-    )
-    .join('\n');
+  const csvField = (value) => `"${String(value).replace(/"/gu, '""')}"`;
+  const contents = [
+    '"Name","Value"',
+    ...rewritten.bindings.map(
+      ({ variable, value }) => `${csvField(variable)},${csvField(value)}`,
+    ),
+  ].join('\n');
   writeFileSync(file, `${contents}\n`, { mode: 0o600 });
   chmodSync(file, 0o600);
 
   const quotedFile = powerShellSingleQuote(file);
-  // A failed load throws a message the model can relay (the exit wrapper
-  // prints it); a failed removal does not stop the command.
+  const remove = `Remove-Item -LiteralPath ${quotedFile} -Force -ErrorAction SilentlyContinue`;
+  // Cmdlets only: no .NET method call, type literal, $() or script block, each
+  // of which Claude Code's PowerShell checks ask about (2.1.283: "Command
+  // invokes .NET methods", "Command contains subexpressions $()", ...).
+  // Import-Csv keeps every character of a quoted field (CR, LF, quotes);
+  // -Encoding UTF8 reads the BOM-less file the same way on Windows
+  // PowerShell 5.1 and PowerShell 7. A file that cannot be read stops the
+  // command with a message the model can relay; a failed removal does not.
+  const loads = rewritten.bindings.map(
+    ({ variable }) =>
+      `Import-Csv -LiteralPath ${quotedFile} -Encoding UTF8 -ErrorAction Stop | Where-Object Name -CEQ '${variable}' | Select-Object -ExpandProperty Value | Set-Variable -Name ${variable}`,
+  );
   return {
     ...rewritten,
     file,
     command: [
-      `try { $zhLines = [IO.File]::ReadAllLines(${quotedFile}) } catch { throw "${LOAD_FAILURE_TEXT}: $($_.Exception.Message)" }`,
-      `Remove-Item -LiteralPath ${quotedFile} -Force -ErrorAction SilentlyContinue`,
-      "foreach ($zhLine in $zhLines) { if ($zhLine) { $zhName, $zhB64 = $zhLine -split '=', 2; Set-Variable -Name $zhName -Value ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($zhB64))) } }",
+      'try {',
+      ...loads,
+      `} catch { ${remove}; throw '${LOAD_FAILURE_TEXT}' }`,
+      remove,
       rewritten.command,
     ].join('\n'),
   };
@@ -904,6 +1134,44 @@ export function cleanupStaleRunFiles({
     } catch (error) {
       if (!['ENOTEMPTY', 'ENOENT'].includes(error.code)) throw error;
     }
+  }
+  return removed;
+}
+
+// Removes one session's run files older than `minAgeMs` (0: all of them, at
+// SessionEnd) and returns how many it removed.
+export function cleanupSessionRunFiles({
+  sessionId,
+  home = zerohHome(),
+  now = Date.now(),
+  minAgeMs = TURN_END_GRACE_MS,
+} = {}) {
+  if (!sessionId) return 0;
+  const directory = path.join(home, 'run', safePart(sessionId, 'anonymous'));
+  let entries;
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return 0;
+    throw error;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const file = path.join(directory, entry.name);
+    try {
+      if (minAgeMs === 0 || now - statSync(file).mtimeMs >= minAgeMs) {
+        unlinkSync(file);
+        removed += 1;
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  try {
+    rmdirSync(directory);
+  } catch (error) {
+    if (!['ENOTEMPTY', 'ENOENT'].includes(error.code)) throw error;
   }
   return removed;
 }

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The session banner: the ZEROH art, version and tier, the protection status
-// line and any warnings, in full, compact or off mode (ZEROH_BANNER).
+// line and any warnings. The first session after the install shows the full
+// view (art, details, ask line); later sessions show the mode the user chose
+// (/zeroh-disclosure:settings banner, ZEROH_BANNER): big (the art block),
+// mini (one line, the default), compact (one line with counts) or off.
 import {
   closeSync,
   existsSync,
@@ -13,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { writePrivateJson } from './private-fs.js';
 import { plural } from './report-counts.js';
+import { loginItemFix, loginItemReason } from './service-manager.js';
 import { zerohHome } from './vault.js';
 
 // ZEROH with the Blade triangle inside the O, as in the zeroh.io wordmark.
@@ -26,7 +30,13 @@ export const ART_LINES = Object.freeze([
 
 const GREEN = '\u001b[38;2;0;188;125m';
 const RESET = '\u001b[0m';
-const MODES = new Set(['full', 'compact', 'off']);
+// The modes a user can choose. `full` was the name of the every-session art
+// view before 1.0.0: a saved or typed `full` keeps working as `big`.
+export const BANNER_MODES = Object.freeze(['big', 'compact', 'mini', 'off']);
+const MODE_ALIASES = Object.freeze({ full: 'big' });
+const PRODUCT = 'ZeroH Disclosure';
+const STATUS_COMMAND = '/zeroh-disclosure:status';
+const DOCTOR_COMMAND = '/zeroh-disclosure:doctor';
 const CONFIG_VERSION = 1;
 const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -64,30 +74,42 @@ export function colourAllowed(env = process.env) {
   );
 }
 
+// A user-chosen mode (big, compact, mini, off, or the old `full`) in its
+// current name, or null.
+export function normalizeBannerMode(value) {
+  const mode = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  if (BANNER_MODES.includes(mode)) return mode;
+  return MODE_ALIASES[mode] ?? null;
+}
+
+// ZEROH_BANNER, else the saved mode, else 'default' (the full view on the
+// first session, mini after it).
 export function readBannerMode({
   env = process.env,
   home = zerohHome(env),
 } = {}) {
-  const environmentMode = String(env.ZEROH_BANNER || '').toLowerCase();
-  if (MODES.has(environmentMode)) return environmentMode;
+  const environmentMode = normalizeBannerMode(env.ZEROH_BANNER);
+  if (environmentMode) return environmentMode;
   try {
     const stored = JSON.parse(readFileSync(bannerFiles(home).config, 'utf8'));
-    if (stored?.version === CONFIG_VERSION && MODES.has(stored.mode)) {
-      return stored.mode;
-    }
+    const storedMode =
+      stored?.version === CONFIG_VERSION && normalizeBannerMode(stored.mode);
+    if (storedMode) return storedMode;
   } catch {
     // No setting, or an invalid setting, leaves the default behavior intact.
   }
-  return 'banner';
+  return 'default';
 }
 
 export function writeBannerMode(
   mode,
   { env = process.env, home = zerohHome(env) } = {},
 ) {
-  const normalized = String(mode || '').toLowerCase();
-  if (!MODES.has(normalized)) {
-    throw new Error('banner mode must be full, compact, or off');
+  const normalized = normalizeBannerMode(mode);
+  if (!normalized) {
+    throw new Error('banner mode must be big, compact, mini, or off');
   }
   const file = bannerFiles(home).config;
   writePrivateJson(file, { version: CONFIG_VERSION, mode: normalized });
@@ -120,12 +142,44 @@ export function secretSummary(known = []) {
 //   on          this session's prompts go through the proxy and are masked
 //   ready       the first prompt puts this session behind the proxy
 //   overridden  the shell (or another settings file) sets ANTHROPIC_BASE_URL
-//   no-login-item  the system refused the login item, so no settings entry
 //   off         ZEROH_PROXY=off, or no proxy
 //   turned-off  the user ran `proxy off` (it stays off until `proxy on`)
 //   provider    Bedrock, Vertex or Foundry: traffic does not pass the proxy
 //   down        the session's proxy does not answer
 const MASKS_TYPING = new Set(['on', 'ready']);
+
+// The one protection state both the art block and the mini line show: a
+// mark, the words, and the command that helps (the fix when something needs
+// attention, the status command when nothing does).
+export function protectionState({ proxy = 'off', paused = false } = {}) {
+  if (paused) {
+    return {
+      mark: '⚠',
+      words: 'Paused: see the message below',
+      command: DOCTOR_COMMAND,
+    };
+  }
+  if (MASKS_TYPING.has(proxy)) {
+    return {
+      mark: '✓',
+      words: 'Protected: your secrets are masked',
+      command: STATUS_COMMAND,
+    };
+  }
+  return {
+    mark: '✓',
+    words: 'Protected: files and output are masked',
+    // Typing isn't masked: turn the proxy back on, or let doctor say why.
+    // Bedrock, Vertex and Foundry never pass the proxy, so there is
+    // nothing to fix there.
+    command:
+      proxy === 'turned-off'
+        ? '/zeroh-disclosure:proxy on'
+        : proxy === 'provider'
+          ? STATUS_COMMAND
+          : DOCTOR_COMMAND,
+  };
+}
 // Plain unless the caller asks for colour (see colourAllowed): a command's
 // `!` output shows ANSI codes raw (T-24).
 function artBlock({ version, plan, proxy, paused, colour }) {
@@ -136,16 +190,13 @@ function artBlock({ version, plan, proxy, paused, colour }) {
   // Line 1 names the product in full ("ZeroH Disclosure 1.0.0 · Free"):
   // 40 art columns + 3 spaces + at most 37 characters of text. Lines 1, 3
   // and 5 align with the top, middle and bottom of the art.
+  const state = protectionState({ proxy, paused });
   const side = [
-    `ZeroH Disclosure ${version} · ${plan}`,
+    `${PRODUCT} ${version} · ${plan}`,
     '',
-    paused
-      ? '⚠ Paused: see the message below'
-      : MASKS_TYPING.has(proxy)
-        ? '✓ Protected: your secrets are masked'
-        : '✓ Protected: files and output are masked',
+    `${state.mark} ${state.words}`,
     '',
-    '/zeroh-disclosure:status for details',
+    `${STATUS_COMMAND} for details`,
   ];
   return ART_LINES.map((line, index) => {
     // In colour, the Blade triangle keeps the terminal's own text colour so
@@ -157,20 +208,20 @@ function artBlock({ version, plan, proxy, paused, colour }) {
   }).join('\n');
 }
 
-// The full view (first run and /zeroh-disclosure:status, T-34): only what is
-// protected right now and what needs attention, in plain words. Settings and
-// paths live in the README; Claude answers the rest (skills/about).
-const PROXY_WORDS = {
-  on: 'Local proxy: running; this session goes through it.',
-  ready:
-    'Local proxy: ready; this session goes through it from your first prompt.',
-  off: 'Local proxy: off.',
-  'turned-off': 'Local proxy: off (you turned it off).',
-  provider: 'Local proxy: not used with Bedrock, Vertex or Foundry.',
-  overridden: 'Local proxy: not used; ANTHROPIC_BASE_URL is set elsewhere.',
-  'no-login-item': "Local proxy: can't run on this system.",
-  down: 'Local proxy: not running.',
-};
+// The mini line: the art block's name, state and plan in one line, ending
+// with the command that helps in this state. In colour the product name is
+// the art's green.
+function miniLine({ plan, proxy, paused, colour }) {
+  const state = protectionState({ proxy, paused });
+  const name = colour ? `${GREEN}${PRODUCT}${RESET}` : PRODUCT;
+  return `${name} ${state.mark} ${state.words} · ${plan} · ${state.command}`;
+}
+
+// The full view (first run and /zeroh-disclosure:status, T-34): three lines
+// under the art (owner, 2026-09-28): where it runs and what it masks, what
+// passes, and the question to ask Claude. The proxy's own state is not
+// repeated here: a proxy that doesn't mask typing is already said by the
+// first line and by its warning line below, and the status line shows it.
 export const ASK_LINE = "Ask Claude: 'what does ZeroH Disclosure protect?'";
 
 // What happens to a secret the user types when the proxy can't mask it, by
@@ -187,13 +238,15 @@ function fullDetails({ proxy, paused, unmaskStatus, retention, uncertain }) {
     paused
       ? "Masking is paused: ZeroH can't open its vault (see below)."
       : MASKS_TYPING.has(proxy)
-        ? 'Masks what you type, files Claude reads, command output and tool results.'
-        : uncertain === 'block'
-          ? 'Masks files Claude reads, command output and tool results. A prompt with a secret is stopped, not sent.'
-          : 'Masks files Claude reads, command output and tool results. What you type is not masked: a prompt with a secret is sent, with a notice.',
+        ? 'Runs on your machine: masks what you type, files Claude reads, command output and tool results.'
+        : // A session whose proxy is gone can't send at all (D-10).
+          proxy === 'down'
+          ? "Runs on your machine: masks files Claude reads, command output and tool results. The local proxy isn't running, so no prompt is sent until it is back."
+          : uncertain === 'block'
+            ? 'Runs on your machine: masks files Claude reads, command output and tool results. A prompt with a secret is stopped, not sent.'
+            : 'Runs on your machine: masks files Claude reads, command output and tool results. What you type is not masked: a prompt with a secret is sent, with a notice.',
     'Images and scanned PDFs are not masked; they pass with a notice.',
   ];
-  if (PROXY_WORDS[proxy]) lines.push(PROXY_WORDS[proxy]);
   if (unmaskStatus) lines.push(`Unmasked now: ${unmaskStatus}.`);
   if (retention) lines.push(retention);
   return lines.join('\n');
@@ -202,12 +255,12 @@ function fullDetails({ proxy, paused, unmaskStatus, retention, uncertain }) {
 const CONTEXT_NOTE = {
   on: 'the proxy masks them',
   ready: 'the proxy masks them from your first prompt on',
+  down: 'nothing is sent until the local proxy is back',
 };
 function proxyLine(proxy, uncertain) {
   const typed = typedSecretWords(uncertain);
   return {
     overridden: `⚠ ANTHROPIC_BASE_URL is set outside ZeroH's settings (your shell or another settings file), so what you type can't be masked; ${typed}`,
-    'no-login-item': `⚠ nothing on this system can keep ZeroH's local proxy running after a restart (no login item), so what you type can't be masked; ${typed}. Files and command output are still masked`,
     off: `⚠ proxy off: what you type isn't masked; ${typed}`,
     'turned-off': `⚠ proxy off (you turned it off): what you type isn't masked; ${typed}. \`/zeroh-disclosure:proxy on\` turns it back on`,
     provider: `⚠ Bedrock, Vertex or Foundry: the proxy is not used, so what you type isn't masked; ${typed}`,
@@ -223,6 +276,8 @@ export function warningLines({
   proxy = 'off',
   unmaskWarnings = [],
   uncertain = 'pass',
+  // proxy.json's record of a refused login item, or null.
+  loginItemRefused = null,
 } = {}) {
   const lines = contextFindings.map(
     ({ displayPath, count }) =>
@@ -233,11 +288,76 @@ export function warningLines({
   lines.push(...unmaskWarnings.map((warning) => `⚠ ${warning}`));
   const line = proxyLine(proxy, uncertain);
   if (line) lines.push(line);
+  if (loginItemRefused && MASKS_TYPING.has(proxy)) {
+    lines.push(loginItemLine(loginItemRefused));
+  }
   return lines;
 }
 
+// /zeroh-disclosure:status's lines about the proxy itself, as it is now,
+// never as it is meant to be: whether it answers, whether this session goes
+// through it, and whether a login item starts it after a restart (and why
+// not, with the fix). `runtime` is proxy-manager's proxyRuntimeStatus. What
+// happens to a secret in the prompt that puts the session behind the proxy
+// follows the `uncertain` setting: sent with a "not protected" line by
+// default, stopped with `uncertain block` (hooks/user-prompt-submit.js).
+export function proxyStatusLines({
+  proxy = 'off',
+  runtime = null,
+  uncertain = 'pass',
+} = {}) {
+  if (
+    !runtime ||
+    ['off', 'turned-off', 'provider', 'overridden'].includes(proxy)
+  ) {
+    return [];
+  }
+  const firstPrompt =
+    uncertain === 'block'
+      ? 'a secret in that prompt is stopped, not sent'
+      : 'a secret in that prompt is sent, with a "not protected" line';
+  const lines = [];
+  if (proxy === 'on') {
+    lines.push('Local proxy: running; this session goes through it.');
+  } else if (proxy === 'down') {
+    lines.push(
+      "Local proxy: not answering; this session's model requests can't be sent until it is back. Restart Claude Code, or run /zeroh-disclosure:doctor.",
+    );
+  } else if (runtime.running) {
+    lines.push(
+      `Local proxy: running; this session is not behind it yet. Your next prompt puts it there (${firstPrompt}).`,
+    );
+  } else {
+    lines.push(
+      `Local proxy: not running. Your next prompt starts it and puts this session behind it (${firstPrompt}).`,
+    );
+  }
+  if (runtime.loginItem) {
+    lines.push('Login item: registered; it starts the proxy after a restart.');
+  } else if (runtime.loginItemRefused) {
+    lines.push(
+      `Login item: not registered: ${loginItemReason(runtime.loginItemRefused)}. The proxy runs only while Claude Code does. To fix: ${loginItemFix(runtime.loginItemRefused)}.`,
+    );
+  } else if (runtime.installed) {
+    lines.push(
+      'Login item: not registered yet; the next Claude Code session registers it.',
+    );
+  }
+  return lines;
+}
+
+// The system refused the login item (lib/service-manager.js): the proxy runs
+// while Claude Code does, so typing is masked, but nothing starts it after a
+// restart. Said every session, with why and the fix, until it registers.
+export function loginItemLine(record) {
+  return `⚠ no login item: ${loginItemReason(record)}. The local proxy runs while Claude Code does and each new session starts it again, but not by itself after a restart. To fix: ${loginItemFix(record)}`;
+}
+
+// mode: a user mode (big, compact, mini, off), 'full' (the art with details,
+// for the first run and /zeroh-disclosure:status) or 'default' (full on the
+// first run, mini after it).
 export function buildBanner({
-  mode = 'banner',
+  mode = 'default',
   firstRun = false,
   version = getVersion(),
   plan = getPlan(),
@@ -256,14 +376,23 @@ export function buildBanner({
   // The `uncertain` setting: what happens to a typed secret without the proxy.
   uncertain = 'pass',
 } = {}) {
-  const effectiveMode = mode === 'banner' && firstRun ? 'full' : mode;
+  const effectiveMode =
+    mode === 'default'
+      ? firstRun
+        ? 'full'
+        : 'mini'
+      : mode === 'full'
+        ? 'full'
+        : (normalizeBannerMode(mode) ?? 'mini');
   const parts = [];
-  if (effectiveMode === 'full' || effectiveMode === 'banner') {
+  if (effectiveMode === 'full' || effectiveMode === 'big') {
     let text = `\n${artBlock({ version, plan, proxy, paused, colour })}`;
     if (effectiveMode === 'full') {
       text += `\n\n${fullDetails({ proxy, paused, unmaskStatus, retention, uncertain })}`;
     }
     parts.push(text);
+  } else if (effectiveMode === 'mini') {
+    parts.push(miniLine({ plan, proxy, paused, colour }));
   } else if (effectiveMode === 'compact') {
     parts.push(
       paused

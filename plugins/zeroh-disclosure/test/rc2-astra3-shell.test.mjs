@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { runHook, tempProject } from './helpers.mjs';
+import { bashPath, runHook, tempProject } from './helpers.mjs';
 import { shellDestinations } from '../lib/shell-destinations.js';
 import {
   awkProgram,
@@ -63,18 +63,29 @@ function preToolUse(p, command, extraEnv = {}) {
   };
 }
 
+// Git Bash on Windows (no /bin/bash there), the system Bash elsewhere.
+const BASH = process.platform === 'win32' ? 'bash' : '/bin/bash';
+
+// GNU sed has options and commands BSD sed (macOS) lacks: `--expression`
+// and its abbreviations, `e` and `W`. The guard must stop those spellings
+// everywhere; only GNU sed can show that they are real writes.
+const GNU_SED =
+  spawnSync('sed', ['--version'], { encoding: 'utf8' }).status === 0;
+
 function bash(command, cwd, home) {
-  return spawnSync('/bin/bash', ['--noprofile', '--norc', '-c', command], {
+  return spawnSync(BASH, ['--noprofile', '--norc', '-c', command], {
     cwd,
     env: { PATH: process.env.PATH, HOME: home },
     encoding: 'utf8',
-    timeout: 10_000,
+    // A cold interpreter start on a Windows runner (antivirus scanning
+    // python.exe) has taken more than 10 s.
+    timeout: process.platform === 'win32' ? 60_000 : 10_000,
   });
 }
 
 const available = (program) =>
   spawnSync(program, ['--version'], { encoding: 'utf8' }).status === 0 ||
-  spawnSync('/bin/sh', ['-c', `command -v ${program}`]).status === 0;
+  spawnSync(BASH, ['-c', `command -v ${program}`]).status === 0;
 
 // Each command writes DISABLE into the protected settings file `t`.
 function protectedWrites(t) {
@@ -95,10 +106,10 @@ function protectedWrites(t) {
     ['perl', `perl -we ${quote(pl)}`],
     ['sed', `sed ${quote(`w ${t}`)} disable.json`],
     ['sed', `sed -e ${quote(`w ${t}`)} disable.json`],
-    ['sed', `sed --expression=${quote(`w ${t}`)} disable.json`],
-    ['sed', `sed -n ${quote(`W ${t}`)} disable.json`],
+    ['sed', `sed --expression=${quote(`w ${t}`)} disable.json`, 'gnu'],
+    ['sed', `sed -n ${quote(`W ${t}`)} disable.json`, 'gnu'],
     ['sed', `sed -n ${quote(`s/x*/&/w ${t}`)} disable.json`],
-    ['sed', `sed ${quote(`1e cp disable.json ${t}`)} disable.json`],
+    ['sed', `sed ${quote(`1e cp disable.json ${t}`)} disable.json`, 'gnu'],
     ['sed', `sed -ne ${quote(`/disable/w ${t}`)} disable.json`],
     [
       'awk',
@@ -119,13 +130,16 @@ function protectedWrites(t) {
 
 test('F1/F2: explicit writes to protected settings are denied in both modes, and are real writes', () => {
   const { p, target } = settingsProject();
-  for (const [program, command] of protectedWrites(target)) {
-    if (!available(program)) continue;
+  // The path as Git Bash on Windows passes it on (C:/…): a pair of
+  // backslashes in its command line arrives as one, so "C:\\Users" would be
+  // a string escape to Python or Perl, not the file.
+  for (const [program, command, gnuOnly] of protectedWrites(bashPath(target))) {
     for (const mode of ['pass', 'block']) {
       const out = preToolUse(p, command, { ZEROH_UNCERTAIN: mode });
       assert.equal(out.decision, 'deny', `${mode}: ${command}`);
       assert.equal(out.updated, null, `${mode}: ${command}`);
     }
+    if (!available(program) || (gnuOnly && !GNU_SED)) continue;
     // What the denied command would have done: it writes the fixture.
     writeFileSync(target, '{}\n');
     const run = bash(command, p.dir, p.home);

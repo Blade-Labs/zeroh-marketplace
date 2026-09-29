@@ -173,13 +173,17 @@ test('command scripts use the project root and CLAUDE_CODE_SESSION_ID from a sub
 // script; none tells the user to run a bare `zeroh-disclosure`.
 test('user actions are slash commands with narrow grants', () => {
   const cli = 'node "${CLAUDE_PLUGIN_ROOT}/bin/zeroh-disclosure.mjs"';
-  for (const [name, command] of [
-    ['doctor.md', 'doctor'],
-    ['allow.md', 'allow'],
-    ['uninstall.md', 'uninstall'],
+  for (const [name, command, fixed] of [
+    ['doctor.md', 'doctor', ''],
+    ['allow.md', 'allow', ''],
+    // Typing /zeroh-disclosure:uninstall is the confirmation (user-only).
+    ['uninstall.md', 'uninstall', ' --yes'],
   ]) {
     const source = readFileSync(path.join(PLUGIN, 'commands', name), 'utf8');
-    assert.ok(source.includes(`!\`${cli} ${command} $ARGUMENTS\``), name);
+    assert.ok(
+      source.includes(`!\`${cli} ${command}${fixed} $ARGUMENTS\``),
+      name,
+    );
     const line = source.match(/^allowed-tools: (.*)$/m)[1];
     assert.equal(
       line,
@@ -216,7 +220,7 @@ test('settings passes only banner, receipts and vault to the CLI', () => {
         CLAUDE_PROJECT_DIR: p.dir,
       }),
     });
-  assert.match(run().stdout, /^Banner: default/mu);
+  assert.match(run().stdout, /^Banner: mini \(the default/mu);
   assert.match(run().stdout, /Receipts: kept on this computer for 90 days/u);
   assert.match(
     run('uninstall', '--yes').stdout,
@@ -234,7 +238,7 @@ test('settings passes only banner, receipts and vault to the CLI', () => {
   );
 });
 
-test('uninstall from a slash command shows what it removes and removes nothing without --yes', () => {
+test('uninstall in a terminal without --yes shows what it removes and removes nothing', () => {
   const p = tempProject();
   mkdirSync(p.home, { recursive: true });
   const result = spawnSync(
@@ -259,7 +263,7 @@ test('uninstall from a slash command shows what it removes and removes nothing w
   );
   assert.match(
     result.stdout,
-    /Nothing was removed yet\. To remove all of it, run \/zeroh-disclosure:uninstall --yes/u,
+    /Nothing was removed yet\. To remove all of it, type \/zeroh-disclosure:uninstall/u,
   );
   assert.ok(
     result.stdout.includes(
@@ -292,4 +296,51 @@ test('user-only commands cannot be invoked by the model (UO-1)', () => {
     );
     assert.equal(disabled, USER_ONLY_FILES.includes(name), name);
   }
+});
+
+// Windows re-test (rc.2), finding 7: status said the proxy was ready and
+// masked typing while no login item existed and no proxy ran. It now says
+// what is true: not running (the next prompt starts it), and why there is no
+// login item, with the fix.
+test('status says the proxy is not running and why there is no login item', async () => {
+  const { writeProxyConfig, proxyPaths } =
+    await import('../lib/proxy-state.js');
+  const p = tempProject({ env: false });
+  const env = {
+    PATH: process.env.PATH,
+    HOME: p.home,
+    ZEROH_HOME: p.home,
+    ZEROH_CREDENTIAL_HOME: p.home,
+    ZEROH_CLAUDE_SETTINGS: p.settings,
+    ZEROH_SERVICE_MANAGER_DIR: p.serviceManager,
+    CLAUDE_PROJECT_DIR: p.dir,
+  };
+  writeProxyConfig(proxyPaths(env), {
+    version: 3,
+    controlToken: 'ZEROHFAKEcontroltoken000000000000',
+    // Nothing listens here.
+    port: 9,
+    installs: {},
+    loginItemRefused: {
+      at: '2026-09-28T10:00:00.000Z',
+      platform: 'win32',
+      code: 'EPERM',
+      detail: 'ERROR: The task XML is malformed.',
+    },
+  });
+  const run = spawnSync(
+    process.execPath,
+    [path.join(PLUGIN, 'commands', 'scripts', 'status.js')],
+    { cwd: p.dir, encoding: 'utf8', env },
+  );
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(
+    run.stdout,
+    /^Local proxy: not running\. Your next prompt starts it/mu,
+  );
+  assert.match(
+    run.stdout,
+    /^Login item: not registered: schtasks refused it: "ERROR: The task XML is malformed\."\. The proxy runs only while Claude Code does\. To fix: /mu,
+  );
+  assert.doesNotMatch(run.stdout, /this session goes through it/u);
 });

@@ -169,6 +169,16 @@ test('the argv a request is matched on: slash command to CLI argv', () => {
     'h.example.com',
   ]);
   assert.equal(slashToCli('status', []), null);
+  // One step: typing the user-only /zeroh-disclosure:uninstall confirms it,
+  // exactly as its `!` block runs it (`uninstall --yes $ARGUMENTS`).
+  assert.deepEqual(slashToCli('uninstall', []), ['uninstall', '--yes']);
+  assert.deepEqual(slashToCli('uninstall', ['--yes']), [
+    'uninstall',
+    '--yes',
+    '--yes',
+  ]);
+  assert.equal(slashToCli('uninstall', ['--dry-run']), null);
+  assert.equal(managementAction(['uninstall', '--yes', '--dry-run']), null);
   assert.deepEqual(
     canonicalArgv(['allow', 'K', 'h.example.com', '--cwd', '/x']),
     ['allow', 'K', 'h.example.com'],
@@ -347,6 +357,35 @@ test('UserPromptSubmit applies a typed management command and stops the prompt',
   );
 });
 
+test('typing /zeroh-disclosure:uninstall removes ZeroH in one step', () => {
+  const project = tempProject();
+  mkdirSync(path.join(project.home, 'vault'), { recursive: true });
+  const extra = {
+    HOME: path.join(project.dir, 'user-home'),
+    ZEROH_CLAUDE_BIN: path.join(project.dir, 'no-claude'),
+  };
+  // The command's `!` block: `uninstall --yes` recorded, nothing removed.
+  const bang = cli(project, ['uninstall', '--yes'], {
+    ...extra,
+    CLAUDE_CODE_SESSION_ID: 'sess-u',
+  });
+  assert.match(bang.stdout, /^Nothing changed/mu);
+  assert.ok(existsSync(path.join(project.home, 'vault')));
+  const hook = runHook(
+    'user-prompt-submit',
+    { session_id: 'sess-u', prompt: '/zeroh-disclosure:uninstall' },
+    { project, extraEnv: extra },
+  );
+  assert.equal(hook.json?.decision, 'block', hook.stderr);
+  assert.match(hook.json.reason, /^✓ Done by ZeroH Disclosure/u);
+  assert.match(hook.json.reason, /To install it again: claude plugin install/u);
+  assert.deepEqual(readdirSync(project.home), ['uninstalled']);
+  // --dry-run only shows the plan and needs no authority.
+  const preview = cli(project, ['uninstall', '--yes', '--dry-run'], extra);
+  assert.match(preview.stdout, /Nothing was removed yet/u);
+  assert.doesNotMatch(preview.stdout, /Nothing changed: /u);
+});
+
 test('a request the model recorded is not applied without the matching typed prompt', () => {
   const project = tempProject();
   cli(project, ['banner', 'off'], { CLAUDE_CODE_SESSION_ID: 'sess-b' });
@@ -408,6 +447,17 @@ test('launcher and quoting spellings of the CLI change nothing (Astra R3 repros)
     'nohup setsid zeroh-disclosure doctor --fix </dev/null',
     `node ${CLI} uninstall --yes`,
   ]) {
+    // timeout and setsid are GNU/util-linux tools that macOS doesn't ship.
+    const launcher = ['timeout', 'setsid'].find((name) =>
+      command.includes(`${name} `),
+    );
+    if (
+      launcher &&
+      spawnSync('bash', ['-c', `command -v ${launcher}`]).status !== 0
+    ) {
+      t.diagnostic(`${launcher} is not on this system: ${command}`);
+      continue;
+    }
     const run = spawnSync('bash', ['-c', command], {
       cwd: project.dir,
       encoding: 'utf8',

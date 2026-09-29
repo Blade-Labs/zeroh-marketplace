@@ -15,6 +15,7 @@ import {
   statSync,
 } from 'node:fs';
 import {
+  canonicalProjectPath,
   notWritable,
   readJsonOr,
   writePrivateFile,
@@ -53,10 +54,11 @@ export function projectRootFromEnv(start, env = process.env) {
     (readJsonOr(path.join(home, 'projects.json'))?.projects ?? [])
       .map((entry) => entry?.root)
       .filter((root) => typeof root === 'string')
-      .map((root) => path.resolve(root)),
+      .map((root) => canonicalProjectPath(root)),
   );
   for (let dir = from; ; dir = path.dirname(dir)) {
-    if (registered.has(dir)) return dir;
+    // Compared by canonical path: a linked spelling finds its project.
+    if (registered.has(canonicalProjectPath(dir))) return dir;
     if (isDirectory(path.join(home, 'projects', encodeProjectPath(dir)))) {
       return dir;
     }
@@ -68,9 +70,11 @@ export function projectRootFromEnv(start, env = process.env) {
 // 2.1.283 names its ~/.claude/projects folders so the two line up: the
 // absolute path with every character other than A-Z, a-z and 0-9 replaced by
 // "-"; a name longer than 200 characters is cut to 200 and gets "-" and a
-// base-36 hash of the path.
+// base-36 hash of the path. The path is the canonical one
+// (canonicalProjectPath) when it names a folder on this system.
 export function encodeProjectPath(root, pathImpl = path) {
-  const resolved = pathImpl.resolve(root);
+  const resolved =
+    pathImpl === path ? canonicalProjectPath(root) : pathImpl.resolve(root);
   const name = resolved.replace(/[^a-zA-Z0-9]/gu, '-');
   if (name.length <= 200) return name;
   let hash = 0;

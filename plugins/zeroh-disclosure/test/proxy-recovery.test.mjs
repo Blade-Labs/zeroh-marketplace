@@ -397,6 +397,8 @@ test('doctor says what it checked, what it fixed and what to do next', async (t)
   t.after(() => upstream.close());
   writeFileSync(isolated.settings, '{}\n');
   isolated.env.ANTHROPIC_BASE_URL = upstream.url;
+  // doctor --fix retires the daemon; it leaves soon after.
+  isolated.env.ZEROH_RETIRED_IDLE_MS = '1500';
   t.after(async () => stopDefaultProxy({ env: isolated.env }));
   const cli = (...args) =>
     spawnSync(
@@ -436,7 +438,12 @@ test('doctor says what it checked, what it fixed and what to do next', async (t)
     fixed.stdout,
     /Took the ZeroH entry out of your Claude Code settings/u,
   );
-  assert.match(fixed.stdout, /Stopped 1 ZeroH proxy process/u);
+  // Retired, not stopped: a session still open keeps working (Rule 1).
+  assert.match(
+    fixed.stdout,
+    /Retired the local proxy: Claude Code sessions still open keep working/u,
+  );
+  assert.equal((await probeProxy(installed.proxyUrl))?.retired, true);
   assert.match(fixed.stdout, /^Next: Start Claude Code again/mu);
   assert.match(fixed.stdout, /Removed files left by earlier builds/u);
   for (const output of [clean.stdout, found.stdout, fixed.stdout]) {
@@ -451,4 +458,8 @@ test('doctor says what it checked, what it fixed and what to do next', async (t)
     again.stdout,
     /Nothing to fix: the local proxy was not set up\./u,
   );
+  for (let i = 0; i < 100 && (await probeProxy(installed.proxyUrl)); i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(await probeProxy(installed.proxyUrl), null);
 });

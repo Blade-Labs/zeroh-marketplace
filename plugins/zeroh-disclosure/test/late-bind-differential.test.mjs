@@ -53,6 +53,11 @@ function findPowerShell() {
 }
 
 const pwsh = findPowerShell();
+const BASH_MAJOR = Number(
+  spawnSync('bash', ['-c', 'echo "${BASH_VERSINFO[0]}"'], {
+    encoding: 'utf8',
+  }).stdout?.trim() || 0,
+);
 
 function normalized(value) {
   return String(value || '').replaceAll('\r\n', '\n');
@@ -73,9 +78,13 @@ function run(shell, command) {
   };
   const result = spawnSync(executable, args, options);
   assert.equal(result.error, undefined, result.error?.message);
-  return `${normalized(result.stdout)}|ERR|${
-    normalized(result.stderr).trim().split('\n')[0]
-  }|${result.status}`;
+  // The late-bound command runs a line below the values-file load, so a
+  // diagnostic of the shell (macOS Bash 3.2 has a syntax error on `case`
+  // inside `$( )`) names another line number; its text must still match.
+  return `${normalized(result.stdout)}|ERR|${normalized(result.stderr)
+    .trim()
+    .split('\n')[0]
+    .replace(/\bline \d+:/u, 'line N:')}|${result.status}`;
 }
 
 const differentialExceptions = new Set([
@@ -143,11 +152,27 @@ function checkCase(shell, command, hostileExpectation) {
         false,
         'hostile value leaked',
       );
+      const hostileOutput = run(shell, hostile.command).split('|ERR|')[0];
+      // The hostile value arrives exactly where the literal command printed
+      // the safe one, and nothing around it changes.
       assert.equal(
-        run(shell, hostile.command).split('|ERR|')[0],
-        hostileExpectation(HOSTILE_VALUE),
+        hostileOutput,
+        run(shell, command.split(TOKEN).join(SAFE_VALUE))
+          .split('|ERR|')[0]
+          .split(SAFE_VALUE)
+          .join(HOSTILE_VALUE),
         command,
       );
+      // Git Bash on Windows reads a pair of backslashes in its command line
+      // as one, and macOS Bash 3.2 ends `$( … )` at a `case` pattern's `)`,
+      // in the literal command as in the rewrite; there the text around the
+      // value is compared with the literal command's (above) only.
+      if (!(
+        shell === 'bash' &&
+        (process.platform === 'win32' || BASH_MAJOR < 4)
+      )) {
+        assert.equal(hostileOutput, hostileExpectation(HOSTILE_VALUE), command);
+      }
     }
     return null;
   } finally {

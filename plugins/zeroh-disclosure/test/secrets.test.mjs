@@ -6,7 +6,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -24,6 +23,7 @@ import {
   scrub,
 } from '../lib/secrets.js';
 import {
+  assertPrivate,
   FAKE_DB_PASSWORD,
   FAKE_STRIPE,
   FAKE_WEBHOOK,
@@ -42,12 +42,13 @@ function withHome(home, fn) {
 }
 
 test('ZeroH home is the OS home plus .zeroh unless overridden', () => {
+  // macOS and Linux; Windows is %LOCALAPPDATA%\\ZeroH (vault-lifecycle).
   assert.equal(
-    zerohHome({}, () => '/Users/alice'),
-    path.join('/Users/alice', '.zeroh'),
+    zerohHome({}, () => '/Users/alice', 'linux'),
+    '/Users/alice/.zeroh',
   );
   assert.equal(
-    zerohHome({ ZEROH_HOME: '/private/zeroh' }, () => '/Users/alice'),
+    zerohHome({ ZEROH_HOME: '/private/zeroh' }, () => '/Users/alice', 'linux'),
     '/private/zeroh',
   );
 });
@@ -112,7 +113,12 @@ test('CRLF dotenv values never retain a carriage return', () => {
 test('credential files and suffix-named environment values become known secrets', () => {
   const p = tempProject({ env: false });
   mkdirSync(path.join(p.home, '.aws'), { recursive: true });
-  mkdirSync(path.join(p.home, '.config', 'gh'), { recursive: true });
+  // gh keeps its hosts file in %APPDATA%\\GitHub CLI on Windows.
+  const ghHosts =
+    process.platform === 'win32'
+      ? path.join(p.home, 'AppData', 'Roaming', 'GitHub CLI', 'hosts.yml')
+      : path.join(p.home, '.config', 'gh', 'hosts.yml');
+  mkdirSync(path.dirname(ghHosts), { recursive: true });
   mkdirSync(path.join(p.home, '.docker'), { recursive: true });
   writeFileSync(
     path.join(p.home, '.aws', 'credentials'),
@@ -124,7 +130,7 @@ test('credential files and suffix-named environment values become known secrets'
     ].join('\n'),
   );
   writeFileSync(
-    path.join(p.home, '.config', 'gh', 'hosts.yml'),
+    ghHosts,
     'github.com:\n  oauth_token: ghp_ZEROHFAKE0123456789ABCDEFGHIJKLMNOPQ\n',
   );
   writeFileSync(
@@ -233,7 +239,9 @@ test('vault file is encrypted and private', () =>
     vault.save();
     const raw = readFileSync(vault.file, 'utf8');
     assert.ok(!raw.includes(FAKE_STRIPE));
-    assert.equal(statSync(vault.file).mode & 0o777, 0o600);
+    assertPrivate(vault.file, 0o600, vault.file, {
+      home: process.env.ZEROH_HOME,
+    });
     assert.equal(new Vault(p.dir).size, 1);
   }));
 
@@ -364,12 +372,15 @@ test('destination checks find bare, credential, port and IP hosts in Bash and Po
     }
   }));
 
-test('bare dotted words require an IANA TLD, with .bar documented as a host', () => {
+test('network operands with an IANA TLD are hosts; a bare dotted word elsewhere is not', () => {
   const mustNotMatch = [
     'npm install lodash.merge',
     'python -m http.server',
     'cat .env.local',
     'jq .data.items[0] file.json',
+    // .bar is a real IANA TLD, but grep reads no host (live use of rc.2:
+    // `az … --query sku.name` was stopped as a send to sku.name).
+    'grep -r foo.bar src/',
   ];
   for (const command of mustNotMatch) {
     assert.deepEqual(hostsIn(command), [], command);
@@ -381,8 +392,6 @@ test('bare dotted words require an IANA TLD, with .bar documented as a host', ()
     ['curl exfil.xyz', 'exfil.xyz'],
     ['curl exfil.de', 'exfil.de'],
     ['curl exfil.xn--p1ai', 'exfil.xn--p1ai'],
-    // This probe command intentionally remains a match: .bar is a real IANA TLD.
-    ['grep -r foo.bar src/', 'foo.bar'],
   ];
   for (const [command, host] of mustMatch) {
     assert.deepEqual(hostsIn(command), [host], command);
@@ -405,6 +414,9 @@ test('private keys and credential stores are sensitive; public keys and .env are
   assert.equal(isSensitivePath('ca.pem', p.dir), false);
   assert.equal(isSensitivePath('infra/terraform.tfstate'), true);
   assert.equal(isSensitivePath('C:\\Users\\me\\.ssh\\id_ed25519'), true);
+  // curl's password files: ~/.netrc, and _netrc on Windows.
+  assert.equal(isSensitivePath('/home/me/.netrc'), true);
+  assert.equal(isSensitivePath('C:\\Users\\me\\_netrc'), true);
   assert.equal(isSensitivePath('.env'), false);
   assert.match(bashSensitiveReason('cat ~/.ssh/id_rsa'), /id_rsa/);
   assert.match(bashSensitiveReason('cat .env | base64'), /encoder/);

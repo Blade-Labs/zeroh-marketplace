@@ -15,7 +15,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   DEFAULT_STYLE,
   encodeProjectPath,
@@ -285,6 +285,10 @@ test('the style file is read on every draw', async () => {
   assert.equal(await s.run(['segment']), 'ZeroH | protected');
 });
 
+// A receipt file URL as this system writes one (file:///C:/… on Windows).
+const RECEIPT_PATH = path.resolve('/tmp/x/receipt.html');
+const RECEIPT_URL = pathToFileURL(RECEIPT_PATH).href;
+
 test('--json: the versioned data schema', async () => {
   const s = session({
     ...HEALTHY,
@@ -334,15 +338,15 @@ test('--json: the versioned data schema', async () => {
       { kind: 'EMAIL', expiresAt: Date.parse('2026-09-27T12:12:00Z') },
       { kind: 'PHONE', expiresAt: null },
     ],
-    receipt: 'file:///tmp/x/receipt.html',
+    receipt: RECEIPT_URL,
   });
   assert.deepEqual(withAll.unmask, [
     { kind: 'EMAIL', expires_at: '2026-09-27T12:12:00.000Z' },
     { kind: 'PHONE', expires_at: null },
   ]);
   assert.deepEqual(withAll.receipt, {
-    url: 'file:///tmp/x/receipt.html',
-    path: '/tmp/x/receipt.html',
+    url: RECEIPT_URL,
+    path: RECEIPT_PATH,
   });
 });
 

@@ -13,6 +13,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import http from 'node:http';
@@ -34,10 +35,11 @@ import {
   proxyPaths,
   readProxyConfig,
 } from '../lib/proxy-state.js';
-import { acquireFileLock, releaseFileLock } from '../lib/vault.js';
+import { acquireFileLock, releaseFileLock, Vault } from '../lib/vault.js';
 import { uninstallMarkerPath } from '../lib/uninstall-marker.js';
 import { createServiceManager } from '../lib/service-manager.js';
 import {
+  fakeProgram,
   fakeUpstream,
   isolatedProxyEnvironment as isolatedEnvironment,
   PLUGIN,
@@ -55,7 +57,7 @@ function settingsDoc(file) {
   return JSON.parse(readFileSync(file, 'utf8'));
 }
 
-async function until(check, timeoutMs = 6_000) {
+async function until(check, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await check()) return true;
@@ -106,7 +108,9 @@ test('proxy off stays off in the next prompt and session until proxy on (LP-B2)'
     isolated.settings,
     `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: upstream.url } })}\n`,
   );
-  const env = isolated.env;
+  // The retired daemon leaves soon after its last request (hooks run
+  // between requests here, so not too soon).
+  const env = { ...isolated.env, ZEROH_RETIRED_IDLE_MS: '5000' };
   t.after(async () => stopDefaultProxy({ env }));
   const installed = await ensureDefaultProxy({
     env,
@@ -125,11 +129,13 @@ test('proxy off stays off in the next prompt and session until proxy on (LP-B2)'
   });
   assert.equal(off.status, 0, off.stderr);
   assert.match(off.stdout, /stays off, also in new sessions/u);
+  assert.match(off.stdout, /This session keeps working until you exit/u);
   assert.equal(
     settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL,
     upstream.url,
   );
-  await until(async () => !(await probeProxy(installed.proxyUrl)));
+  // Retired, not stopped: the session that ran `proxy off` still names it.
+  assert.equal((await probeProxy(installed.proxyUrl))?.retired, true);
 
   // The next prompt of a running session does not put it back.
   const routing = await routeSession({
@@ -163,16 +169,32 @@ test('proxy off stays off in the next prompt and session until proxy on (LP-B2)'
   );
   assert.equal(readProxyConfig(proxyPaths(env)), null);
   assert.equal(createServiceManager({ env }).registeredKind(), null);
-  // A session that still names the old proxy is told plainly, never looped.
+  // A session that still names the old proxy keeps working through the
+  // retired daemon (Rule 1): its prompt goes on.
   const stale = hook(
     'user-prompt-submit',
     { session_id: 'off-1', prompt: 'hello again' },
     { ...env, ANTHROPIC_BASE_URL: installed.proxyUrl },
     isolated.root,
   );
-  assert.equal(stale.code, 2);
-  assert.match(stale.stderr, /you turned the local proxy off/u);
-  assert.doesNotMatch(stale.stderr, /could not check/u);
+  assert.equal(stale.code, 0, stale.stderr);
+  assert.notEqual(stale.json?.decision, 'block');
+  const through = await postJson(`${installed.proxyUrl}/v1/messages`, BODY, {
+    sessionId: 'off-1',
+  });
+  assert.equal(through.status, 200);
+  // Idle, it leaves by itself.
+  assert.ok(await until(async () => !(await probeProxy(installed.proxyUrl))));
+  // Once gone, a session that still names it is told plainly, never looped.
+  const gone = hook(
+    'user-prompt-submit',
+    { session_id: 'off-1', prompt: 'hello again' },
+    { ...env, ANTHROPIC_BASE_URL: installed.proxyUrl },
+    isolated.root,
+  );
+  assert.equal(gone.code, 2);
+  assert.match(gone.stderr, /you turned the local proxy off/u);
+  assert.doesNotMatch(gone.stderr, /could not check/u);
 
   // proxy on: the next session sets it up again.
   const on = spawnSync(process.execPath, [CLI, 'proxy', 'on'], {
@@ -201,6 +223,11 @@ test('proxy off stays off in the next prompt and session until proxy on (LP-B2)'
   assert.equal(existsSync(restoreRecordPath(isolated.settings)), false);
 });
 
+// Windows has no SIGTERM: process.kill ends a process at once there and none
+// of its handlers run, so a daemon stopped that way cannot take its settings
+// entry out (on POSIX it does, LP-B4).
+const GRACEFUL_SIGTERM = process.platform !== 'win32';
+
 test('a daemon that leaves takes its settings entry with it, and comes back at the same URL (LP-B4)', async (t) => {
   const isolated = isolatedEnvironment('proxy-leaves');
   const upstream = await fakeUpstream();
@@ -219,27 +246,31 @@ test('a daemon that leaves takes its settings entry with it, and comes back at t
   assert.ok(manager.registeredKind());
 
   // Shutdown or logout (SIGTERM): the entry goes, the login item stays, and
-  // the next prompt of a plugin session writes it back.
-  process.kill(installed.pid, 'SIGTERM');
-  assert.ok(await until(async () => !(await probeProxy(installed.proxyUrl))));
-  assert.deepEqual(settingsDoc(isolated.settings), original);
-  assert.ok(
-    manager.registeredKind(),
-    'the login item stays for the next login',
-  );
-  const routed = await routeSession({
-    env,
-    sessionId: 'leave-1',
-    root: isolated.root,
-    pluginRoot: PLUGIN,
-    waitMs: 10,
-  });
-  assert.equal(routed.routed, true);
-  assert.equal(
-    settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL,
-    installed.proxyUrl,
-    'the same URL is written back',
-  );
+  // the next prompt of a plugin session writes it back. (Not on Windows,
+  // where no test can stop the daemon gracefully; there the daemon from the
+  // install serves the part below.)
+  if (GRACEFUL_SIGTERM) {
+    process.kill(installed.pid, 'SIGTERM');
+    assert.ok(await until(async () => !(await probeProxy(installed.proxyUrl))));
+    assert.deepEqual(settingsDoc(isolated.settings), original);
+    assert.ok(
+      manager.registeredKind(),
+      'the login item stays for the next login',
+    );
+    const routed = await routeSession({
+      env,
+      sessionId: 'leave-1',
+      root: isolated.root,
+      pluginRoot: PLUGIN,
+      waitMs: 10,
+    });
+    assert.equal(routed.routed, true);
+    assert.equal(
+      settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL,
+      installed.proxyUrl,
+      'the same URL is written back',
+    );
+  }
 
   // The plugin was removed and ~/.zeroh deleted: the daemon puts the user's
   // setting back and removes its login item before it exits, so Claude Code
@@ -349,7 +380,8 @@ test('a daemon that leaves keeps the entry a live session goes through; its next
   });
   process.kill(last.pid, 'SIGTERM');
   assert.ok(await gone());
-  assert.deepEqual(settingsDoc(isolated.settings), original);
+  if (GRACEFUL_SIGTERM)
+    assert.deepEqual(settingsDoc(isolated.settings), original);
 });
 
 test('an update restarts the daemon without cutting an answer in progress (LP-F2)', async (t) => {
@@ -453,9 +485,13 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   t.after(() => upstream.close());
   const original = { env: { ANTHROPIC_BASE_URL: upstream.url } };
   writeFileSync(isolated.settings, `${JSON.stringify(original)}\n`);
-  const env = isolated.env;
+  // The retired daemon leaves soon after its last request (hooks run
+  // between requests here, so not too soon).
+  const env = { ...isolated.env, ZEROH_RETIRED_IDLE_MS: '5000' };
   const project = path.join(isolated.root, 'project');
   mkdirSync(project, { recursive: true });
+  const secret = 'ZEROHFAKE-uninstall-known-7c3e9a1b5d';
+  writeFileSync(path.join(project, '.env'), `UNINSTALL_KEY=${secret}\n`);
   const start = hook(
     'session-start',
     { session_id: 'uninstall-1', source: 'startup' },
@@ -472,6 +508,14 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   assert.equal(prompt.code, 0, prompt.stderr);
   const installed = settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL;
   assert.match(installed, /\/z\//u);
+  const withSecret = JSON.stringify({
+    messages: [{ role: 'user', content: `key ${secret}` }],
+  });
+  const before = await postJson(`${installed}/v1/messages`, withSecret, {
+    sessionId: 'uninstall-1',
+  });
+  assert.equal(before.status, 200);
+  assert.ok(!upstream.seen.at(-1).body.includes(secret), 'masked before');
   // D-15: nothing in the project; the session lives under ZEROH_HOME.
   assert.equal(existsSync(path.join(project, '.zeroh')), false);
   assert.ok(existsSync(path.join(env.ZEROH_HOME, 'projects')));
@@ -500,7 +544,7 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
     ].join('\n'),
     { mode: 0o755 },
   );
-  const uninstallEnv = { ...env, ZEROH_CLAUDE_BIN: fakeClaude };
+  const uninstallEnv = { ...env, ZEROH_CLAUDE_BIN: fakeProgram(fakeClaude) };
   const uninstall = (...args) =>
     spawnSync(process.execPath, [CLI, 'uninstall', ...args], {
       env: asUser(['uninstall', ...args], uninstallEnv),
@@ -508,11 +552,25 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
     });
-  // Without a terminal to ask in (a slash command) it says what it removes
+  // In a terminal without --yes, or with --dry-run, it says what it removes
   // and removes nothing.
-  const asked = uninstall();
-  assert.equal(asked.status, 0, asked.stderr);
-  assert.match(asked.stdout, /Nothing was removed yet/u);
+  const receiptsDir = `${path.resolve(env.ZEROH_HOME)}-receipts`;
+  for (const args of [[], ['--yes', '--dry-run']]) {
+    const asked = uninstall(...args);
+    assert.equal(asked.status, 0, asked.stderr);
+    assert.match(asked.stdout, /Nothing was removed yet/u);
+    assert.match(asked.stdout, /type \/zeroh-disclosure:uninstall/u);
+    // The plan says the receipts are kept, and where.
+    assert.ok(
+      asked.stdout
+        .replace(/\s+/gu, ' ')
+        .includes(
+          `It keeps your receipts: every signed receipt, receipt.html and session receipt bundle, with the public keys that verify them, move to ${receiptsDir}.`,
+        ),
+      asked.stdout,
+    );
+  }
+  assert.equal(existsSync(receiptsDir), false);
   assert.equal(existsSync(calls), false);
   assert.equal(
     settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL,
@@ -540,14 +598,57 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
     removed.stdout,
     /Removed the plugin from Claude Code \(zeroh-disclosure@zeroh, user\)/u,
   );
-  assert.match(removed.stdout, /keep running until you exit them/u);
+  assert.match(
+    removed.stdout,
+    /This session keeps working until you exit, without ZeroH's masking; new sessions start without ZeroH\./u,
+  );
+  assert.doesNotMatch(removed.stdout, /masks nothing new|stay tokens/u);
+  assert.match(
+    removed.stdout,
+    /To install it again: claude plugin install zeroh-disclosure@zeroh/u,
+  );
   assert.deepEqual(settingsDoc(isolated.settings), original);
   assert.equal(existsSync(restoreRecordPath(isolated.settings)), false);
   assert.equal(existsSync(path.join(project, '.zeroh')), false);
   assert.ok(existsSync(path.join(other, '.zeroh', 'notes.txt')));
   // Only the tombstone is left, for the sessions still running.
   assert.deepEqual(readdirSync(env.ZEROH_HOME), ['uninstalled']);
+  // The receipts, and only they, are kept outside ZEROH_HOME (owner
+  // decision 2026-09-28), value-free, with the public keys.
+  assert.match(
+    removed.stdout.replace(/\s+/gu, ' '),
+    /Kept your receipts: 1 signed receipt\(s\) of 1 session\(s\)/u,
+  );
+  assert.ok(removed.stdout.includes(receiptsDir), removed.stdout);
+  const keptFiles = readdirSync(receiptsDir, { recursive: true })
+    .map((name) => path.join(receiptsDir, name))
+    .filter((file) => !statSync(file).isDirectory());
+  assert.ok(keptFiles.length >= 4, keptFiles.join('\n'));
+  for (const file of keptFiles) {
+    assert.match(
+      path.basename(file),
+      /^(?:turn-\d+\.json|receipt\.html|session\.bundle\.json|signing-key\.json|zeroh-receipts\.json|README\.txt)$/u,
+      file,
+    );
+    assert.ok(!readFileSync(file, 'utf8').includes(secret), file);
+  }
   assert.equal(createServiceManager({ env }).registeredKind(), null);
+  // The running session keeps working: the retired daemon still serves its
+  // URL (Rule 1) and writes nothing under ZEROH_HOME.
+  assert.equal((await probeProxy(installed))?.retired, true);
+  const served = await postJson(`${installed}/v1/messages`, BODY, {
+    sessionId: 'uninstall-1',
+  });
+  assert.equal(served.status, 200);
+  // Rule 8: the vault and the hooks are gone, so nothing could put a token
+  // back: the retired daemon masks nothing, not even what it masked before.
+  const unmasked = await postJson(`${installed}/v1/messages`, withSecret, {
+    sessionId: 'uninstall-1',
+  });
+  assert.equal(unmasked.status, 200);
+  assert.ok(upstream.seen.at(-1).body.includes(secret), 'passed unmasked');
+  assert.deepEqual(readdirSync(env.ZEROH_HOME), ['uninstalled']);
+  // Idle, it leaves by itself, and nothing starts it again.
   assert.ok(await until(async () => !(await probeProxy(installed))));
 
   // The running session's hooks do nothing more: nothing is set up again.
@@ -580,8 +681,279 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   assert.equal(again.code, 0, again.stderr);
   assert.ok(existsSync(env.ZEROH_HOME));
   assert.equal(existsSync(uninstallMarkerPath(env)), false);
-  const { stopDefaultProxy } = await import('../lib/proxy-manager.js');
-  await stopDefaultProxy({ env });
+  // The kept receipts are left as they were.
+  for (const file of keptFiles) assert.ok(existsSync(file), file);
+
+  // --delete-receipts wipes everything, the receipts kept before included.
+  const wiped = uninstall('--yes', '--delete-receipts');
+  assert.equal(wiped.status, 0, wiped.stderr);
+  assert.match(
+    wiped.stdout,
+    /Deleted your receipts too \(--delete-receipts\)\./u,
+  );
+  assert.equal(existsSync(receiptsDir), false);
+  assert.deepEqual(readdirSync(env.ZEROH_HOME), ['uninstalled']);
+  // The daemon the new session started was retired; idle, it leaves.
+  assert.ok(await until(() => testDaemons().length === 0, 20_000));
+});
+
+// Rule 1 (owner, 2026-09-28): `proxy off`, doctor --fix and uninstall
+// retire the daemon instead of stopping it. The session that ran the command
+// still names its URL; a stopped daemon made its next call fail with
+// "Connection refused" and ten retries.
+test('a retired daemon serves open sessions with what it masked, masks nothing new, exits when idle and never restarts', async (t) => {
+  const isolated = isolatedEnvironment('retired');
+  const upstream = await fakeUpstream();
+  t.after(() => upstream.close());
+  writeFileSync(
+    isolated.settings,
+    `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: upstream.url } })}\n`,
+  );
+  const env = { ...isolated.env, ZEROH_RETIRED_IDLE_MS: '1500' };
+  const root = path.join(isolated.root, 'project');
+  mkdirSync(root, { recursive: true });
+  const before = 'ZEROHFAKE-retired-before-4f1c9a2b7d';
+  const after = 'ZEROHFAKE-retired-after-8e2d6c1a5f';
+  writeFileSync(path.join(root, '.env'), `BEFORE_KEY=${before}\n`);
+  t.after(async () => stopDefaultProxy({ env }));
+  const installed = await ensureDefaultProxy({
+    env,
+    root,
+    pluginRoot: PLUGIN,
+    sessionId: 'retired-1',
+  });
+  const ask = (content) =>
+    postJson(
+      `${installed.proxyUrl}/v1/messages`,
+      JSON.stringify({ messages: [{ role: 'user', content }] }),
+      { sessionId: 'retired-1' },
+    );
+  assert.equal((await ask(`key ${before}`)).status, 200);
+  const masked = upstream.seen.at(-1).body;
+  assert.ok(!masked.includes(before));
+  const token = /\[[A-Z_]+-[0-9a-f]{6}\]/u.exec(masked)?.[0];
+  assert.ok(token, masked);
+
+  const off = spawnSync(process.execPath, [CLI, 'proxy', 'off'], {
+    env: asUser(['proxy', 'off'], env),
+    encoding: 'utf8',
+  });
+  assert.equal(off.status, 0, off.stderr);
+  assert.equal((await probeProxy(installed.proxyUrl))?.retired, true);
+  // A value known only after it retired, and the proxy's files gone.
+  writeFileSync(
+    path.join(root, '.env'),
+    `BEFORE_KEY=${before}\nAFTER_KEY=${after}\n`,
+  );
+  assert.equal(readProxyConfig(proxyPaths(env)), null);
+  const log = proxyPaths(env).log;
+  const logBefore = existsSync(log) ? readFileSync(log, 'utf8') : '';
+
+  assert.equal((await ask(`key ${before} and ${after}`)).status, 200);
+  const retired = upstream.seen.at(-1).body;
+  // What the model saw as a token stays that token; nothing new is masked
+  // (it could never be restored once ZeroH is gone).
+  assert.ok(retired.includes(token), retired);
+  assert.ok(!retired.includes(before), retired);
+  assert.ok(retired.includes(after), retired);
+  // A session it never masked for (no hooks there) still passes through as
+  // it did before it retired: nothing could put a token back there.
+  const unrouted = await postJson(
+    `${installed.proxyUrl}/v1/messages`,
+    JSON.stringify({ messages: [{ role: 'user', content: `key ${before}` }] }),
+    { sessionId: 'retired-no-hooks' },
+  );
+  assert.equal(unrouted.status, 200);
+  assert.ok(upstream.seen.at(-1).body.includes(before));
+  // It wrote nothing under ZEROH_HOME, and no login item came back.
+  assert.equal(existsSync(log) ? readFileSync(log, 'utf8') : '', logBefore);
+  assert.equal(readProxyConfig(proxyPaths(env)), null);
+  assert.equal(createServiceManager({ env }).registeredKind(), null);
+
+  // Kept alive by requests, it leaves once idle, and stays gone.
+  assert.ok(await until(async () => !(await probeProxy(installed.proxyUrl))));
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+  assert.equal(await probeProxy(installed.proxyUrl), null);
+});
+
+// Astra pre-1.0.0 R4: a retired daemon pooled every project's known values
+// into one masker and used it for every session, so a value known only in
+// project A went to project B's model as A's token, which B's hooks can't
+// put back (rule 8). Each session keeps its own project's known values.
+test("a retired daemon masks each session with its own project's known values only (Astra R4)", async (t) => {
+  const isolated = isolatedEnvironment('retired-per-project');
+  const upstream = await fakeUpstream();
+  t.after(() => upstream.close());
+  writeFileSync(
+    isolated.settings,
+    `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: upstream.url } })}\n`,
+  );
+  const env = { ...isolated.env, ZEROH_RETIRED_IDLE_MS: '1500' };
+  const a = path.join(isolated.root, 'project-a');
+  const b = path.join(isolated.root, 'project-b');
+  mkdirSync(a, { recursive: true });
+  mkdirSync(b, { recursive: true });
+  const onlyA = 'ZEROHFAKE-retired-only-project-A-7c3e';
+  const onlyB = 'ZEROHFAKE-retired-only-project-B-2d9f';
+  const vaultA = new Vault(a, { env });
+  const tokenA = vaultA.tokenFor('SECRET', onlyA);
+  vaultA.save();
+  const vaultB = new Vault(b, { env });
+  const tokenB = vaultB.tokenFor('SECRET', onlyB);
+  vaultB.save();
+  t.after(async () => stopDefaultProxy({ env }));
+  const installed = await ensureDefaultProxy({
+    env,
+    root: a,
+    pluginRoot: PLUGIN,
+    sessionId: 'project-a',
+  });
+  await ensureDefaultProxy({
+    env,
+    root: b,
+    pluginRoot: PLUGIN,
+    sessionId: 'project-b',
+  });
+  await stopDefaultProxy({ env, retire: true, remember: true });
+  assert.equal((await probeProxy(installed.proxyUrl))?.retired, true);
+  const ask = (sessionId) =>
+    postJson(
+      `${installed.proxyUrl}/v1/messages`,
+      JSON.stringify({
+        messages: [{ role: 'user', content: `keys ${onlyA} ${onlyB}` }],
+      }),
+      { sessionId },
+    );
+
+  assert.equal((await ask('project-b')).status, 200);
+  const fromB = upstream.seen.at(-1).body;
+  assert.ok(!fromB.includes(tokenA), `A's token in B: ${fromB}`);
+  assert.ok(fromB.includes(onlyA), fromB);
+  assert.ok(fromB.includes(tokenB) && !fromB.includes(onlyB), fromB);
+  assert.equal(new Vault(b, { env }).valueOf(tokenB), onlyB);
+
+  assert.equal((await ask('project-a')).status, 200);
+  const fromA = upstream.seen.at(-1).body;
+  assert.ok(!fromA.includes(tokenB), `B's token in A: ${fromA}`);
+  assert.ok(fromA.includes(onlyB), fromA);
+  assert.ok(fromA.includes(tokenA) && !fromA.includes(onlyA), fromA);
+  assert.ok(await until(async () => !(await probeProxy(installed.proxyUrl))));
+});
+
+// Rule 1 (architect review 1.0.0): where the system refused the login item
+// the daemon leaves once no plugin session is live, but a session whose
+// hooks don't run (the plugin disabled there, or Claude Code started it
+// without plugins) captured the same port. The daemon takes its settings
+// entries out, then drains like a retired one instead of closing the port.
+test('a session-only daemon drains instead of closing a port a session without hooks still uses', async (t) => {
+  const isolated = isolatedEnvironment('session-only-drain');
+  const upstream = await fakeUpstream();
+  t.after(() => upstream.close());
+  writeFileSync(
+    isolated.settings,
+    `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: upstream.url } })}\n`,
+  );
+  const env = { ...isolated.env, ZEROH_RETIRED_IDLE_MS: '4000' };
+  const refusing = {
+    isRegistered: () => false,
+    register() {
+      throw Object.assign(new Error('login items are off'), { code: 'EPERM' });
+    },
+    unregister: () => ({ removed: false, kind: null }),
+  };
+  t.after(async () => stopDefaultProxy({ env, serviceManager: refusing }));
+  const installed = await ensureDefaultProxy({
+    env,
+    root: isolated.root,
+    pluginRoot: PLUGIN,
+    sessionId: 'drain-plugin',
+    serviceManager: refusing,
+    writeSettings: true,
+  });
+  assert.equal(installed.sessionOnly, true);
+  assert.equal(
+    settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL,
+    installed.proxyUrl,
+  );
+  // A session without hooks on the same port: passed through, unmasked.
+  const hookless = () =>
+    postJson(`${installed.proxyUrl}/v1/messages`, BODY, {
+      sessionId: 'drain-no-hooks',
+    });
+  assert.equal((await hookless()).status, 200);
+
+  // The only plugin session ends: the entry comes out within a lifecycle
+  // check (5 s after start) ...
+  endSessionRoute({ env, sessionId: 'drain-plugin' });
+  assert.ok(
+    await until(
+      () =>
+        settingsDoc(isolated.settings).env?.ANTHROPIC_BASE_URL !==
+        installed.proxyUrl,
+      20_000,
+    ),
+    'the settings entry was taken out',
+  );
+  // ... and the session still on the port keeps working (it was refused
+  // ten times over before).
+  for (let index = 0; index < 3; index += 1) {
+    const answer = await hookless();
+    assert.equal(answer.status, 200, answer.text);
+    assert.equal(upstream.seen.at(-1).body, BODY);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  assert.equal((await probeProxy(installed.proxyUrl))?.retired, true);
+  // A new plugin session never settles for a draining daemon: it takes the
+  // port over with a daemon that masks again.
+  const next = await ensureDefaultProxy({
+    env,
+    root: isolated.root,
+    pluginRoot: PLUGIN,
+    sessionId: 'drain-next',
+    serviceManager: refusing,
+    writeSettings: true,
+  });
+  const health = await probeProxy(next.proxyUrl);
+  assert.ok(health, 'a daemon answers');
+  assert.equal(health.retired, undefined);
+  assert.equal(next.proxyUrl, installed.proxyUrl);
+});
+
+// doctor --fix inside a session retires this home's daemon as well; a
+// retired daemon is never reported or killed as an unknown one.
+test('doctor --fix retires the daemon and later ignores it', async (t) => {
+  const isolated = isolatedEnvironment('retired-doctor');
+  const upstream = await fakeUpstream();
+  t.after(() => upstream.close());
+  writeFileSync(
+    isolated.settings,
+    `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: upstream.url } })}\n`,
+  );
+  const env = { ...isolated.env, ZEROH_RETIRED_IDLE_MS: '1500' };
+  t.after(async () => stopDefaultProxy({ env }));
+  const installed = await ensureDefaultProxy({
+    env,
+    root: isolated.root,
+    pluginRoot: PLUGIN,
+    sessionId: 'doctor-1',
+  });
+  const fixed = await diagnoseProxy({ env, fix: true, retire: true });
+  assert.equal(fixed.retired, 1);
+  assert.equal(fixed.stopped, 0);
+  assert.equal((await probeProxy(installed.proxyUrl))?.retired, true);
+  const through = await postJson(`${installed.proxyUrl}/v1/messages`, BODY, {
+    sessionId: 'doctor-1',
+  });
+  assert.equal(through.status, 200);
+  const guard = await checkSessionProxy({
+    env: { ...env, ANTHROPIC_BASE_URL: installed.proxyUrl },
+    sessionId: 'doctor-1',
+    root: isolated.root,
+  });
+  assert.deepEqual(guard, { block: false, state: 'retired' });
+  const again = await diagnoseProxy({ env });
+  assert.equal(again.findings.includes('unknown-zeroh-daemon'), false);
+  assert.ok(await until(async () => !(await probeProxy(installed.proxyUrl))));
 });
 
 // The guard in helpers.mjs: after the last test of a file, a proxy daemon

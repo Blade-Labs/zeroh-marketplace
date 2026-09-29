@@ -1,0 +1,360 @@
+{
+  "turn": 1,
+  "phase": "finalized",
+  "created_at": "2026-09-28T12:10:30.052Z",
+  "proof_stage": "pre_boundary",
+  "policy_id": "zeroh-disclosure-v1",
+  "policy_alias": "disclosure",
+  "protection_engine_id": "regex-local",
+  "protection_engine_resolution": {
+    "requested_engine_id": "regex-local",
+    "selected_engine_id": "regex-local",
+    "status": "selected",
+    "fallback": false,
+    "fallback_mode": "n/a",
+    "reason": null
+  },
+  "findings": [],
+  "sanitized_text": "Read the env file please.",
+  "replacements": [],
+  "masked_categories": [],
+  "referenced_tokens": [],
+  "receipt": {
+    "receipt_id": "zrh_mul7h7gz_TVD0pck_p1nv",
+    "receipt_hash": "sfy17B620etU8Hn1Rp-G1YmKx5H_CbzoRbw0tySSwRo",
+    "public_claims": {
+      "schema": "zeroh-disclosure-receipt/v2",
+      "subject_type": "prompt",
+      "iss": "did:jwk:pOtE-9yRIIfIvu-l9n0ku71HVZOMl1rx-msrNbDAuN8",
+      "sub": "did:jwk:pOtE-9yRIIfIvu-l9n0ku71HVZOMl1rx-msrNbDAuN8",
+      "vct": "https://zeroh.io/vct/disclosure-receipt/v1",
+      "receipt_id": "zrh_mul7h7gz_TVD0pck_p1nv",
+      "iat": "2026-09-28T12:10:30.035Z",
+      "policy_id": "zeroh-disclosure-v1",
+      "policy_alias": "disclosure",
+      "policy_hash": "mnVztVDD_VNh5iHWHjiagEHwx3g10wnPVaRbvJTz4xU",
+      "proof_stage": "pre_boundary",
+      "detector_hash": "ZGD9qBEF9Qd5VOnS4ZKjFvKXv54QvqSJ72URnNTEVdM",
+      "protection_engine_id": "regex-local",
+      "protection_engine_hash": "ZGD9qBEF9Qd5VOnS4ZKjFvKXv54QvqSJ72URnNTEVdM",
+      "protection_engine_manifest": {
+        "id": "regex-local",
+        "engine": "regex-local",
+        "cloud_calls": false,
+        "categories": [
+          {
+            "type": "PRIVATE_KEY",
+            "risk": "critical",
+            "confidence": 0.99
+          },
+          {
+            "type": "API_KEY",
+            "risk": "critical",
+            "confidence": 0.84
+          },
+          {
+            "type": "SECRET",
+            "risk": "critical",
+            "confidence": 0.9
+          },
+          {
+            "type": "TOKEN",
+            "risk": "critical",
+            "confidence": 0.84
+          },
+          {
+            "type": "PASSWORD",
+            "risk": "high",
+            "confidence": 0.93
+          },
+          {
+            "type": "EMAIL",
+            "risk": "medium",
+            "confidence": 0.9
+          },
+          {
+            "type": "CARD_NUMBER",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "IBAN",
+            "risk": "high",
+            "confidence": 0.95
+          },
+          {
+            "type": "ES_NIF",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "ES_NIE",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "IT_FISCAL_CODE",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "FI_PERSONAL_IDENTITY_CODE",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "PHONE_NUMBER",
+            "risk": "medium",
+            "confidence": 0.85
+          },
+          {
+            "type": "IP_ADDRESS",
+            "risk": "medium",
+            "confidence": 0.8
+          },
+          {
+            "type": "CRYPTO",
+            "risk": "medium",
+            "confidence": 0.8
+          },
+          {
+            "type": "US_SSN",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "US_ITIN",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "UK_NINO",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "QATAR_ID",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "IN_AADHAAR",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "IN_PAN",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "PK_CNIC",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "EMIRATES_ID",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "SAUDI_NID",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "IQAMA",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "BR_CPF",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "PL_PESEL",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "SE_PERSONNUMMER",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "NL_BSN",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "CN_RESIDENT_ID",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "TW_NATIONAL_ID",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "HK_IDENTITY_CARD",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "NO_FODSELSNUMMER",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "TH_TNIN",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "IL_ID",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "MALAYSIA_NRIC",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "PASSPORT",
+            "risk": "high",
+            "confidence": 0.9
+          },
+          {
+            "type": "DOB",
+            "risk": "high",
+            "confidence": 0.9
+          }
+        ],
+        "provider_catalog": {
+          "source": {
+            "project": "gitleaks/gitleaks",
+            "version": "v8.30.1",
+            "commit": "83d9cd684c87",
+            "license": "MIT",
+            "file": "vendor/gitleaks/gitleaks-v8.30.1.toml"
+          },
+          "imported": 221,
+          "skipped": 1
+        },
+        "interface_version": "zeroh-protection-engine/v1",
+        "provider": "zeroh-reference"
+      },
+      "protection_engine_resolution": {
+        "requested_engine_id": "regex-local",
+        "selected_engine_id": "regex-local",
+        "status": "selected",
+        "fallback": false,
+        "fallback_mode": "n/a",
+        "reason": null
+      },
+      "boundary_hash": "ksWJYFQ_ySr221qm3mUmmcY-bHMxQQ8_4I4J1NFE4bw",
+      "decision_action": "allow_with_receipt",
+      "detected_categories": [],
+      "masked_categories": [],
+      "sanitized_content_hash": "_37U8VqHfvB5mLYVcRygXJ1q6zLdYP7ymVEjYZcHMcM",
+      "original_content_commitment": "9GWwcVFdwbwct7JjiM2sMKfakTNgnPLtEN0dQBRoh-g",
+      "previous_receipt_hash": null,
+      "previous_token_hash": null,
+      "raw_content_seen_by_zeroh_saas": false,
+      "raw_content_sent_to_ai_provider": false,
+      "sanitized_content_may_be_sent_to_ai_provider": true,
+      "signing_key_id": "local:6578597",
+      "issuer_public_jwk": {
+        "key_ops": ["verify"],
+        "ext": true,
+        "kty": "EC",
+        "x": "GXfFJGva-nkoHN_oujet6oCGoD40sAnoJ-8UaYuNuNc",
+        "y": "hC9GRuLGnzIZsXgiXzAm-G7QD6vlslR1xcuddz_UJRU",
+        "crv": "P-256"
+      },
+      "unmask_receipt_extension": "hmac-v1"
+    },
+    "compact": "eyJhbGciOiJFUzI1NiIsImtpZCI6Imp3ay10aHVtYnByaW50OnBPdEUtOXlSSUlmSXZ1LWw5bjBrdTcxSFZaT01sMXJ4LW1zck5iREF1TjgiLCJ0eXAiOiJ6ZXJvaC1yZWNlaXB0K2p3dCJ9.eyJfc2QiOlsibU1CNkgtUVViMWVvX2pRYm5mV2I1Z0dxZ3JtNU41RF9FVXZTRHpSd3h1byIsIjRjekRhV2RfRlBJMjlGeHpMNk1wSGMwRXVjM19OWXZUUHJURE5xdXlUY2siLCJfUFFHenAzQVJhd0VuOUE5UUp3dFNDZFNwY2V1d1V1ZllrbllyR3h3Y1o4IiwiUl9CRW5Dc0p5QUxhYXpscEpDaWpYZWhlcVdVbmRmc2VrMjYyWWdSc3JDMCIsImdfdFF2WGU1Y1A0UF93M3VkSDk0WE9vLWxoMDhJNTViVThkQnhPWVlhemsiLCJPaUN5bjd1Q3NiQ1l5RUJpWmRkYXV4MVNQblF6aUQzeXpTbEtHeDRtNTFVIl0sIl9zZF9hbGciOiJzaGEtMjU2IiwiYm91bmRhcnlfaGFzaCI6ImtzV0pZRlFfeVNyMjIxcW0zbVVtbWNZLWJITXhRUThfNEk0SjFORkU0YnciLCJkZWNpc2lvbl9hY3Rpb24iOiJhbGxvd193aXRoX3JlY2VpcHQiLCJkZXRlY3RlZF9jYXRlZ29yaWVzIjpbXSwiZGV0ZWN0b3JfaGFzaCI6IlpHRDlxQkVGOVFkNVZPblM0WktqRnZLWHY1NFF2cVNKNzJVUm5OVEVWZE0iLCJpYXQiOiIyMDI2LTA5LTI4VDEyOjEwOjMwLjAzNVoiLCJpc3MiOiJkaWQ6andrOnBPdEUtOXlSSUlmSXZ1LWw5bjBrdTcxSFZaT01sMXJ4LW1zck5iREF1TjgiLCJpc3N1ZXJfcHVibGljX2p3ayI6eyJjcnYiOiJQLTI1NiIsImV4dCI6dHJ1ZSwia2V5X29wcyI6WyJ2ZXJpZnkiXSwia3R5IjoiRUMiLCJ4IjoiR1hmRkpHdmEtbmtvSE5fb3VqZXQ2b0NHb0Q0MHNBbm9KLThVYVl1TnVOYyIsInkiOiJoQzlHUnVMR256SVpzWGdpWHpBbS1HN1FENnZsc2xSMXhjdWRkel9VSlJVIn0sIm1hc2tlZF9jYXRlZ29yaWVzIjpbXSwib3JpZ2luYWxfY29udGVudF9jb21taXRtZW50IjoiOUdXd2NWRmR3YndjdDdKamlNMnNNS2Zha1ROZ25QTHRFTjBkUUJSb2gtZyIsInBvbGljeV9hbGlhcyI6ImRpc2Nsb3N1cmUiLCJwb2xpY3lfaGFzaCI6Im1uVnp0VkREX1ZOaDVpSFdIamlhZ0VId3gzZzEwd25QVmFSYnZKVHo0eFUiLCJwb2xpY3lfaWQiOiJ6ZXJvaC1kaXNjbG9zdXJlLXYxIiwicHJldmlvdXNfcmVjZWlwdF9oYXNoIjpudWxsLCJwcmV2aW91c190b2tlbl9oYXNoIjpudWxsLCJwcm9vZl9zdGFnZSI6InByZV9ib3VuZGFyeSIsInByb3RlY3Rpb25fZW5naW5lX2hhc2giOiJaR0Q5cUJFRjlRZDVWT25TNFpLakZ2S1h2NTRRdnFTSjcyVVJuTlRFVmRNIiwicHJvdGVjdGlvbl9lbmdpbmVfaWQiOiJyZWdleC1sb2NhbCIsInByb3RlY3Rpb25fZW5naW5lX21hbmlmZXN0Ijp7ImNhdGVnb3JpZXMiOlt7ImNvbmZpZGVuY2UiOjAuOTksInJpc2siOiJjcml0aWNhbCIsInR5cGUiOiJQUklWQVRFX0tFWSJ9LHsiY29uZmlkZW5jZSI6MC44NCwicmlzayI6ImNyaXRpY2FsIiwidHlwZSI6IkFQSV9LRVkifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImNyaXRpY2FsIiwidHlwZSI6IlNFQ1JFVCJ9LHsiY29uZmlkZW5jZSI6MC44NCwicmlzayI6ImNyaXRpY2FsIiwidHlwZSI6IlRPS0VOIn0seyJjb25maWRlbmNlIjowLjkzLCJyaXNrIjoiaGlnaCIsInR5cGUiOiJQQVNTV09SRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoibWVkaXVtIiwidHlwZSI6IkVNQUlMIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkNBUkRfTlVNQkVSIn0seyJjb25maWRlbmNlIjowLjk1LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJQkFOIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkVTX05JRiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJFU19OSUUifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiSVRfRklTQ0FMX0NPREUifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiRklfUEVSU09OQUxfSURFTlRJVFlfQ09ERSJ9LHsiY29uZmlkZW5jZSI6MC44NSwicmlzayI6Im1lZGl1bSIsInR5cGUiOiJQSE9ORV9OVU1CRVIifSx7ImNvbmZpZGVuY2UiOjAuOCwicmlzayI6Im1lZGl1bSIsInR5cGUiOiJJUF9BRERSRVNTIn0seyJjb25maWRlbmNlIjowLjgsInJpc2siOiJtZWRpdW0iLCJ0eXBlIjoiQ1JZUFRPIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlVTX1NTTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJVU19JVElOIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlVLX05JTk8ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiUUFUQVJfSUQifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiSU5fQUFESEFBUiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJTl9QQU4ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiUEtfQ05JQyJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJFTUlSQVRFU19JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJTQVVESV9OSUQifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiSVFBTUEifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiQlJfQ1BGIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlBMX1BFU0VMIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlNFX1BFUlNPTk5VTU1FUiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJOTF9CU04ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiQ05fUkVTSURFTlRfSUQifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVFdfTkFUSU9OQUxfSUQifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiSEtfSURFTlRJVFlfQ0FSRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJOT19GT0RTRUxTTlVNTUVSIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlRIX1ROSU4ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiSUxfSUQifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiTUFMQVlTSUFfTlJJQyJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJQQVNTUE9SVCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJET0IifV0sImNsb3VkX2NhbGxzIjpmYWxzZSwiZW5naW5lIjoicmVnZXgtbG9jYWwiLCJpZCI6InJlZ2V4LWxvY2FsIiwiaW50ZXJmYWNlX3ZlcnNpb24iOiJ6ZXJvaC1wcm90ZWN0aW9uLWVuZ2luZS92MSIsInByb3ZpZGVyIjoiemVyb2gtcmVmZXJlbmNlIiwicHJvdmlkZXJfY2F0YWxvZyI6eyJpbXBvcnRlZCI6MjIxLCJza2lwcGVkIjoxLCJzb3VyY2UiOnsiY29tbWl0IjoiODNkOWNkNjg0Yzg3IiwiZmlsZSI6InZlbmRvci9naXRsZWFrcy9naXRsZWFrcy12OC4zMC4xLnRvbWwiLCJsaWNlbnNlIjoiTUlUIiwicHJvamVjdCI6ImdpdGxlYWtzL2dpdGxlYWtzIiwidmVyc2lvbiI6InY4LjMwLjEifX19LCJwcm90ZWN0aW9uX2VuZ2luZV9yZXNvbHV0aW9uIjp7ImZhbGxiYWNrIjpmYWxzZSwiZmFsbGJhY2tfbW9kZSI6Im4vYSIsInJlYXNvbiI6bnVsbCwicmVxdWVzdGVkX2VuZ2luZV9pZCI6InJlZ2V4LWxvY2FsIiwic2VsZWN0ZWRfZW5naW5lX2lkIjoicmVnZXgtbG9jYWwiLCJzdGF0dXMiOiJzZWxlY3RlZCJ9LCJyYXdfY29udGVudF9zZWVuX2J5X3plcm9oX3NhYXMiOmZhbHNlLCJyYXdfY29udGVudF9zZW50X3RvX2FpX3Byb3ZpZGVyIjpmYWxzZSwicmVjZWlwdF9pZCI6InpyaF9tdWw3aDdnel9UVkQwcGNrX3AxbnYiLCJzYW5pdGl6ZWRfY29udGVudF9oYXNoIjoiXzM3VThWcUhmdkI1bUxZVmNSeWdYSjFxNnpMZFlQN3ltVkVqWVpjSE1jTSIsInNhbml0aXplZF9jb250ZW50X21heV9iZV9zZW50X3RvX2FpX3Byb3ZpZGVyIjp0cnVlLCJzY2hlbWEiOiJ6ZXJvaC1kaXNjbG9zdXJlLXJlY2VpcHQvdjIiLCJzaWduaW5nX2tleV9pZCI6ImxvY2FsOjY1Nzg1OTciLCJzdWIiOiJkaWQ6andrOnBPdEUtOXlSSUlmSXZ1LWw5bjBrdTcxSFZaT01sMXJ4LW1zck5iREF1TjgiLCJzdWJqZWN0X3R5cGUiOiJwcm9tcHQiLCJ1bm1hc2tfcmVjZWlwdF9leHRlbnNpb24iOiJobWFjLXYxIiwidmN0IjoiaHR0cHM6Ly96ZXJvaC5pby92Y3QvZGlzY2xvc3VyZS1yZWNlaXB0L3YxIn0.3gOnQpj_snsPGZ1zHnA-iiSliLYLu1BMyO-Q8GSJEbiKAMrXkkfLCoMsq4SprCgsQW1hJJx4jc-dRiNiuwlx8A",
+    "disclosures": [
+      "WyJyOHVPV1BpUDNnV1UxQXRKXy02am1RIiwiYm91bmRhcnlfZGV0YWlscyIseyJib3VuZGFyeV90eXBlIjoiZXh0ZXJuYWxfYWlfcHJvY2Vzc29yIiwiZGVzdGluYXRpb24iOiJhbnRocm9waWNfY2xhdWRlX2FwaSIsIm1vZGVsIjoiY2xhdWRlLWNvZGUiLCJwcm92aWRlciI6ImFudGhyb3BpYyIsInB1cnBvc2UiOiJkZXZlbG9wZXJfYXNzaXN0YW5jZSIsInNvdXJjZV9ydW50aW1lIjoiY2xhdWRlX2NvZGVfdXNlcl9wcm9tcHRfc3VibWl0X2hvb2sifV0",
+      "WyJDcU15Q1czV0FmMmNNWUtFdmlTMEZnIiwiZGV0ZWN0b3JfbWFuaWZlc3QiLHsiY2F0ZWdvcmllcyI6W3siY29uZmlkZW5jZSI6MC45OSwicmlzayI6ImNyaXRpY2FsIiwidHlwZSI6IlBSSVZBVEVfS0VZIn0seyJjb25maWRlbmNlIjowLjg0LCJyaXNrIjoiY3JpdGljYWwiLCJ0eXBlIjoiQVBJX0tFWSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiY3JpdGljYWwiLCJ0eXBlIjoiU0VDUkVUIn0seyJjb25maWRlbmNlIjowLjg0LCJyaXNrIjoiY3JpdGljYWwiLCJ0eXBlIjoiVE9LRU4ifSx7ImNvbmZpZGVuY2UiOjAuOTMsInJpc2siOiJoaWdoIiwidHlwZSI6IlBBU1NXT1JEIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJtZWRpdW0iLCJ0eXBlIjoiRU1BSUwifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiQ0FSRF9OVU1CRVIifSx7ImNvbmZpZGVuY2UiOjAuOTUsInJpc2siOiJoaWdoIiwidHlwZSI6IklCQU4ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiRVNfTklGIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkVTX05JRSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJVF9GSVNDQUxfQ09ERSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJGSV9QRVJTT05BTF9JREVOVElUWV9DT0RFIn0seyJjb25maWRlbmNlIjowLjg1LCJyaXNrIjoibWVkaXVtIiwidHlwZSI6IlBIT05FX05VTUJFUiJ9LHsiY29uZmlkZW5jZSI6MC44LCJyaXNrIjoibWVkaXVtIiwidHlwZSI6IklQX0FERFJFU1MifSx7ImNvbmZpZGVuY2UiOjAuOCwicmlzayI6Im1lZGl1bSIsInR5cGUiOiJDUllQVE8ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVVNfU1NOIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlVTX0lUSU4ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVUtfTklOTyJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJRQVRBUl9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJTl9BQURIQUFSIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IklOX1BBTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJQS19DTklDIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkVNSVJBVEVTX0lEIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlNBVURJX05JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJUUFNQSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJCUl9DUEYifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiUExfUEVTRUwifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiU0VfUEVSU09OTlVNTUVSIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6Ik5MX0JTTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJDTl9SRVNJREVOVF9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJUV19OQVRJT05BTF9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJIS19JREVOVElUWV9DQVJEIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6Ik5PX0ZPRFNFTFNOVU1NRVIifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVEhfVE5JTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJTF9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJNQUxBWVNJQV9OUklDIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlBBU1NQT1JUIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkRPQiJ9XSwiY2xvdWRfY2FsbHMiOmZhbHNlLCJlbmdpbmUiOiJyZWdleC1sb2NhbCIsImlkIjoicmVnZXgtbG9jYWwiLCJpbnRlcmZhY2VfdmVyc2lvbiI6Inplcm9oLXByb3RlY3Rpb24tZW5naW5lL3YxIiwicHJvdmlkZXIiOiJ6ZXJvaC1yZWZlcmVuY2UiLCJwcm92aWRlcl9jYXRhbG9nIjp7ImltcG9ydGVkIjoyMjEsInNraXBwZWQiOjEsInNvdXJjZSI6eyJjb21taXQiOiI4M2Q5Y2Q2ODRjODciLCJmaWxlIjoidmVuZG9yL2dpdGxlYWtzL2dpdGxlYWtzLXY4LjMwLjEudG9tbCIsImxpY2Vuc2UiOiJNSVQiLCJwcm9qZWN0IjoiZ2l0bGVha3MvZ2l0bGVha3MiLCJ2ZXJzaW9uIjoidjguMzAuMSJ9fX1d",
+      "WyJvckhwQkdSS3BkQllMX0hacExTZkR3IiwicHJvdGVjdGlvbl9lbmdpbmVfbWFuaWZlc3QiLHsiY2F0ZWdvcmllcyI6W3siY29uZmlkZW5jZSI6MC45OSwicmlzayI6ImNyaXRpY2FsIiwidHlwZSI6IlBSSVZBVEVfS0VZIn0seyJjb25maWRlbmNlIjowLjg0LCJyaXNrIjoiY3JpdGljYWwiLCJ0eXBlIjoiQVBJX0tFWSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiY3JpdGljYWwiLCJ0eXBlIjoiU0VDUkVUIn0seyJjb25maWRlbmNlIjowLjg0LCJyaXNrIjoiY3JpdGljYWwiLCJ0eXBlIjoiVE9LRU4ifSx7ImNvbmZpZGVuY2UiOjAuOTMsInJpc2siOiJoaWdoIiwidHlwZSI6IlBBU1NXT1JEIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJtZWRpdW0iLCJ0eXBlIjoiRU1BSUwifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiQ0FSRF9OVU1CRVIifSx7ImNvbmZpZGVuY2UiOjAuOTUsInJpc2siOiJoaWdoIiwidHlwZSI6IklCQU4ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiRVNfTklGIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkVTX05JRSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJVF9GSVNDQUxfQ09ERSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJGSV9QRVJTT05BTF9JREVOVElUWV9DT0RFIn0seyJjb25maWRlbmNlIjowLjg1LCJyaXNrIjoibWVkaXVtIiwidHlwZSI6IlBIT05FX05VTUJFUiJ9LHsiY29uZmlkZW5jZSI6MC44LCJyaXNrIjoibWVkaXVtIiwidHlwZSI6IklQX0FERFJFU1MifSx7ImNvbmZpZGVuY2UiOjAuOCwicmlzayI6Im1lZGl1bSIsInR5cGUiOiJDUllQVE8ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVVNfU1NOIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlVTX0lUSU4ifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVUtfTklOTyJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJRQVRBUl9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJTl9BQURIQUFSIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IklOX1BBTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJQS19DTklDIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkVNSVJBVEVTX0lEIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlNBVURJX05JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJUUFNQSJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJCUl9DUEYifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiUExfUEVTRUwifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiU0VfUEVSU09OTlVNTUVSIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6Ik5MX0JTTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJDTl9SRVNJREVOVF9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJUV19OQVRJT05BTF9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJIS19JREVOVElUWV9DQVJEIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6Ik5PX0ZPRFNFTFNOVU1NRVIifSx7ImNvbmZpZGVuY2UiOjAuOSwicmlzayI6ImhpZ2giLCJ0eXBlIjoiVEhfVE5JTiJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJJTF9JRCJ9LHsiY29uZmlkZW5jZSI6MC45LCJyaXNrIjoiaGlnaCIsInR5cGUiOiJNQUxBWVNJQV9OUklDIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IlBBU1NQT1JUIn0seyJjb25maWRlbmNlIjowLjksInJpc2siOiJoaWdoIiwidHlwZSI6IkRPQiJ9XSwiY2xvdWRfY2FsbHMiOmZhbHNlLCJlbmdpbmUiOiJyZWdleC1sb2NhbCIsImlkIjoicmVnZXgtbG9jYWwiLCJpbnRlcmZhY2VfdmVyc2lvbiI6Inplcm9oLXByb3RlY3Rpb24tZW5naW5lL3YxIiwicHJvdmlkZXIiOiJ6ZXJvaC1yZWZlcmVuY2UiLCJwcm92aWRlcl9jYXRhbG9nIjp7ImltcG9ydGVkIjoyMjEsInNraXBwZWQiOjEsInNvdXJjZSI6eyJjb21taXQiOiI4M2Q5Y2Q2ODRjODciLCJmaWxlIjoidmVuZG9yL2dpdGxlYWtzL2dpdGxlYWtzLXY4LjMwLjEudG9tbCIsImxpY2Vuc2UiOiJNSVQiLCJwcm9qZWN0IjoiZ2l0bGVha3MvZ2l0bGVha3MiLCJ2ZXJzaW9uIjoidjguMzAuMSJ9fX1d",
+      "WyIzNkJqdFU3S1NySUtmSVpvN3N4NlhRIiwiZGVjaXNpb25fZGV0YWlscyIseyJhY3Rpb24iOiJhbGxvd193aXRoX3JlY2VpcHQiLCJibG9ja2VkIjpmYWxzZSwibWFza19jYXRlZ29yaWVzIjpbXSwibWF0Y2hlZF9ydWxlcyI6WyJaRVJPSC1BTExPVy1XSVRILVJFQ0VJUFQiXSwicmVhc29uIjoiTm90aGluZyB0byBtYXNrIG9yIGJsb2NrOyBhIHJlY2VpcHQgaXMgc3RpbGwgcmVjb3JkZWQuIn1d",
+      "WyI5RVBTcHFFT0FqOHlCcjN2SEYxZ2VnIiwidHJhbnNmb3JtYXRpb25fbWFuaWZlc3QiLFtdXQ",
+      "WyIteW9xaExvTDBhNDlHQ3hTamk4SFl3IiwibWFza2VkX3Byb21wdCIsIlJlYWQgdGhlIGVudiBmaWxlIHBsZWFzZS4iXQ"
+    ],
+    "disclosure_manifest": [
+      {
+        "name": "boundary_details",
+        "digest": "mMB6H-QUb1eo_jQbnfWb5gGqgrm5N5D_EUvSDzRwxuo"
+      },
+      {
+        "name": "detector_manifest",
+        "digest": "4czDaWd_FPI29FxzL6MpHc0Euc3_NYvTPrTDNquyTck"
+      },
+      {
+        "name": "protection_engine_manifest",
+        "digest": "_PQGzp3ARawEn9A9QJwtSCdSpceuwUufYknYrGxwcZ8"
+      },
+      {
+        "name": "decision_details",
+        "digest": "R_BEnCsJyALaazlpJCijXeheqWUndfsek262YgRsrC0"
+      },
+      {
+        "name": "transformation_manifest",
+        "digest": "g_tQvXe5cP4P_w3udH94XOo-lh08I55bU8dBxOYYazk"
+      },
+      {
+        "name": "masked_prompt",
+        "digest": "OiCyn7uCsbCYyEBiZddaux1SPnQziD3yzSlKGx4m51U"
+      }
+    ],
+    "revealed_under_grant": [],
+    "revealed_under_grant_hmac": "xj6x4P9-Ixtjt9j8_HTPnVGa1nok8I6vp9dAVmLiS-M"
+  },
+  "token": {
+    "payload": {
+      "typ": "zeroh-disclosure-token/v1",
+      "receipt_id": "zrh_mul7h7gz_TVD0pck_p1nv",
+      "receipt_hash": "sfy17B620etU8Hn1Rp-G1YmKx5H_CbzoRbw0tySSwRo",
+      "boundary_hash": "ksWJYFQ_ySr221qm3mUmmcY-bHMxQQ8_4I4J1NFE4bw",
+      "policy_hash": "mnVztVDD_VNh5iHWHjiagEHwx3g10wnPVaRbvJTz4xU",
+      "previous_token_hash": null,
+      "signing_key_id": "local:6578597",
+      "iat": "2026-09-28T12:10:30.042Z"
+    },
+    "payload_hash": "nPk3VhI-Zo376pXG_o79Npxr9ZQpc5PnQgNpCMuFF5c",
+    "signature_b64u": "ONNz4KIkrQOF2D-D_mlX9GD1T53ppWXYapp5ej0aFSs",
+    "token_hash": "7F9vLxqf5cyZU5SZbJMWmGhLr_4TTm1V8ncDTLPf_mk"
+  },
+  "audit": {
+    "masked": {
+      "by_type": {
+        "API_KEY": 1
+      },
+      "by_channel": {
+        "file read": {
+          "API_KEY": 1
+        }
+      },
+      "tokens": ["[API_KEY-cf009b]"],
+      "token_map": [
+        {
+          "token": "[API_KEY-cf009b]",
+          "type": "API_KEY",
+          "channel": "file read",
+          "source": ".env · line 1 · STRIPE_KEY",
+          "count": 1,
+          "name": "STRIPE_KEY"
+        }
+      ]
+    },
+    "files": {
+      "/tmp/zeroh-fixture/.env": 1
+    }
+  },
+  "finalized_at": "2026-09-28T12:10:31.473Z"
+}

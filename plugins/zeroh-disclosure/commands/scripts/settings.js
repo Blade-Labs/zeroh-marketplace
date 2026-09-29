@@ -33,7 +33,7 @@ await loadConfig({ cwd: root });
 if (args.length === 0) {
   console.log(
     [
-      `Banner: ${readBannerMode() === 'banner' ? 'default (the full view once, then the short banner)' : readBannerMode()} (/zeroh-disclosure:settings banner full|compact|off)`,
+      `Banner: ${bannerWords(readBannerMode())} (/zeroh-disclosure:settings banner big|compact|mini|off)`,
       `${retentionLine()} (/zeroh-disclosure:settings receipts keep forever|1y|90d|30d)`,
       `Uncertain cases: ${uncertainMode()} (/zeroh-disclosure:settings uncertain pass|block; pass, the default, never stops ordinary work)`,
       `Status line: ${statuslineWords()} (/zeroh-disclosure:settings statusline on|off|style)`,
@@ -53,6 +53,12 @@ const result = spawnSync(process.execPath, [CLI, ...args, '--cwd', root], {
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 process.stdout.write(`${result.stdout || ''}${result.stderr || ''}`);
+
+function bannerWords(mode) {
+  return mode === 'default'
+    ? 'mini (the default: the big view after the install, then one line)'
+    : mode;
+}
 
 function statuslineWords() {
   try {

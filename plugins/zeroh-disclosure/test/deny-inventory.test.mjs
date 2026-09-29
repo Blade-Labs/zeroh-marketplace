@@ -60,6 +60,10 @@ const INVENTORY = {
     'block-mode',
     'dynamic, script, launcher, unparseable',
   ],
+  'variable-in-command': [
+    'block-mode',
+    'a command sends only a variable reference (`-u "$KEY:"`): what it holds is unseen',
+  ],
   'prompt-too-large': ['block-mode', 'owner decision 2026-09-27'],
   'vault-unavailable-prompt': ['block-mode', 'owner decision 2026-09-27'],
   'vault-unsaveable-prompt': ['block-mode', 'owner decision 2026-09-27'],
@@ -86,6 +90,15 @@ const INVENTORY = {
   'vault-unavailable-tool': [
     'block-mode',
     'runs with the token, with a notice, by default',
+  ],
+  // Rule 8: a vault that opens but can't be saved (test/vault-unsaveable).
+  'vault-unsaveable-output': [
+    'block-mode',
+    'new values pass unmasked, with a notice, by default',
+  ],
+  'vault-unsaveable-tool': [
+    'block-mode',
+    'the input keeps the values as written, with a notice, by default',
   ],
   'expired-token': [
     'block-mode',

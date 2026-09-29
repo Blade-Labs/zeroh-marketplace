@@ -22,6 +22,8 @@ import {
 } from '../lib/proxy-state.js';
 import {
   createServiceManager,
+  encodeWindowsTask,
+  readDefinitionText,
   windowsArgument,
   windowsHeadlessCommand,
   windowsTaskDefinition,
@@ -62,17 +64,22 @@ for (const [platform, marker] of [
     const runtime = path.join(fixture.env.ZEROH_HOME, 'bin', 'runtime');
     const config = fixture.files.config;
     const registration = manager.register({ runtime, config });
-    const definition = readFileSync(registration.definition, 'utf8');
+    const definition = readDefinitionText(registration.definition);
 
     assert.match(
       definition,
       new RegExp(marker.replaceAll('[', '\\[').replaceAll(']', '\\]'), 'u'),
     );
-    assert.ok(definition.includes(process.execPath));
+    // A systemd unit escapes each backslash (a Windows host's paths).
+    const written = (value) =>
+      platform === 'linux' ? value.replaceAll('\\', '\\\\') : value;
+    assert.ok(definition.includes(written(process.execPath)));
     assert.ok(
-      definition.includes(path.join(runtime, 'bin', 'proxy-daemon.mjs')),
+      definition.includes(
+        written(path.join(runtime, 'bin', 'proxy-daemon.mjs')),
+      ),
     );
-    assert.ok(definition.includes(config));
+    assert.ok(definition.includes(written(config)));
     assert.doesNotMatch(definition, /--takeover/u);
     assert.equal(manager.isRegistered(), true);
     if (platform !== 'linux') assertWellFormedXml(definition);
@@ -146,6 +153,90 @@ test('an orphaned daemon restores settings and unregisters after 24 hours', asyn
     JSON.parse(readFileSync(settingsPath, 'utf8')).env.ANTHROPIC_BASE_URL,
     gateway,
   );
+});
+
+// Windows 11 re-test (1.0.0-rc.2): schtasks /Create /XML refused the UTF-8
+// file ("The task XML is malformed ... unable to switch the encoding"); the
+// same definition saved as UTF-16 with a byte order mark registered.
+test('the Windows logon task file is UTF-16LE with a byte order mark and declares UTF-16', () => {
+  const fixture = isolated('utf16');
+  const calls = [];
+  const manager = createServiceManager({
+    env: { ...fixture.env, SystemRoot: 'C:\\WINDOWS', USERNAME: 'jörg' },
+    platform: 'win32',
+    definitionRoot: fixture.env.ZEROH_SERVICE_MANAGER_DIR,
+    executeCommands: true,
+    execute(file, args) {
+      calls.push([path.basename(file.replaceAll('\\', '/')), ...args]);
+    },
+  });
+  const runtime = path.join(fixture.env.ZEROH_HOME, 'bin', 'runtime');
+  const target = { runtime, config: fixture.files.config };
+  const registration = manager.register(target);
+  const bytes = readFileSync(registration.definition);
+  assert.deepEqual([...bytes.subarray(0, 2)], [0xff, 0xfe], 'UTF-16LE BOM');
+  const text = bytes.subarray(2).toString('utf16le');
+  assert.ok(text.startsWith('<?xml version="1.0" encoding="UTF-16"?>'));
+  assert.equal(bytes.length, 2 + Buffer.byteLength(text, 'utf16le'));
+  assert.match(text, /<UserId>jörg<\/UserId>/u);
+  assertWellFormedXml(text);
+  assert.equal(readDefinitionText(registration.definition), text);
+  assert.deepEqual(calls[0].slice(0, 5), [
+    'schtasks.exe',
+    '/Create',
+    '/TN',
+    'ZeroH Disclosure Proxy',
+    '/XML',
+  ]);
+  assert.equal(calls[0][5], registration.definition);
+  assert.equal(manager.isRegistered(target), true);
+  assert.deepEqual(
+    [...encodeWindowsTask('<a/>')],
+    [0xff, 0xfe, 0x3c, 0, 0x61, 0, 0x2f, 0, 0x3e, 0],
+  );
+});
+
+test('a UTF-8 task file an earlier release wrote is registered again', () => {
+  const fixture = isolated('utf8-task');
+  const manager = createServiceManager({
+    env: fixture.env,
+    platform: 'win32',
+    definitionRoot: fixture.env.ZEROH_SERVICE_MANAGER_DIR,
+    executeCommands: false,
+  });
+  const runtime = path.join(fixture.env.ZEROH_HOME, 'bin', 'runtime');
+  const target = { runtime, config: fixture.files.config };
+  const registration = manager.register(target);
+  const text = readDefinitionText(registration.definition).replace(
+    'encoding="UTF-16"',
+    'encoding="UTF-8"',
+  );
+  writeFileSync(registration.definition, text, 'utf8');
+  assert.equal(manager.isRegistered(target), false);
+});
+
+test('a refused login item carries the tool’s first error line', () => {
+  const fixture = isolated('refused-detail');
+  const manager = createServiceManager({
+    env: fixture.env,
+    platform: 'win32',
+    definitionRoot: fixture.env.ZEROH_SERVICE_MANAGER_DIR,
+    executeCommands: true,
+    execute() {
+      const error = new Error('Command failed');
+      error.status = 1;
+      error.stderr = Buffer.from(
+        'ERROR: The task XML is malformed.\r\n(1,40)::ERROR: unable to switch the encoding\r\n',
+      );
+      throw error;
+    },
+  });
+  const runtime = path.join(fixture.env.ZEROH_HOME, 'bin', 'runtime');
+  assert.throws(
+    () => manager.register({ runtime, config: fixture.files.config }),
+    (error) => error.detail === 'ERROR: The task XML is malformed.',
+  );
+  assert.equal(existsSync(manager.paths.task), false);
 });
 
 test('the Windows logon task is well-formed XML for the current user, with no battery or 72 h limits', () => {
@@ -239,6 +330,53 @@ test('macOS registration boots out a leftover job, and cleanup boots out before 
     'launchctl disable gui/501/com.bladelabs.zeroh-disclosure-proxy',
   ]);
   assert.equal(existsSync(registration.definition), false);
+});
+
+// Uninstall, `proxy off` and doctor --fix retire the daemon: its login item
+// goes, but the daemon keeps serving the sessions still open, so nothing may
+// stop it on the way (no bootout, no `systemctl --now`, no task kill).
+test('unregister with keepRunning removes the login item without stopping the daemon', () => {
+  for (const platform of ['darwin', 'linux', 'win32']) {
+    const fixture = isolated(`keep-${platform}`);
+    const calls = [];
+    const manager = createServiceManager({
+      env: fixture.env,
+      platform,
+      definitionRoot: fixture.env.ZEROH_SERVICE_MANAGER_DIR,
+      executeCommands: true,
+      uid: 501,
+      desktop: false,
+      execute(file, args) {
+        calls.push([path.basename(file), ...args].join(' '));
+      },
+    });
+    const registration = manager.register({
+      runtime: path.join(fixture.env.ZEROH_HOME, 'bin', 'runtime'),
+      config: fixture.files.config,
+    });
+    calls.length = 0;
+    const result = manager.unregister({ keepRunning: true });
+    assert.equal(result.removed, true, platform);
+    assert.equal(existsSync(registration.definition), false, platform);
+    for (const call of calls) {
+      assert.doesNotMatch(call, /bootout|--now|\/End|taskkill|stop/u, call);
+    }
+    if (platform === 'darwin') {
+      assert.deepEqual(calls, [
+        'launchctl disable gui/501/com.bladelabs.zeroh-disclosure-proxy',
+      ]);
+    }
+    if (platform === 'linux') {
+      assert.deepEqual(calls, [
+        'systemctl --user disable zeroh-disclosure-proxy.service',
+        'systemctl --user daemon-reload',
+      ]);
+    }
+    if (platform === 'win32') {
+      assert.equal(calls.length, 1);
+      assert.match(calls[0], /schtasks\.exe \/Delete/u);
+    }
+  }
 });
 
 // P-3: a refused login item leaves nothing that looks registered, so the next
@@ -393,14 +531,22 @@ test('the login item starts the stable node link, and re-registers only when tha
   const { stableNodePath } = await import('../lib/service-manager.js');
   const bin = path.join(fixture.root, 'homebrew', 'bin');
   mkdirSync(bin, { recursive: true });
-  const link = path.join(bin, 'node');
+  // PATH as this system writes it (`;` and node.exe on Windows).
+  const link = path.join(
+    bin,
+    process.platform === 'win32' ? 'node.exe' : 'node',
+  );
   symlinkSync(process.execPath, link);
+  const missing = path.join(fixture.root, 'nonexistent');
   assert.equal(
-    stableNodePath({ env: { PATH: `/nonexistent:${bin}` }, platform: 'linux' }),
+    stableNodePath({
+      env: { PATH: [missing, bin].join(path.delimiter) },
+      platform: process.platform,
+    }),
     link,
   );
   assert.equal(
-    stableNodePath({ env: { PATH: '/nonexistent' }, platform: 'linux' }),
+    stableNodePath({ env: { PATH: missing }, platform: process.platform }),
     process.execPath,
   );
   const target = {

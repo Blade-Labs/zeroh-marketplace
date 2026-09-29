@@ -2,7 +2,13 @@
 
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { cidPdfWithoutToUnicode } from './fixtures/format-fixtures.mjs';
@@ -401,8 +407,10 @@ function runChild(args) {
 
 test('recorded fixtures hold no paths from the recording machine', () => {
   const dir = new URL('./fixtures/', import.meta.url);
-  for (const name of readdirSync(dir)) {
-    const text = readFileSync(new URL(name, dir), 'utf8');
+  for (const name of readdirSync(dir, { recursive: true })) {
+    const file = new URL(name, dir);
+    if (statSync(file).isDirectory()) continue;
+    const text = readFileSync(file, 'utf8');
     assert.doesNotMatch(
       text,
       /\/tmp\/claude-\d+|scratchpad|\/home\/[a-z]|\/Users\/[A-Za-z]|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/scratchpad/u,

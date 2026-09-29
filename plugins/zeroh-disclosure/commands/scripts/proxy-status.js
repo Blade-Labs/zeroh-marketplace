@@ -8,9 +8,11 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
+  proxyRuntimeStatus,
   sessionProxyState,
   settingsEntryState,
 } from '../../lib/proxy-manager.js';
+import { loginItemFix, loginItemReason } from '../../lib/service-manager.js';
 import { commandSessionId } from './_helpers.js';
 
 const action = String(process.argv[2] || '')
@@ -41,11 +43,11 @@ if (state.reason === 'opted-out') {
   );
 } else if (state.reason === 'turned-off') {
   lines.push(
-    'Local masking proxy: off (you turned it off). Typed secrets are stopped, not masked. Turn it back on with /zeroh-disclosure:proxy on.',
+    'Local masking proxy: off (you turned it off). What you type is not masked: a typed secret is sent with a "not protected" line (stopped with uncertain block). Turn it back on with /zeroh-disclosure:proxy on.',
   );
 } else if (state.reason === 'provider') {
   lines.push(
-    'Local masking proxy: not used (Claude Code talks to Bedrock, Vertex or Foundry directly); typed secrets are blocked.',
+    'Local masking proxy: not used (Claude Code talks to Bedrock, Vertex or Foundry directly); a typed secret is sent with a "not protected" line (stopped with uncertain block).',
   );
 } else if (state.active) {
   lines.push('Local masking proxy: on for this session.');
@@ -61,6 +63,12 @@ if (state.reason === 'opted-out') {
       : entry === 'removed-by-user'
         ? 'Local masking proxy: its entry was removed from your Claude Code settings, so it stays off. To turn it on again, run /zeroh-disclosure:doctor --fix and start a new session.'
         : 'Local masking proxy: not active; the next session starts it.',
+  );
+}
+const runtime = await proxyRuntimeStatus().catch(() => null);
+if (runtime?.loginItemRefused) {
+  lines.push(
+    `No login item: ${loginItemReason(runtime.loginItemRefused)}. The proxy runs only while Claude Code does. To fix: ${loginItemFix(runtime.loginItemRefused)}.`,
   );
 }
 lines.push(

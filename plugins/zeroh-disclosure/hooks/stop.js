@@ -27,6 +27,9 @@ import {
   writeSessionReceiptHtml,
 } from '../lib/report.js';
 import { updateSessionStatus } from '../lib/session-status.js';
+import { signTurnSummary } from '../lib/turn-summary.js';
+import { takeDeferredNotices } from '../lib/unchecked.js';
+import { acquireFileLock, releaseFileLock } from '../lib/vault.js';
 
 const event = await readStdinJson();
 try {
@@ -95,6 +98,36 @@ for (const t of turns) {
   finalizedTurns.push({ turn: t, ledger: finalized, blocked, sentUnmasked });
 }
 
+// The receipt signed at UserPromptSubmit covers the typed prompt; every
+// other number the receipt shows (tool output and file reads masked, values
+// sent, what passed unchecked) is signed here as the turn's summary, bound
+// to that receipt (lib/turn-summary.js). The current turn is signed again at
+// every Stop, so a count added after an earlier Stop is covered too.
+const currentTurnNumber = Number(session.state.turnCount) || turns.at(-1);
+const summaryTurns = new Set(finalizedTurns.map((entry) => entry.turn));
+if (turns.includes(currentTurnNumber)) summaryTurns.add(currentTurnNumber);
+for (const t of summaryTurns) {
+  const ledgerPath = path.join(session.dir, `turn-${t}.json`);
+  let lock = null;
+  try {
+    lock = acquireFileLock(`${ledgerPath}.lock`);
+    const ledger = await readJson(ledgerPath);
+    if (ledger?.phase !== 'finalized' || !ledger.receipt?.receipt_id) continue;
+    ledger.turn_summary = await signTurnSummary({
+      ledger,
+      turn: t,
+      signer: session.signingKey,
+    });
+    await writeJson(ledgerPath, ledger);
+    const entry = finalizedTurns.find((item) => item.turn === t);
+    if (entry) entry.ledger = ledger;
+  } catch {
+    // Unsigned, the turn fails verification and the receipt says so.
+  } finally {
+    if (lock) releaseFileLock(lock);
+  }
+}
+
 // Every turn still gets a signed receipt, receipt.html and the session
 // receipt bundle; the screen hears about a turn only when it has something to
 // say, and only about the turn that just ended (T-31): an earlier stopped
@@ -136,6 +169,10 @@ updateSessionStatus({ cwd, sessionId }, (status) => {
   status.masked = masked;
   return status;
 });
+
+// What the local proxy let through this turn without protecting it (it
+// can't show a line itself): its "not protected" lines (lib/unchecked.js).
+outboundLines.unshift(...(await takeDeferredNotices({ cwd, sessionId })));
 
 if (outboundLines.length === 0) process.exit(0);
 

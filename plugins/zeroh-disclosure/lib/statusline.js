@@ -25,13 +25,13 @@
 // `receipt ↗` is an OSC 8 hyperlink to the session's receipt.html. Terminals
 // without OSC 8 show the plain text. Colour follows NO_COLOR and TERM=dumb.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Node built-ins only, so the status line starts in a few milliseconds. The
-// helpers below are copies of lib/private-fs.js zerohHome, lib/session.js
+// helpers below are copies of lib/private-fs.js (zerohHome, canonicalProjectPath), lib/session.js
 // (projectRootFromEnv, encodeProjectPath, sanitizeSid, envSessionId),
 // lib/vault.js projectKey, lib/claude-settings.js (resolveClaudeSettingsPath,
 // restoreRecordPath), lib/uninstall-marker.js uninstallMarkerPath and
@@ -47,11 +47,34 @@ export function zerohHome(env = process.env, platform = process.platform) {
       'ZeroH',
     );
   }
-  return path.join(os.homedir(), '.zeroh');
+  return path.posix.join(os.homedir(), '.zeroh');
+}
+
+// The one spelling of a project folder that every key is made from: the
+// absolute path with symbolic links resolved (a missing tail is kept as
+// written). macOS reports /var and /tmp as /private/var and /private/tmp to
+// a process's own working directory, and any project may sit under a linked
+// folder; Claude Code, a terminal and the hooks can each spell the same
+// folder differently, and all must find the same vault, allow list, grants
+// and sessions. Windows short names (RUNNER~1) are left as they are.
+export function canonicalProjectPath(root) {
+  const absolute = path.resolve(root);
+  const tail = [];
+  let cursor = absolute;
+  for (;;) {
+    try {
+      return path.join(realpathSync(cursor), ...tail);
+    } catch {
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return absolute;
+      tail.unshift(path.basename(cursor));
+      cursor = parent;
+    }
+  }
 }
 
 export function encodeProjectPath(root) {
-  const resolved = path.resolve(root);
+  const resolved = canonicalProjectPath(root);
   const name = resolved.replace(/[^a-zA-Z0-9]/gu, '-');
   if (name.length <= 200) return name;
   let hash = 0;
@@ -69,7 +92,7 @@ export function sanitizeSid(sid) {
 
 export function projectKey(projectRoot) {
   return createHash('sha256')
-    .update(path.resolve(projectRoot))
+    .update(canonicalProjectPath(projectRoot))
     .digest('hex')
     .slice(0, 16);
 }
@@ -95,13 +118,14 @@ export function projectRootFrom(start, env = process.env) {
       )
         .map((entry) => entry?.root)
         .filter((root) => typeof root === 'string')
-        .map((root) => path.resolve(root)),
+        .map((root) => canonicalProjectPath(root)),
     );
   } catch {
     // No registry: only the folders under ZEROH_HOME/projects count.
   }
   for (let dir = from; ; dir = path.dirname(dir)) {
-    if (registered.has(dir)) return dir;
+    // Compared by canonical path: a linked spelling finds its project.
+    if (registered.has(canonicalProjectPath(dir))) return dir;
     if (isDirectory(path.join(home, 'projects', encodeProjectPath(dir)))) {
       return dir;
     }
@@ -163,6 +187,19 @@ export const STOPPED_MS = 30_000;
 
 const DOTS = { protected: '🟢', warn: '🟡', off: '🔴' };
 const SGR = { protected: '32', warn: '33', off: '31' };
+
+// True when the nearest existing folder of `target` is a file: nothing can
+// ever be written there. POSIX reports reading below a file as ENOTDIR;
+// Windows as ENOENT, like a file not written yet.
+function belowAFile(target) {
+  for (let dir = path.resolve(target); ; dir = path.dirname(dir)) {
+    try {
+      return !statSync(dir).isDirectory();
+    } catch {
+      if (path.dirname(dir) === dir) return false;
+    }
+  }
+}
 
 export function readJson(file, read = readFileSync) {
   for (let attempt = 0; ; attempt += 1) {
@@ -336,6 +373,9 @@ export function statuslineModel({
       sanitizeSid(sessionId),
     );
     const read = readJson(path.join(dir, STATUS_FILE));
+    if (read.missing && belowAFile(dir)) {
+      return set('off', "state can't be read", DOCTOR);
+    }
     if (read.missing) {
       const ran = Number(input?.cost?.total_duration_ms);
       return Number.isFinite(ran) && ran > NEVER_RAN_MS

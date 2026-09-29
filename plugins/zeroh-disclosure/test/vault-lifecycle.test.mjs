@@ -549,7 +549,14 @@ test('Windows keeps ZeroH in %LOCALAPPDATA% with a user-only ACL (LV-F5)', () =>
     protectWindowsPath('D:\\zh', { platform: 'win32', execute, env: {} }),
     true,
   );
+  // The folder's own entries go first (a folder made with explicit ones
+  // kept them), then inherited ones; only the user and SYSTEM stay.
   assert.deepEqual(calls[1], [
+    'C:\\Windows\\System32\\icacls.exe',
+    'D:\\zh',
+    '/reset',
+  ]);
+  assert.deepEqual(calls[2], [
     'C:\\Windows\\System32\\icacls.exe',
     'D:\\zh',
     '/inheritance:r',
@@ -579,13 +586,28 @@ test('on Windows the first private write into the home protects all of it, once 
   ensurePrivateDir(path.join(env.ZEROH_HOME, 'proxy', 'routes'), windows);
   assert.deepEqual(
     calls.map(([file]) => path.win32.basename(file)),
-    ['whoami.exe', 'icacls.exe'],
+    ['whoami.exe', 'icacls.exe', 'icacls.exe'],
   );
   assert.equal(calls[1][1], path.resolve(env.ZEROH_HOME));
+  assert.equal(calls[2][1], path.resolve(env.ZEROH_HOME));
   assert.ok(existsSync(path.join(env.ZEROH_HOME, '.acl-protected')));
   ensurePrivateDir(path.join(env.ZEROH_HOME, 'vault'), windows);
-  assert.equal(calls.length, 2, 'once');
+  assert.equal(calls.length, 3, 'once');
   // A folder outside the home is left to its own ACL.
   ensurePrivateDir(path.join(project.dir, '.zeroh'), windows);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
+  // A home an earlier build marked (its own explicit entries left in place)
+  // is protected again, once.
+  const earlier = {
+    ...windows,
+    env: { ZEROH_HOME: path.join(project.home, 'old-home') },
+  };
+  mkdirSync(earlier.env.ZEROH_HOME, { recursive: true });
+  writeFileSync(path.join(earlier.env.ZEROH_HOME, '.acl-protected'), '');
+  ensurePrivateDir(path.join(earlier.env.ZEROH_HOME, 'vault'), earlier);
+  assert.equal(calls.length, 6);
+  assert.deepEqual(calls[4].slice(1), [
+    path.resolve(earlier.env.ZEROH_HOME),
+    '/reset',
+  ]);
 });

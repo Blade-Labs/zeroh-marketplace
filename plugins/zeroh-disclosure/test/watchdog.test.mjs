@@ -102,20 +102,22 @@ test('the deadline table matches hooks.json, two seconds under each timeout', ()
   const hooks = JSON.parse(
     readFileSync(path.join(PLUGIN, 'hooks', 'hooks.json'), 'utf8'),
   ).hooks;
-  const names = {
-    SessionStart: 'session-start',
-    UserPromptSubmit: 'user-prompt-submit',
-    PreToolUse: 'pre-tool-use',
-    PostToolUse: 'post-tool-use',
-    MessageDisplay: 'message-display',
-    Stop: 'stop',
-    SessionEnd: 'session-end',
-  };
   for (const [event, entries] of Object.entries(hooks)) {
-    const timeout = entries[0].hooks[0].timeout;
-    assert.equal(HOOK_TIMEOUTS[names[event]], timeout, event);
-    assert.equal(hookDeadlineMs(names[event], {}), (timeout - 2) * 1000);
+    const { timeout, command } = entries[0].hooks[0];
+    const name = command.split(' ').at(-1);
+    assert.equal(HOOK_TIMEOUTS[name], timeout, event);
+    assert.equal(hookDeadlineMs(name, {}), (timeout - 2) * 1000);
   }
+  assert.deepEqual(
+    Object.keys(HOOK_TIMEOUTS).sort(),
+    [
+      ...new Set(
+        Object.values(hooks).map((entries) =>
+          entries[0].hooks[0].command.split(' ').at(-1),
+        ),
+      ),
+    ].sort(),
+  );
   // An override can only shorten the deadline.
   assert.equal(
     hookDeadlineMs('pre-tool-use', { ZEROH_HOOK_DEADLINE_MS: '1500' }),
@@ -170,8 +172,34 @@ test('without an override the deadline is the hooks.json timeout minus 2 s', () 
   const plugin = pluginWith('message-display', HANG);
   const r = run(plugin, 'message-display', EVENTS['message-display'], p);
   assert.equal(r.code, 1);
-  assert.match(r.stderr, /timed out/u);
-  assert.ok(r.ms >= 2900 && r.ms < 4500, `${r.ms.toFixed(0)} ms`);
+  // The loader names the deadline it used: 5 s - 2 s. Wall time only bounds
+  // it from below: process start-up on a Windows runner varied from 0.3 to
+  // over 3 s, so an upper bound on it measured the runner, not the deadline.
+  assert.match(r.stderr, /timed out \(over 3 s\)/u);
+  assert.ok(r.ms >= 2900, `${r.ms.toFixed(0)} ms`);
+});
+
+// A MessageDisplay flush that already answered keeps its answer when its
+// bookkeeping runs past the deadline: Claude Code shows a failed flush's
+// original delta, with its tokens.
+test('a MessageDisplay flush that answered before its deadline exits 0', () => {
+  const p = tempProject();
+  const body = `globalThis.zerohHook.state.emitted = true;
+process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'MessageDisplay', displayContent: 'ZEROHFAKE shown' } }) + '\\n');
+for (;;) {}
+`;
+  const plugin = pluginWith('message-display', body);
+  for (const extra of [FAST, BLOCK]) {
+    const r = run(
+      plugin,
+      'message-display',
+      EVENTS['message-display'],
+      p,
+      extra,
+    );
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(r.json?.hookSpecificOutput?.displayContent, 'ZEROHFAKE shown');
+  }
 });
 
 test('block mode: a side effect in progress is reported as possibly half-done', () => {

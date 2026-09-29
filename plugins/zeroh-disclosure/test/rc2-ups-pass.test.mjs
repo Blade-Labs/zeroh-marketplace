@@ -5,12 +5,17 @@
 //   - a prompt larger than 256 KB: sent unscanned ("too large to scan");
 //   - a vault that can't be opened or saved when the prompt needs masking,
 //     with the proxy masking the request: sent ("ZeroH couldn't open its
-//     vault", with the doctor hint).
+//     vault" or "couldn't save its vault", with the doctor hint; rule 8:
+//     the proxy then masks only the values already on disk).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { runHook, tempProject, withProxy } from './helpers.mjs';
+import { writeFileSync } from 'node:fs';
+import {
+  runHook,
+  tempProject,
+  vaultUnsaveable,
+  withProxy,
+} from './helpers.mjs';
 import { Vault } from '../lib/vault.js';
 
 const BLOCK = { ZEROH_UNCERTAIN: 'block' };
@@ -45,9 +50,7 @@ test('an unsaveable vault through the proxy: sent with a notice by default, stop
     const p = tempProject();
     const proxy = await withProxy(p);
     t.after(proxy.stop);
-    const vaultDir = path.join(p.home, 'vault');
-    mkdirSync(vaultDir, { recursive: true, mode: 0o700 });
-    chmodSync(vaultDir, 0o500);
+    const restore = await vaultUnsaveable(p);
     try {
       const res = runHook(
         'user-prompt-submit',
@@ -59,7 +62,7 @@ test('an unsaveable vault through the proxy: sent with a notice by default, stop
         const message = res.json?.systemMessage ?? '';
         assert.match(
           message,
-          /ZeroH Disclosure: this prompt was not protected \(ZeroH couldn't open its vault\)/u,
+          /ZeroH Disclosure: this prompt was not protected \(ZeroH couldn't save its vault\)/u,
         );
         assert.match(message, /\/zeroh-disclosure:doctor/u);
         assert.ok(!message.includes(FAKE_EMAIL));
@@ -71,7 +74,7 @@ test('an unsaveable vault through the proxy: sent with a notice by default, stop
         );
       }
     } finally {
-      chmodSync(vaultDir, 0o700);
+      restore();
     }
   }
 });

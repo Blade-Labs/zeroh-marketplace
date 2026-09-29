@@ -23,6 +23,7 @@ import {
 } from '../lib/claude-settings.js';
 import { proxyPaths, writeProxyConfig } from '../lib/proxy-state.js';
 import {
+  vaultUnsaveable,
   FAKE_STRIPE,
   FAKE_WEBHOOK,
   PLUGIN,
@@ -362,7 +363,7 @@ test('Stop reports what the model saw and links one receipt line', () => {
   const lines = stop.json.systemMessage.split('\n');
   assert.match(
     lines[0],
-    /^ZeroH Disclosure · turn 1 · 1 value masked · receipt: .*\/receipt\.html$/u,
+    /^ZeroH Disclosure · turn 1 · 1 value masked · receipt: .*[\\/]receipt\.html$/u,
   );
   // T-20: what Claude saw, as tokens nothing restores, with their source.
   assert.match(lines[1], /^Claude saw ⟦API_KEY-[0-9a-f]{6}⟧ for STRIPE_KEY$/u);
@@ -710,12 +711,12 @@ test('PreToolUse late-binds PowerShell tokens and blocks unapproved hosts', () =
   assert.equal('permissionDecision' in restored, false);
   assert.match(
     restored.updatedInput.command,
-    /Write-Output "\$\{ZH_API_KEY_[0-9a-f]{6}\}"/,
+    /Write-Output \$\{ZH_API_KEY_[0-9a-f]{6}\}/,
   );
   assert.ok(!JSON.stringify(restored).includes(FAKE_STRIPE));
   assert.equal(
     existsSync(
-      path.join(p.home, 'run', ids.session_id, `${ids.tool_use_id}.b64`),
+      path.join(p.home, 'run', ids.session_id, `${ids.tool_use_id}.csv`),
     ),
     true,
   );
@@ -1279,7 +1280,7 @@ test('PreToolUse late-binds PowerShell single quotes without literal restore', (
   assert.equal(json.hookSpecificOutput.permissionDecision, undefined);
   assert.match(
     json.hookSpecificOutput.updatedInput.command,
-    /Write-Output "\$\{/,
+    /Write-Output \$\{/,
   );
   assert.ok(!JSON.stringify(json).includes(FAKE_STRIPE));
   assert.doesNotMatch(
@@ -1785,13 +1786,10 @@ test('a held vault lock does not crash MessageDisplay or PreToolUse', () => {
 });
 
 test('UserPromptSubmit fails closed when the vault cannot be saved (block mode)', async (t) => {
-  const { chmodSync, mkdirSync } = await import('node:fs');
   const p = tempProject();
   const proxy = await withProxy(p);
   t.after(proxy.stop);
-  const vaultDir = path.join(p.home, 'vault');
-  mkdirSync(vaultDir, { recursive: true, mode: 0o700 });
-  chmodSync(vaultDir, 0o500);
+  const restore = await vaultUnsaveable(p);
   try {
     const res = runHook(
       'user-prompt-submit',
@@ -1807,7 +1805,7 @@ test('UserPromptSubmit fails closed when the vault cannot be saved (block mode)'
     );
     assert.equal(clean.code, 0, clean.stderr);
   } finally {
-    chmodSync(vaultDir, 0o700);
+    restore();
   }
 });
 
@@ -2520,7 +2518,7 @@ test('file names and commands with sensitive values stay masked in receipts (Ast
       assert.equal(keys.length, 1);
       assert.match(
         keys[0],
-        /\/\[API_KEY-[0-9a-f]{6}\] \[EMAIL-[0-9a-f]{6}\] notes\.txt$/u,
+        /[\\/]\[API_KEY-[0-9a-f]{6}\] \[EMAIL-[0-9a-f]{6}\] notes\.txt$/u,
         'file identity kept in masked form',
       );
     }

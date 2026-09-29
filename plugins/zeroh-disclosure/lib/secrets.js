@@ -19,7 +19,14 @@ import {
 } from './detector.js';
 import { isLoopbackHost } from './loopback.js';
 import { shellDestinations } from './shell-destinations.js';
-import { NAMED_TOKEN_RE, TOKEN_RE } from './token-pattern.js';
+import {
+  containsToken,
+  NAMED_TOKEN_RE,
+  TOKEN_PATTERN,
+  TOKEN_RE,
+} from './token-pattern.js';
+
+const TOKEN_SPLIT_RE = new RegExp(`(${TOKEN_PATTERN})`, 'u');
 export { loadAllowRules } from './allow-rules.js';
 
 const SECRET_NAME_RE =
@@ -163,7 +170,10 @@ function readCredentialFile(file, allowedRoot) {
     const direct = lstatSync(file);
     if (!direct.isFile() || direct.size > CREDENTIAL_FILE_LIMIT) return null;
     const resolved = realpathSync(file);
-    if (!inside(allowedRoot, resolved)) return null;
+    // Both sides resolved: a home that is itself reached through a link
+    // (macOS /var is /private/var, a linked home folder) still holds its own
+    // credential files; a link that leaves it is still refused.
+    if (!inside(realpathSync(allowedRoot), resolved)) return null;
     const resolvedStat = statSync(resolved);
     if (!resolvedStat.isFile() || resolvedStat.size > CREDENTIAL_FILE_LIMIT)
       return null;
@@ -251,9 +261,13 @@ function credentialFiles({ root, home, env }) {
     }
   }
 
-  const netrcName = process.platform === 'win32' ? '_netrc' : '.netrc';
-  const netrc = readCredentialFile(path.join(home, netrcName), home);
-  if (netrc) {
+  // curl on Windows reads %USERPROFILE%\.netrc and falls back to _netrc
+  // (Git for Windows' curl the same); both may hold passwords.
+  const netrcNames =
+    process.platform === 'win32' ? ['.netrc', '_netrc'] : ['.netrc'];
+  for (const netrcName of netrcNames) {
+    const netrc = readCredentialFile(path.join(home, netrcName), home);
+    if (!netrc) continue;
     const tokens =
       netrc.replace(/#.*$/gmu, '').match(/"[^"]*"|'[^']*'|\S+/gu) ?? [];
     let machine = 'default';
@@ -415,11 +429,33 @@ function baseType(type) {
   return String(type).replace(/_(?:ENCODED|HEX)$/u, '');
 }
 
+// One ordinary prose word: ASCII letters, all lowercase or with one leading
+// capital, at most 24 of them, and one sentence mark after it
+// (`password=<word>?`). A hyphen, an apostrophe, a digit, an inner symbol
+// or a capital inside makes it a typed password, not a word
+// (`orchard-river-copper-lantern!`, `WqRtYuIoPaSdFgHj`): those keep bare
+// matching (Astra detector-exceptions review, finding 5).
+const PLAIN_WORD = /^[A-Za-z][a-z]+[?!.,]?$/u;
+const PLAIN_WORD_MAX = 24;
+const plainWord = (value) =>
+  value.length <= PLAIN_WORD_MAX + 1 &&
+  PLAIN_WORD.test(value) &&
+  value.replace(/[?!.,]$/u, '').length <= PLAIN_WORD_MAX;
+
 function exactFromVault(entry) {
   const value = entry.value;
   if (typeof value !== 'string' || value.length < MIN_VAULT_EXACT) return false;
   const source = entry.source ?? 'detected';
   if (entry.type === 'PERSON' && !source.startsWith('reported:')) return false;
+  // A single plain word found by its surroundings, typed (`password=<word>`
+  // in a prompt) or in a file or output, is masked where its key names it:
+  // the detector finds it there again and the vault gives it the same token.
+  // It is never exact-matched bare, which would mask that word in all later
+  // code and prose. Vault entries written before 1.0.0 stop matching bare
+  // too. A known (`.env`, credential file) or reported word still matches
+  // everywhere.
+  if ((source === 'prompt' || source === 'detected') && plainWord(value))
+    return false;
   if (source === 'detected') {
     if (LOOSE_TYPES.has(entry.type)) return false;
     // A key-name finding from before 1.0 that was code (`API_KEY`,
@@ -657,6 +693,12 @@ export function scrub(
         continue;
       }
       const token = vault.tokenFor(c.type, c.value, c.source);
+      // A read-only view of the values on disk (lib/restorable.js) has no
+      // token for a new value: it passes as it is (rule 8).
+      if (!token) {
+        rebuilt += out.slice(start, end);
+        continue;
+      }
       rebuilt += token;
       const seen = byToken.get(token);
       if (seen) seen.count += 1;
@@ -685,6 +727,11 @@ export function scrub(
         continue;
       }
       const token = vault.tokenFor(f.type, raw, findingSource);
+      if (!token) {
+        rebuilt += out.slice(cursor, f.end);
+        cursor = f.end;
+        continue;
+      }
       rebuilt += out.slice(cursor, f.start) + token;
       cursor = f.end;
       replacements.push({
@@ -818,10 +865,18 @@ export function builtInDestinations(value) {
 const ROOT_ZONE_TLDS = new Set(TOP_LEVEL_DOMAINS);
 
 function addHost(hosts, candidate) {
-  const host = String(candidate)
-    .toLowerCase()
-    .replace(/^\[|\]$/g, '')
-    .replace(/\.$/, '');
+  // A name with a token in it (`[API_KEY-3f9a1c].evil.example`, read from
+  // the command the model wrote) keeps the token as written.
+  const host = containsToken(candidate)
+    ? String(candidate)
+        .split(TOKEN_SPLIT_RE)
+        .map((piece, i) => (i % 2 ? piece : piece.toLowerCase()))
+        .join('')
+        .replace(/\.$/, '')
+    : String(candidate)
+        .toLowerCase()
+        .replace(/^\[|\]$/g, '')
+        .replace(/\.$/, '');
   // This machine is never a destination (the one loopback rule).
   if (!host || isLoopbackHost(host)) return;
   hosts.add(host);
@@ -851,10 +906,8 @@ function hasRootZoneTld(host) {
   return ROOT_ZONE_TLDS.has(host.slice(host.lastIndexOf('.') + 1));
 }
 
-// Source, script and data file extensions that are also delegated TLDs. A bare
-// `name.ext` with one of these is a file (`python app.py`, `./deploy.sh`,
-// `README.md`, `main.tf`, `x.zip`), unless the text makes it a host: a scheme
-// URL, `user@`, or the host argument of a network command.
+// Source, script and data file extensions that are also delegated TLDs:
+// `app.py:12`, `main.tf:3` is a file and a line, not a host and a port.
 const FILE_EXTENSION_TLDS = new Set([
   'ac', // configure.ac
   'am', // Makefile.am
@@ -886,57 +939,13 @@ const FILE_EXTENSION_TLDS = new Set([
   'work', // go.work
   'zip',
 ]);
-// Common receivers of a member access (`user.name`, `app.run`, `self.email`):
-// code, never a host.
-const CODE_RECEIVERS = new Set([
-  'app',
-  'config',
-  'console',
-  'ctx',
-  'document',
-  'event',
-  'exports',
-  'module',
-  'obj',
-  'os',
-  'process',
-  'props',
-  'req',
-  'res',
-  'self',
-  'settings',
-  'state',
-  'sys',
-  'this',
-  'user',
-  'window',
-]);
-// True when a dotted word outside a network command is a file or code, not a
-// destination: a path segment, an address, a call, a file on disk (relative
-// to `cwd`), a member access (`user.name`, `app.run`) or a source file
-// (`app.py`). A word with a port (`user.name:8080`) is a host. Operands of a
-// network command never come here: lib/shell-destinations.js reads them, and
-// they are hosts whatever they look like (Astra finding 2, re-review R2).
-function fileOrCodeWord(text, start, end, host, cwd) {
+
+// True when `name.ext:N` is a file and a line (`grep -n x app.py:12`,
+// `src/main.rs:40`), not a host and a port.
+function fileAndLine(text, start, host) {
   const prev = text[start - 1];
   if ((prev === '/' && text[start - 2] !== '/') || prev === '\\') return true;
-  if (prev === '@' || prev === '<' || prev === '>') return true;
-  if (text[end] === '(') return true;
-  const labels = host.split('.');
-  const tld = labels[labels.length - 1];
-  const port = /^:\d{1,5}(?![\w.])/u.test(text.slice(end));
-  if (port && !FILE_EXTENSION_TLDS.has(tld)) return false;
-  if (existsOnDisk(text.slice(start, end), cwd)) return true;
-  if (labels.length === 2 && CODE_RECEIVERS.has(labels[0])) return true;
-  return FILE_EXTENSION_TLDS.has(tld);
-}
-
-function existsOnDisk(word, cwd) {
-  try {
-    return existsSync(path.resolve(cwd || process.cwd(), word));
-  } catch {
-    return false;
-  }
+  return FILE_EXTENSION_TLDS.has(host.slice(host.lastIndexOf('.') + 1));
 }
 
 // The commands inside `text`: the `command` fields of a tool input in JSON,
@@ -967,8 +976,27 @@ export function networkHostsIn(command, { shell = null } = {}) {
   return [...hosts];
 }
 
-export function hostsIn(text, { cwd = process.cwd() } = {}) {
+// Where a text names a destination host. Outside a network command's
+// operands (read by networkHostsIn with the shared tokenizer), a host counts
+// only where its spelling makes it one: a URL (`https://host/…`,
+// `//host/…`), `user@host`, `host:port`, `[v6]:port`. A bare dotted word
+// anywhere else (`--query sku.name`, `--set image.tag=…`, `gcloud config set
+// compute.zone …`, `app.kubernetes.io/name`, a JSON key, code) is a field,
+// a setting, a file or a name, not a destination, even when its last label
+// is a real TLD (`.name`, `.zone`, `.io`). A bare address (`--source-
+// address-prefixes 198.51.100.0/24`) is data the same way. The program that
+// reads such a word is either one ZeroH knows (its operands are read) or an
+// uncertain destination the caller reports (product principle 5).
+//
+// `values`: email addresses ZeroH put back into `text`. An address passed as
+// data (`git -c user.email=…`, a form field) names no destination; its
+// domain counts only as the operand of a network command (`ssh user@host`),
+// which networkHostsIn reads.
+export function hostsIn(text, { values = [] } = {}) {
   text = String(text);
+  const restoredAddresses = new Set(
+    [...values].map((value) => String(value).toLowerCase()),
+  );
   const hosts = new Set();
   for (const command of commandsIn(text))
     for (const host of networkHostsIn(command)) hosts.add(host);
@@ -983,31 +1011,37 @@ export function hostsIn(text, { cwd = process.cwd() } = {}) {
     const host = match[1].toLowerCase();
     const offset = match[0].lastIndexOf(match[1]);
     const start = match.index + offset;
-    const end = start + match[1].length;
     const userAt = match[0].includes('@');
-    const explicit = userAt || /:\d{1,5}$/u.test(match[0]);
-    const startsWithDot = text[start - 1] === '.';
-    if (startsWithDot) continue;
-    if (!userAt && fileOrCodeWord(text, start, end, host, cwd)) continue;
-    if (explicit || hasRootZoneTld(host)) addHost(hosts, host);
+    const port = /:\d{1,5}$/u.test(match[0]);
+    // `//host/…`: a URL without its scheme.
+    const schemeless =
+      !userAt &&
+      text.slice(start - 2, start) === '//' &&
+      !/[A-Za-z0-9+.-]:$/u.test(text.slice(0, start - 2)) &&
+      text[start - 3] !== '/' &&
+      hasRootZoneTld(host);
+    if (!userAt && !port && !schemeless) continue;
+    if (text[start - 1] === '.') continue;
+    if (
+      userAt &&
+      restoredAddresses.has(match[0].replace(/:\d{1,5}$/u, '').toLowerCase())
+    )
+      continue;
+    if (port && !userAt && fileAndLine(text, start, host)) continue;
+    addHost(hosts, host);
   }
   for (const match of text.matchAll(
     /(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])/g,
   )) {
-    if (validIpv4(match[1])) addHost(hosts, match[1]);
+    const end = match.index + match[1].length;
+    const spelled =
+      text[match.index - 1] === '@' || /^:\d{1,5}(?!\d)/u.test(text.slice(end));
+    if (spelled && validIpv4(match[1])) addHost(hosts, match[1]);
   }
   for (const match of text.matchAll(
-    /\[([0-9a-f:.]*:[0-9a-f:.]+)\](?::\d{1,5})?/gi,
+    /(@)?\[([0-9a-f:.]*:[0-9a-f:.]+)\](:\d{1,5})?/gi,
   )) {
-    if (validIpv6(match[1])) addHost(hosts, match[1]);
-  }
-  for (const match of text.matchAll(
-    /(?<![\w[])([0-9a-f]{0,4}:[0-9a-f:]{2,})(?![\w\]])/gi,
-  )) {
-    const candidate = match[1].replace(/:\d{1,5}$/, (port) =>
-      match[1].includes('::') ? port : '',
-    );
-    if (validIpv6(candidate)) addHost(hosts, candidate);
+    if ((match[1] || match[3]) && validIpv6(match[2])) addHost(hosts, match[2]);
   }
   return [...hosts];
 }
@@ -1078,6 +1112,75 @@ export function mcpServerAllowed({ token, entry }, rules, server) {
   );
 }
 
+// Wildcard DNS services that answer a name with the address written in it
+// (their documented forms, exact suffix): `203.0.113.7.sslip.io`,
+// `203-0-113-7.sslip.io`, `pm.203.0.113.7.sslip.io`, `pm-203-0-113-7.sslip.io`,
+// IPv6 as `2001-db8--1.sslip.io`; the same on nip.io.
+const ADDRESS_NAME_SUFFIXES = ['sslip.io', 'nip.io'];
+// Anything these services could read as an address: a dotted or dashed run
+// of four or more numbers (IPv4), a label of eight hex digits (nip.io's hex
+// form) or a dashed IPv6 (a `--`, or three hex groups joined by dashes).
+const ADDRESS_LIKE_V4 = /(?<![0-9])\d{1,3}(?:[.-]\d{1,3}){3,}(?![0-9])/gu;
+const ADDRESS_LIKE_OTHER =
+  /(?:^|[.-])[0-9a-f]{8}(?:$|[.-])|--|[0-9a-f]{1,4}-[0-9a-f]{1,4}-[0-9a-f]{1,4}/u;
+const PREFIX_LABELS =
+  /^[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?(?:\.[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?)*$/u;
+
+// True when `value` is an IP address and `host` names exactly that server:
+// the address itself (`203.0.113.7`, `[2001:db8::1]`, with any port) or its
+// name on an address-mapping service above. The address is then where the
+// call goes, not data sent elsewhere (the mirror of an email address used
+// as data): the same value as data to that host (`-d ip=<IP>
+// https://pm.<IP>.sslip.io/`) goes to the server at that address, which
+// already has it. A mapping name counts only when the protected address is
+// the ONLY address-like sequence in it, so the service cannot select
+// another one (`198.51.100.9.x.<IP>.sslip.io` resolves to 198.51.100.9);
+// any other name that merely contains the address
+// (`203.0.113.7.evil.example`) is resolved by whoever owns that name.
+function addressNamesHost(value, host) {
+  const address = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/gu, '');
+  const v4 = validIpv4(address);
+  if (!v4 && !validIpv6(address)) return false;
+  if (host === address) return true;
+  const suffix = ADDRESS_NAME_SUFFIXES.find((s) => host.endsWith(`.${s}`));
+  if (!suffix) return false;
+  const name = host.slice(0, -suffix.length - 1);
+  const forms = v4
+    ? [address, address.replace(/\./gu, '-')]
+    : [address.replace(/:/gu, '-')];
+  const form = forms.find(
+    (f) =>
+      name === f ||
+      name.endsWith(`.${f}`) ||
+      (v4 && f.includes('-') && name.endsWith(`-${f}`)),
+  );
+  if (!form) return false;
+  const prefix = name.slice(0, name.length - form.length).replace(/[.-]$/u, '');
+  if (prefix && !PREFIX_LABELS.test(prefix)) return false;
+  // The protected address is the only address-like sequence in the name.
+  if (v4) {
+    const runs = name.match(ADDRESS_LIKE_V4) ?? [];
+    if (runs.length !== 1 || runs[0] !== form) return false;
+    return !ADDRESS_LIKE_OTHER.test(prefix);
+  }
+  return !/\d/u.test(prefix) && !ADDRESS_LIKE_OTHER.test(prefix);
+}
+
+// `host` with every restored value in it, in any case, replaced by its token.
+export function maskedHost(host, restored, vault) {
+  let out = String(host);
+  for (const token of new Set(restored.map((r) => r.token))) {
+    const value = String(vault.valueOf(token) ?? '');
+    if (value.length < 4) continue;
+    const pattern = value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    out = out.replace(new RegExp(pattern, 'giu'), token);
+  }
+  return out;
+}
+
 // A restored secret may only travel to hosts allowed for it. With no host in
 // the text there is nothing to check here (a local script, a file edit);
 // what could not be read is the caller's (shellDestinations' uncertain).
@@ -1088,12 +1191,13 @@ export function checkDestinations(
   text,
   vault,
   rules,
-  { hosts: given = null, cwd } = {},
+  { hosts: given = null } = {},
 ) {
-  const hosts = given ?? hostsIn(text, { cwd });
+  const hosts = given ?? hostsIn(text);
   if (!hosts.length) return { ok: true, violations: [] };
   const violations = [];
   const seen = new Set();
+  const reported = new Set();
   for (const r of restored) {
     if (seen.has(r.token)) continue;
     seen.add(r.token);
@@ -1101,14 +1205,29 @@ export function checkDestinations(
     if (!entry) continue;
     const allowed = allowedHosts({ token: r.token, entry }, rules);
     for (const host of hosts) {
-      if (!allowed.some((p) => hostMatches(host, p))) {
+      // A name with tokens in it is judged with their values in place.
+      const named = containsToken(host)
+        ? host.replace(TOKEN_RE, (token) => vault.valueOf(token) ?? token)
+        : host;
+      if (addressNamesHost(entry.value, named.toLowerCase())) continue;
+      if (
+        !allowed.some(
+          (p) => hostMatches(host, p) || hostMatches(named.toLowerCase(), p),
+        )
+      ) {
         const name = entry.source?.startsWith('known:')
           ? entry.source.slice(6)
           : null;
+        // A value inside a host name is shown as its token (the deny
+        // reason reaches the model; host names are lower case, so the
+        // value would not be recognised there).
+        const shown = maskedHost(host, restored, vault);
+        if (reported.has(`${r.token} ${shown}`)) continue;
+        reported.add(`${r.token} ${shown}`);
         violations.push({
           token: r.token,
           name,
-          host,
+          host: shown,
           allowed,
         });
       }
@@ -1120,7 +1239,7 @@ export function checkDestinations(
 // ---- sensitive files -----------------------------------------------------------
 
 const KEY_FILE_RE =
-  /(?:^|\/)(?:id_(?:rsa|dsa|ecdsa|ed25519)(?!\.pub)|[^/]+\.(?:p12|pfx|jks|keystore|kdbx|ppk|tfstate|tfstate\.backup)|allow\.key|vault\.key|\.git-credentials|\.netrc|\.pgpass|kubeconfig|\.kube\/config|\.aws\/credentials|\.docker\/config\.json)$/i;
+  /(?:^|\/)(?:id_(?:rsa|dsa|ecdsa|ed25519)(?!\.pub)|[^/]+\.(?:p12|pfx|jks|keystore|kdbx|ppk|tfstate|tfstate\.backup)|allow\.key|vault\.key|\.git-credentials|[._]netrc|\.pgpass|kubeconfig|\.kube\/config|\.aws\/credentials|\.docker\/config\.json)$/i;
 
 // ZeroH's own keys: reading one would undo the masking itself, so these stay
 // closed in every mode. (Everything else under ZEROH_HOME, session signing

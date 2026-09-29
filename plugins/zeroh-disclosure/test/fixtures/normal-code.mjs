@@ -111,7 +111,6 @@ def login(username, password=None, token=None):
   password: {{ db_password }}
   token: \${API_TOKEN}
   secret: <%= secret %>
-  api_key: $API_KEY
 `,
   'deploy/secret.yaml': `apiVersion: v1
 kind: Deployment

@@ -5,6 +5,7 @@
 import './helpers.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, cpSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -13,9 +14,11 @@ import {
   changedClaudeCodeIds,
   checkFeatures,
   loadFeatures,
+  NEXT_PLATFORMS,
   parityTable,
   parseFeaturesLine,
   PLUGIN_ROOT,
+  renderFeaturesTable,
   validateFeatures,
 } from '../scripts/features.mjs';
 
@@ -46,8 +49,11 @@ test('every feature is shipped in Claude Code and names code or a test', () => {
     'mask.prompt',
     'mask.tool-output',
     'mask.file-read',
-    'restore.allowed-host',
+    'restore.bash',
+    'restore.powershell',
     'stop.disallowed-host',
+    'guard.file-tools',
+    'guard.shell',
     'unmask.dialog',
     'receipt.signed',
     'statusline',
@@ -76,6 +82,48 @@ test('the detection counts in the feature list are the catalog counts', () => {
   assert.match(
     keys.description,
     new RegExp(catalog.source.replace('.', '\\.'), 'u'),
+  );
+  // Of the imported rules, the ones that name no provider.
+  const generic = new Set([
+    'generic-api-key',
+    'private-key',
+    'jwt',
+    'jwt-base64',
+    'curl-auth-header',
+    'curl-auth-user',
+    'kubernetes-secret-yaml',
+  ]);
+  const rules = createRequire(import.meta.url)(
+    '../vendor/sensitive-data-detectors/src/rules/gitleaks.generated.json',
+  );
+  const list = Array.isArray(rules) ? rules : rules.rules;
+  assert.equal(list.length, catalog.provider_formats);
+  const genericCount = list.filter(({ id }) => generic.has(id)).length;
+  assert.equal(genericCount, generic.size, 'every generic rule is still there');
+  assert.match(
+    keys.description,
+    new RegExp(
+      `: ${list.length - genericCount} for a named provider's keys and ${genericCount} generic ones`,
+      'u',
+    ),
+  );
+});
+
+test('every feature has an area, and the next platforms cover the core features', () => {
+  const core = data.features.filter((feature) => feature.core);
+  assert.ok(core.length >= 4, 'the core features are marked');
+  for (const feature of core) {
+    for (const platform of NEXT_PLATFORMS) {
+      assert.ok(feature.platforms[platform], `${feature.id}: ${platform}`);
+    }
+  }
+  const markdown = renderFeaturesTable(data);
+  assert.match(markdown, /^## Masking$/mu);
+  assert.match(markdown, /^## Next platforms$/mu);
+  const next = markdown.slice(markdown.indexOf('## Next platforms'));
+  assert.equal(
+    next.split('\n').filter((line) => line.startsWith('| `')).length,
+    core.length,
   );
 });
 
@@ -137,6 +185,25 @@ test('a stale or broken feature list is refused', () => {
     ).join('\n'),
     /"not possible" without a reason/u,
   );
+  const [first] = original.features;
+  const errors = validateFeatures(
+    {
+      ...original,
+      features: [
+        {
+          ...first,
+          area: 'nowhere',
+          platforms: {
+            ...first.platforms,
+            codex: { status: 'planned', note: '', sources: 'not a list' },
+          },
+        },
+      ],
+    },
+    { root },
+  ).join('\n');
+  assert.match(errors, /needs an area/u);
+  assert.match(errors, /codex sources must be a list of strings/u);
 });
 
 test("this release's CHANGELOG section lists real feature IDs", () => {
@@ -178,6 +245,8 @@ test('the Features line, the Claude Code changes and the parity table', () => {
       'claude-code': { status, note: '' },
       codex: { status: 'unknown', note: '' },
       opencode: { status: 'planned', note: '' },
+      'opencode-v2': { status: 'planned', note: '' },
+      copilot: { status: 'unknown', note: '' },
     },
   });
   assert.deepEqual(
@@ -201,6 +270,6 @@ test('the Features line, the Claude Code changes and the parity table', () => {
   );
   assert.equal(
     parityTable({ features: [feature('a', 'shipped')] }, ['a']),
-    '| Feature | Claude Code | Codex | OpenCode |\n| --- | --- | --- | --- |\n| `a` | shipped | unknown | planned |',
+    '| Feature | Claude Code | Codex | OpenCode 1.x | OpenCode 2 |\n| --- | --- | --- | --- | --- |\n| `a` | shipped | unknown | planned | planned |',
   );
 });

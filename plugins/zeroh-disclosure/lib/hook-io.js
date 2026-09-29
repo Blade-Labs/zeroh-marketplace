@@ -93,7 +93,7 @@ export function piiProfile() {
 // this home's control token) that it masks this session; nothing in the
 // environment can claim it. See sessionProxyState for the reasons it is not.
 // With `requireSeen`, the daemon must also have received a request of this
-// session already (LP-B5): see proxyConfirmed.
+// session already: see proxyConfirmed.
 export async function proxyActive({
   sessionId = null,
   env = process.env,
@@ -129,13 +129,13 @@ export async function proxyState({ sessionId = null, env = process.env } = {}) {
   return 'down';
 }
 
-// True when this session's traffic is known to reach the proxy (LP-B5,
-// T-29): the daemon has masked a request under its id already, OR the hook's
+// True when this session's traffic is known to reach the proxy (T-29): the daemon has masked a request under its id already, OR the hook's
 // own environment names this install's proxy URL (the session started behind
 // it, or Claude Code has applied the entry since). Callers hold proxyActive,
 // which proves the daemon healthy and masking this session. Only a session
 // switched to the proxy mid-prompt (its environment does not name the proxy
-// yet) waits for "seen"; its typed secrets are stopped until then.
+// yet) waits for "seen"; until then a typed secret is sent with a "not
+// protected" line (stopped with `uncertain block`).
 export function proxyConfirmed({ sessionId = null, env = process.env } = {}) {
   if (!sessionId) return false;
   try {

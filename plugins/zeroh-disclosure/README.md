@@ -1,7 +1,7 @@
 # ZeroH Disclosure for Claude Code
 
 [![Licence: AGPL-3.0-only](https://img.shields.io/badge/licence-AGPL--3.0--only-blue)](LICENSE)
-[![Version 1.0.0-rc.1](https://img.shields.io/badge/version-1.0.0--rc.1-orange)](CHANGELOG.md)
+[![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-green)](CHANGELOG.md)
 
 ZeroH Disclosure is a Claude Code plugin that lets Claude work with your API keys, passwords and
 personal data without the model receiving them. Before anything reaches the model, it replaces
@@ -37,7 +37,8 @@ claude plugin marketplace add Blade-Labs/zeroh-marketplace
 claude plugin install zeroh-disclosure@zeroh
 ```
 
-Then restart Claude Code. The first session shows the ZeroH Disclosure banner and sets up the
+Then restart Claude Code. The first session shows the big ZeroH Disclosure banner (later sessions
+show one line) and sets up the
 [local proxy](#the-local-proxy). With your first message ZeroH also turns on its
 [status line](#status-line), unless you have one of your own, and auto-update for the zeroh
 marketplace, unless you have set it either way; one line says what it changed.
@@ -246,8 +247,8 @@ known provider prefix have built-in destinations:
 | ZeroH        | `zhk_`                                                        | `*.zeroh.io`                                                                    |
 
 Any other value, such as a `DATABASE_URL` or an internal token, may go nowhere until you allow a
-host. `localhost`, `127.0.0.1` and `::1` are always allowed. When a call is blocked, ZeroH shows
-the exact line to type:
+host. This machine is always allowed: `localhost`, all of `127.0.0.0/8`, `0.0.0.0` and `::1`. When
+a call is blocked, ZeroH shows the exact line to type:
 
 ```text
 ZeroH Disclosure blocked STRIPE_KEY → staging.pay-internal.dev. To allow it, type:
@@ -278,22 +279,22 @@ unmasking per kind; see
 
 Everything is a slash command inside Claude Code:
 
-| Command                                                     | What it does                                                                  |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `/zeroh-disclosure:status`                                  | What is protected now, the proxy, unmask grants, receipts and warnings        |
-| `/zeroh-disclosure:mask-show`                               | What the model saw this session: tokens, types, sources and counts, no values |
-| `/zeroh-disclosure:mask-receipt`                            | This session's receipt slip and the path to `receipt.html`                    |
-| `/zeroh-disclosure:report [7d\|30d\|90d\|all]`              | The receipt slip for a period                                                 |
-| `/zeroh-disclosure:unmask [KIND <why>\|revoke [id\|all]]`   | Ask to unmask one kind of personal data, or list and end grants               |
-| `/zeroh-disclosure:report-miss`                             | Report a value ZeroH did not mask, in a private dialog rather than in chat    |
-| `/zeroh-disclosure:allow [NAME HOST]` (`--remove`)          | Let a secret reach a host or MCP server; alone, show where each value may go  |
-| `/zeroh-disclosure:proxy [off\|on]`                         | Proxy status, or turn the proxy off or back on                                |
-| `/zeroh-disclosure:doctor [--fix\|--report]`                | Check and repair the proxy, its settings entry and the vaults                 |
-| `/zeroh-disclosure:settings [banner\|receipts keep\|vault]` | Banner, receipts kept, uncertain cases, status line, vault or `vault clear`   |
-| `/zeroh-disclosure:mask-config`                             | Configuration, policy and protection engine                                   |
-| `/zeroh-disclosure:uninstall [--yes]`                       | What uninstall removes; with `--yes`, remove ZeroH and the plugin completely  |
+| Command                                                                            | What it does                                                                   |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `/zeroh-disclosure:status`                                                         | What is protected now, the proxy, unmask grants, receipts and warnings         |
+| `/zeroh-disclosure:mask-show`                                                      | What the model saw this session: tokens, types, sources and counts, no values  |
+| `/zeroh-disclosure:mask-receipt`                                                   | This session's receipt slip and the path to `receipt.html`                     |
+| `/zeroh-disclosure:report [7d\|30d\|90d\|all]`                                     | The receipt slip for a period                                                  |
+| `/zeroh-disclosure:unmask [KIND <why>\|revoke [id\|all]]`                          | Ask to unmask one kind of personal data, or list and end grants                |
+| `/zeroh-disclosure:report-miss`                                                    | Report a value ZeroH did not mask, in a private dialog rather than in chat     |
+| `/zeroh-disclosure:allow [NAME HOST]` (`--remove`)                                 | Let a secret reach a host or MCP server; alone, show where each value may go   |
+| `/zeroh-disclosure:proxy [off\|on]`                                                | Proxy status, or turn the proxy off or back on                                 |
+| `/zeroh-disclosure:doctor [--fix\|--report]`                                       | Check and repair the proxy, its settings entry and the vaults                  |
+| `/zeroh-disclosure:settings [banner\|receipts keep\|uncertain\|statusline\|vault]` | Banner, receipts kept, uncertain cases, status line, vault or `vault clear`    |
+| `/zeroh-disclosure:mask-config`                                                    | Configuration, policy and protection engine                                    |
+| `/zeroh-disclosure:uninstall [--dry-run]`                                          | Remove ZeroH and the plugin completely; `--dry-run` only shows what it removes |
 
-`allow`, `proxy`, `doctor --fix`, `settings` changes, `unmask caps` and `uninstall --yes` change
+`allow`, `proxy`, `doctor --fix`, `settings` changes, `unmask caps` and `uninstall` change
 what ZeroH protects, so only you can run them. You type the command and ZeroH applies it on the
 same turn: the result appears at once, under Claude Code's "operation blocked by hook" label,
 starting with `✓ Done by ZeroH Disclosure`, and nothing is sent to Claude. Claude can't invoke
@@ -337,7 +338,7 @@ Set these as environment variables before starting Claude Code, or as `KEY=value
 | `ZEROH_DISPLAY_REAL_VALUES` | `1`         | `0` keeps tokens on your screen too                                                          |
 | `ZEROH_VAULT_RETENTION`     | `7d`        | `session`, `7d` or `30d`: how long unused detected values stay in the vault                  |
 | `ZEROH_RECEIPT_RETENTION`   | `90d`       | `forever`, `1y`, `90d` or `30d`: how long receipts are kept                                  |
-| `ZEROH_BANNER`              | saved mode  | `full`, `compact` or `off`; overrides `/zeroh-disclosure:settings banner`                    |
+| `ZEROH_BANNER`              | saved mode  | `big`, `compact`, `mini` or `off`; overrides `/zeroh-disclosure:settings banner`             |
 | `ZEROH_UNCERTAIN`           | `pass`      | `pass` never stops ordinary work; `block` denies what ZeroH can't prove                      |
 | `ZEROH_HOME`                | see below   | Where the vault, keys, grants, receipts and proxy live (environment only)                    |
 | `ZEROH_PROXY_PORT`          | a free port | Port for the local proxy                                                                     |
@@ -461,8 +462,8 @@ The limits:
   blocks direct attempts to change them; it is not a sandbox.
 - **Transformed values.** A restored value that a command prints reversed, spaced out, as a hex
   dump or as base64 of a shifted string is not recognised when it comes back.
-- **Without the proxy** (`ZEROH_PROXY=off`, `proxy off`, Bedrock, Vertex, Foundry, a shell that
-  sets `ANTHROPIC_BASE_URL`, or a machine that refuses login items), a prompt in which you type a
+- **Without the proxy** (`ZEROH_PROXY=off`, `proxy off`, Bedrock, Vertex, Foundry, or a shell that
+  sets `ANTHROPIC_BASE_URL`), a prompt in which you type a
   secret or personal data is sent as typed, with a "not protected (proxy not running)" line, and
   background commands and the `Monitor` tool run with the same line, because nothing can mask
   them. With `uncertain block` the prompt is stopped and those commands are denied.
@@ -510,9 +511,9 @@ start says so once and ZeroH steps aside. Either way Claude Code keeps working.
 - Set `CLAUDE_CODE_USE_POWERSHELL_TOOL=1` to use Claude Code's PowerShell tool
   ([Run with PowerShell](docs/how-to.md#run-with-powershell)).
 - The proxy's login item needs a desktop or a systemd user session. Over SSH, in WSL or in a
-  container, and on a managed Mac or locked-down Windows that refuses login items, the proxy is
-  not set up and typed secrets are sent with a "not protected" line rather than masked; ZeroH says
-  so once.
+  container, and on a managed Mac or locked-down Windows that refuses login items, the proxy runs
+  only while Claude Code does (each session starts it, and what you type is still masked); the
+  banner, status and doctor say why the login item failed and how to fix it.
 - `pdftotext` on your `PATH` improves PDF text extraction but is optional; there is a built-in
   extractor.
 
@@ -528,15 +529,19 @@ scanned-PDF redaction, custom detectors, and ProofPack reports for auditors.
 ## Uninstall
 
 ```text
-/zeroh-disclosure:uninstall          # shows what it removes; nothing is removed yet
-/zeroh-disclosure:uninstall --yes    # removes it
+/zeroh-disclosure:uninstall            # removes it; typing it is the confirmation
+/zeroh-disclosure:uninstall --dry-run  # only shows what it would remove
 ```
 
 It removes the plugin from Claude Code, ZeroH's entry in your Claude Code settings (your own
-setting goes back), ZeroH's status line if you turned it on, the proxy and its login item, and
-ZeroH's folder with the vault, keys and receipts. Exit the session you ran it in: nothing protects it any more. If Claude Code can't
-start, run `node "<plugin>/bin/zeroh-disclosure.mjs" uninstall --yes` in a terminal outside Claude
-Code (it shows what it removes and asks you to type a code).
+setting goes back), ZeroH's status line if you turned it on, the proxy's login item, and ZeroH's
+folder with the vault, keys and settings, then says how to install it again. It keeps your signed
+receipts, with the public keys that verify them and no values, in `~/ZeroH Receipts`
+(`%LOCALAPPDATA%\ZeroH Receipts` on Windows); `--delete-receipts` removes them too. The session you
+ran it in keeps working until you exit, without ZeroH's masking (with the vault gone, nothing could
+put a token back); new sessions start without ZeroH. If Claude Code can't start, run
+`node "<plugin>/bin/zeroh-disclosure.mjs" uninstall --yes` in a terminal outside Claude Code (it
+shows what it removes and asks you to type a code).
 [Uninstall and clean up](docs/how-to.md#uninstall-and-clean-up) has the details.
 
 ## Documentation

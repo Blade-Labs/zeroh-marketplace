@@ -132,9 +132,14 @@ export function looksLikeCodeValue(value, name = '', { words = true } = {}) {
 // A complete quoted literal after a secret-named key is the secret, whatever
 // it holds: leading spaces or braces, all-word passphrases, operator-like
 // words. Only these quoted values are not:
-//   - a reference or an expression whose value is elsewhere: `${…}`, `$VAR`,
-//     `{{ … }}`, `<%= … %>`, `#{…}`, `%{…}`, `%s`, `{name}`,
-//     `process.env.X`, `os.environ["X"]`;
+//   - a format verb or a code expression whose value is elsewhere: `%s`,
+//     `%(name)s`, `{name}`, `process.env.X`, `os.environ["X"]`. A shell,
+//     env-file or template reference (`$VAR`, `${VAR}`, `${VAR:-x}`,
+//     `$env:VAR`, `%VAR%`, `{{ … }}`, `${{ … }}`, `<%= … %>`) is a value
+//     here: whether it is expanded depends on which interpreter reads the
+//     text, which the detector cannot know. Masking a reference is
+//     restorable; a literal read as a reference leaks. ZeroH Disclosure
+//     judges references only when it decides whether a command stops;
 //   - the documented placeholders (PLACEHOLDER) and OpenAPI's example type
 //     names (`"password": "string"`);
 //   - a name, not a value: the key's own name (`PASSWORD: 'password'`), an
@@ -154,8 +159,6 @@ export function looksLikeCodeValue(value, name = '', { words = true } = {}) {
 //     short name (`"New password"`, `"Access token"`). A passphrase is still a
 //     secret, with a secret word or a common word in it or not (`"correct horse
 //     secret staple"`, `"correct horse secret and staple"`).
-// References must make up the whole value (`"${USER}:${PASS}"`, `"Bearer
-// ${TOKEN}"`); a literal around one (`"Tr0ub4dor${n}"`) is a secret.
 const SECRET_LABEL_WORD =
   /^(?:passwords?|passphrases?|passwd|pins?|tokens?|secrets?|keys?|credentials?|api|otp|codes?)$/iu;
 // UI labels about a secret, by construction (Astra rc.2 V3): not any phrase
@@ -205,40 +208,6 @@ function labelConstruction(words, original) {
     words.length <= 3 &&
     /^\p{Lu}/u.test(original[0]) &&
     !/[.,:;!?)]$/u.test(original.at(-1))
-  );
-}
-// `${…}`, `#{…}`, `%{…}` and `$VAR`; `{{ … }}` and `<% … %>` are found by
-// removeReferences, in linear time.
-const REFERENCE_RE = /[$#%]\{[^{}]*\}|\$[A-Za-z_]\w*/gu;
-function removeReferences(v) {
-  let out = '';
-  let at = 0;
-  for (const [open, close] of [
-    ['{{', '}}'],
-    ['<%', '%>'],
-  ]) {
-    const last = v.lastIndexOf(close);
-    out = '';
-    at = 0;
-    for (;;) {
-      const start = v.indexOf(open, at);
-      if (start < 0 || start > last) break;
-      const end = v.indexOf(close, start + open.length);
-      if (end < 0) break;
-      out += `${v.slice(at, start)} `;
-      at = end + close.length;
-    }
-    v = out + v.slice(at);
-  }
-  return v.replace(REFERENCE_RE, ' ');
-}
-// True when the value is made of references only, joined by punctuation (or
-// after an authorization scheme).
-function onlyReferences(v) {
-  const rest = removeReferences(v);
-  if (rest === v) return false;
-  return /^\s*(?:(?:Bearer|Basic|Digest|Token)\s+)?[\s\p{P}\p{S}]*$/iu.test(
-    rest,
   );
 }
 // A complete CSS value (Astra rc.2 V3): component values separated by
@@ -317,9 +286,8 @@ function quotedNotSecret(value, name = '') {
   const v = value.trim();
   if (!v) return true;
   if (PLACEHOLDER.test(v) || TYPE_WORDS.has(v.toLowerCase())) return true;
-  if (onlyReferences(v)) return true;
   if (
-    /^(?:\$[A-Za-z_]\w*|%[sdr]|%\(\w+\)[sdr]|\{[A-Za-z_][\w.]*\}|(?:process\.env|import\.meta\.env|os\.environ)(?:\.[A-Za-z_]\w*|\[["'][^"']+["']\]))$/u.test(
+    /^(?:%[sdr]|%\(\w+\)[sdr]|\{[A-Za-z_][\w.]*\}|(?:process\.env|import\.meta\.env|os\.environ)(?:\.[A-Za-z_]\w*|\[["'][^"']+["']\]))$/u.test(
       v,
     )
   )
@@ -351,6 +319,16 @@ function quotedNotSecret(value, name = '') {
   return labelConstruction(bareWords, words);
 }
 
+// looksLikeCodeValue for a value slot (after a secret-named key or
+// `Password=`): it reads a value starting with `$NAME`, `${` or `%` as code,
+// but in a value slot a value starting with a reference is a reference or a
+// literal with a reference in it (`${PGPASS:-hunter2x}`, `$X-hunter2x`,
+// `%X%hunter2x`), and a value either way.
+function codeInValueSlot(value, name, options) {
+  if (/^(?:\$(?:\{|[A-Za-z_])|%[A-Za-z_]\w*%)/u.test(value)) return false;
+  return looksLikeCodeValue(value, name, options);
+}
+
 // A key that is a quoted branch of a conditional (`cond ? 'secret' : 'x'`),
 // not an assignment.
 function ternaryBranch(match) {
@@ -362,9 +340,10 @@ function ternaryBranch(match) {
 const NON_SECRET_NAME =
   /(?:_URL|_URI|_PATH|_FILE|_DIR|_PREFIX|_SUFFIX|_TIMEOUT(?:_MS|_SECONDS)?|_TTL|_SCOPE|_HEADER|_NAME|_ID|_REGION|_ENDPOINT|MAX_\w*TOKENS?|_TOKENS|PUBLIC_?KEY|_ICON_KEY|_KEY_ID|TOKEN_TYPE|_LENGTH|_SIZE|_COUNT|_ENABLED|_MODE)$/i;
 
-// Values that are placeholders, references or already tokens.
+// Values that are placeholders or already tokens. Not references: `$X`,
+// `${X}`, `${X-literal}` and `$X-literal` are values (see quotedNotSecret).
 const PLACEHOLDER =
-  /^(?:\$\{?[\w.-]+\}?|<[^>]*>|\[[A-Z_]+-[0-9a-f]{6}\]|x{3,}|\*{3,}|changeme|your[-_].*|example|placeholder|todo|null|none|true|false|undefined|redacted|\.\.\.)$/i;
+  /^(?:<[^>]*>|\[[A-Z_]+-[0-9a-f]{6}\]|x{3,}|\*{3,}|changeme|your[-_].*|example|placeholder|todo|null|none|true|false|undefined|redacted|\.\.\.)$/i;
 
 // `group` value meaning "the first capture group that matched" (gitleaks).
 const FIRST_NON_EMPTY = 'first';
@@ -460,6 +439,26 @@ const SECRET_RULES = [
     type: 'API_KEY',
     risk: 'critical',
     pattern: /\bgh[pousr]_[A-Za-z0-9]{30,}\b/g,
+    confidence: 0.99,
+  },
+  {
+    // GitHub App installation tokens (`ghs_`, the Actions GITHUB_TOKEN too) in
+    // the stateless format GitHub rolled out from 2026-04-27: `ghs_`, the app
+    // ID, `_`, then a JWT (three base64url segments, two dots), about 520
+    // characters and varying. Neither the rule above nor gitleaks v8.30.1's
+    // `github-app-token` (`(?:ghu|ghs)_[0-9a-zA-Z]{36}`) matches it. The match
+    // runs to the end of the third segment, so the whole token is masked.
+    // No character before `ghs_` may belong to a segment, so every start owns
+    // its own runs and the rule is linear.
+    // Sources: https://github.blog/changelog/2026-04-24-notice-about-upcoming-new-format-for-github-app-installation-tokens/
+    // and https://github.blog/changelog/2026-05-15-github-app-installation-tokens-per-request-override-header/
+    // (regex guidance updated 2026-05-26). GitHub announced no new format for
+    // ghp_, gho_, ghr_ or github_pat_; user-to-server tokens (ghu_) are "not
+    // in scope yet", so the rules above still cover them.
+    type: 'API_KEY',
+    risk: 'critical',
+    pattern:
+      /(?<![A-Za-z0-9_-])ghs_\d{1,20}_[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])/g,
     confidence: 0.99,
   },
   {
@@ -622,7 +621,9 @@ const SECRET_RULES = [
     pattern: /\b[a-z][a-z0-9+.-]{1,20}:\/\/[^\s:/@'"]+:([^\s@/'"]{3,})@/gi,
     group: 1,
     confidence: 0.95,
-    // Not the documentation stand-ins (`user:pass@host`, `user:${PW}@host`).
+    overPersonalData: true,
+    // Not the documentation stand-ins (`user:pass@host`, `user:<pw>@host`).
+    // A reference (`user:${PW}@host`, `user:${X-pw}@host`) is a value.
     validate: (v) =>
       !PLACEHOLDER.test(v) &&
       !/^(?:pass(?:word)?|passwd|pwd|secret|pw)$/iu.test(v),
@@ -636,12 +637,15 @@ const SECRET_RULES = [
     confidence: 0.94,
     // Not `PWD=/home/me` from `env`, nor `pwd=$(pwd)`.
     // Nor a keyword argument (`password=None,`, `password=password)`).
+    // A reference (`Pwd=%DB_PASS%;`, `Password=${X:-pw};`) is a value.
+    // A plain word is a value here, in a sentence too (`password=<word>`):
+    // masking it in place is restorable, while a missed password leaks.
     validate: (v) => {
       const core = v.includes('(') ? v : v.replace(/[,):]+$/u, '');
       return (
         !PLACEHOLDER.test(core) &&
         !/^(?:password|passwd|pwd|pass)$/iu.test(core) &&
-        !looksLikeCodeValue(core, 'password', { words: false })
+        !codeInValueSlot(core, 'password', { words: false })
       );
     },
   },
@@ -672,7 +676,7 @@ const SECRET_RULES = [
     // on one line. A random-looking value is the most certain case and is
     // masked like any other (DET-1). A complete quoted literal runs to its
     // closing quote (escapes included) and is the secret unless it is a
-    // reference, a placeholder or a label (quotedNotSecret). An unquoted value stops at
+    // placeholder, a format expression or a label (quotedNotSecret). An unquoted value stops at
     // a backslash, so an escaped newline in a string (`KEY=value\nNEXT=…`)
     // does not join lines.
     type: 'SECRET',
@@ -690,7 +694,7 @@ const SECRET_RULES = [
       !/^https?:\/\/[^@]*$/.test(value) &&
       (match[4] === undefined
         ? !quotedNotSecret(value, match[1]) && !ternaryBranch(match)
-        : !PLACEHOLDER.test(value) && !looksLikeCodeValue(value, match[1])),
+        : !PLACEHOLDER.test(value) && !codeInValueSlot(value, match[1])),
     typeOf: (match) => nameType(match[1]),
     genericShape: true,
     retryInside: true,
@@ -925,13 +929,42 @@ function anchored(text, index, anchor, at) {
   return true;
 }
 
+// A URL password that displaces personal data it only partly overlaps
+// masks both spans as one: in a git URL whose password is `$TOKEN`, rc.2
+// read `TOKEN`, the `@` and the host as an e-mail address and masked it,
+// and the URL rule now masks `$TOKEN`.
+// Masking never shrinks below what rc.2 masked there: a missed character
+// leaks, an extra one is restorable. Other credentials (a provider token
+// before `@host`) keep their exact span.
+const OVER_PERSONAL_DATA = new WeakSet();
+function overPersonalData(rule, finding) {
+  if (rule.overPersonalData) OVER_PERSONAL_DATA.add(finding);
+  return finding;
+}
+function credentialOver(f, o) {
+  if (!OVER_PERSONAL_DATA.has(f) || covers(f, o)) return f;
+  const start = Math.min(f.start, o.start);
+  const end = Math.max(f.end, o.end);
+  return overPersonalData(
+    { overPersonalData: true },
+    { ...f, start, end, length: end - start },
+  );
+}
+
 function dedupe(fs) {
   const out = [];
   for (const f of fs) {
     const o = out.find((x) => f.start < x.end && x.start < f.end);
     if (!o) out.push(f);
-    else if (
-      (isCredentialFinding(f) && !isCredentialFinding(o)) ||
+    else if (isCredentialFinding(f) && !isCredentialFinding(o)) {
+      out[out.indexOf(o)] = credentialOver(f, o);
+    } else if (
+      isCredentialFinding(o) &&
+      !isCredentialFinding(f) &&
+      !covers(o, f)
+    ) {
+      out[out.indexOf(o)] = credentialOver(o, f);
+    } else if (
       (isCredentialFinding(f) &&
         isCredentialFinding(o) &&
         covers(f, o) &&
@@ -1043,7 +1076,7 @@ export function detectSensitiveData(
       if (insideToken(start, end)) return null;
       const type = rule.typeOf ? rule.typeOf(match) : rule.type;
       if (enabledTypes && !enabledTypes.includes(type)) return null;
-      return {
+      return overPersonalData(rule, {
         type,
         risk: rule.risk,
         start,
@@ -1053,7 +1086,7 @@ export function detectSensitiveData(
         ...(rule.id ? { ruleId: rule.id } : {}),
         ...(rule.imported ? { imported: true } : {}),
         ...(rule.genericShape ? { generic: true } : {}),
-      };
+      });
     };
     // A rule with `retryInside` looks again one character after a refused
     // match, as if it had not matched there: a refused quoted value
@@ -1221,6 +1254,7 @@ export function detectionCatalog() {
     also: [
       'secrets next to key-like names (API_KEY=..., "password": ..., token: ...)',
       'private keys (PEM, OpenSSH, PuTTY, age)',
+      'GitHub App installation tokens in the 2026 stateless format (ghs_<app id>_<JWT>)',
     ],
     personal_data: detectorManifest()
       .categories.map(({ type }) => type)

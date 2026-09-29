@@ -113,6 +113,52 @@ function knownSource(name, env) {
   return source && typeof source === 'object' ? source : null;
 }
 
+// ZeroH's public marketplace. Until 25 September 2026 its manifest was named
+// `zeroh-marketplace`; a profile that added it then keeps it registered
+// under that name, so `zeroh-disclosure@zeroh` is "not found in marketplace
+// zeroh" and Claude Code's hint names the wrong marketplace (Windows re-test,
+// finding 9). Only a GitHub source for this repository counts: a local
+// directory or another repository named `zeroh-marketplace` (the internal
+// one) is a different marketplace and is left alone.
+export const PUBLIC_MARKETPLACE_REPO = 'Blade-Labs/zeroh-marketplace';
+export const PUBLIC_MARKETPLACE_NAME = 'zeroh';
+
+function isPublicMarketplaceSource(source) {
+  if (!source || typeof source !== 'object') return false;
+  const want = PUBLIC_MARKETPLACE_REPO.toLowerCase();
+  if (source.source === 'github') {
+    return String(source.repo ?? '').toLowerCase() === want;
+  }
+  if (source.source === 'git' || source.source === 'url') {
+    const url = String(source.url ?? '')
+      .toLowerCase()
+      .replace(/\.git$/u, '')
+      .replace(/\/+$/u, '');
+    return (
+      url === `https://github.com/${want}` || url === `git@github.com:${want}`
+    );
+  }
+  return false;
+}
+
+// The name the public marketplace is registered under when it is not
+// `zeroh`, or null.
+export function staleMarketplaceName(env = process.env) {
+  const known = readJsonOr(
+    path.join(claudeConfigDir(env), 'plugins', 'known_marketplaces.json'),
+  );
+  if (!known || typeof known !== 'object') return null;
+  for (const [name, entry] of Object.entries(known)) {
+    if (name === PUBLIC_MARKETPLACE_NAME) continue;
+    if (isPublicMarketplaceSource(entry?.source)) return name;
+  }
+  return null;
+}
+
+export function staleMarketplaceText(name) {
+  return `Claude Code has ZeroH's public marketplace (GitHub ${PUBLIC_MARKETPLACE_REPO}) registered under its old name "${name}", so zeroh-disclosure@zeroh is not found and updates may stop. In a terminal, run: claude plugin marketplace remove ${name}, then claude plugin marketplace add ${PUBLIC_MARKETPLACE_REPO} and claude plugin install zeroh-disclosure@zeroh; then restart Claude Code.`;
+}
+
 // The status line part. Mutates `document`; returns { changed, line,
 // choice }: `choice` is what to record for the file, once the settings are
 // written (null: nothing to record).
@@ -214,6 +260,14 @@ export function applyFirstRunDefaults({
         }
         decidedChanged = true;
       }
+    }
+
+    // Said once per settings file; doctor says it every time.
+    const stale = staleMarketplaceName(env);
+    if (stale && decided.staleMarketplace !== stale) {
+      lines.push(staleMarketplaceText(stale));
+      decided.staleMarketplace = stale;
+      decidedChanged = true;
     }
 
     if (changed) {
