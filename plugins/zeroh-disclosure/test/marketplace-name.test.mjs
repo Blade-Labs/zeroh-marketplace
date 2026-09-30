@@ -5,7 +5,7 @@
 // `zeroh-marketplace`, so `zeroh-disclosure@zeroh` is not found. ZeroH says
 // so once at the first prompt and in doctor, with the three commands. A
 // local directory marketplace, or another repository, named
-// `zeroh-marketplace` (the internal one) is a different marketplace.
+// `zeroh-marketplace` from a different source is a different marketplace.
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -69,7 +69,7 @@ test('the public marketplace under its old name is found, and only it', () => {
       'zeroh-marketplace': {
         source: {
           source: 'github',
-          repo: 'Blade-Labs/zeroh-marketplace-internal',
+          repo: 'Example-Org/other-marketplace',
         },
       },
     },

@@ -26,22 +26,30 @@
 // then types that very command. The terminal fallback and the limits of all
 // of this (code running as the same OS user) are described in
 // docs/architecture.md, "Threat model".
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   closeSync,
+  ftruncateSync,
+  mkdirSync,
+  mkdtempSync,
   openSync,
   readdirSync,
   readFileSync,
   readSync,
+  rmdirSync,
   writeSync,
+  unlinkSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { terminalCommand } from './fix-command.js';
+import { acquireFileLock, fileLockOwnerText } from './vault.js';
+import { isUninstalled } from './uninstall-marker.js';
 import {
   ensurePrivateDir,
+  protectWindowsPath,
   removeQuietly,
   renameWithRetry,
   writePrivateJson,
@@ -542,6 +550,110 @@ export function runAsUser({ argv, cwd, env = process.env, timeoutMs = 6000 }) {
   };
 }
 
+function removalLockPath(env) {
+  const key = createHash('sha256')
+    .update(path.resolve(zerohHome(env)))
+    .digest('hex')
+    .slice(0, 24);
+  const dir = path.join(
+    path.dirname(path.resolve(zerohHome(env))),
+    `.zeroh-disclosure-removal-${key}`,
+  );
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (process.platform === 'win32' && !protectWindowsPath(dir, { env })) {
+    throw new Error('could not protect the removal lock');
+  }
+  return path.join(dir, 'removal.lock');
+}
+
+function reserveRemoval(env) {
+  try {
+    return acquireFileLock(removalLockPath(env), {
+      waitMs: 0,
+      staleMs: 24 * 60 * 60 * 1_000,
+      reclaimDeadOwner: true,
+    });
+  } catch (error) {
+    if (/Timed out waiting for ZeroH vault lock/u.test(error.message)) {
+      throw new Error('ZeroH Disclosure removal is already running.');
+    }
+    throw error;
+  }
+}
+
+export function beginRemoval(env = process.env) {
+  if (env.ZEROH_REMOVAL_LOCK) {
+    const file = removalLockPath(env);
+    if (
+      env.ZEROH_REMOVAL_LOCK !== file ||
+      Number.parseInt(readFileSync(file, 'utf8'), 10) !== process.pid
+    ) {
+      throw new Error('removal lock was lost');
+    }
+    return file;
+  }
+  const lock = reserveRemoval(env);
+  closeSync(lock.fd);
+  return lock.file;
+}
+
+export function finishRemoval(file, { cleanupDirectory = false } = {}) {
+  if (!file) return;
+  try {
+    unlinkSync(file);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (cleanupDirectory) {
+    try {
+      rmdirSync(path.dirname(file));
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code)) throw error;
+    }
+  }
+}
+
+function startDetachedRemoval({ argv, cwd, env, onLog }) {
+  const ticket = mintTicket({ argv, env });
+  // The CLI deletes ZEROH_HOME, so its log must live outside that folder.
+  const logDir = mkdtempSync(
+    path.join(os.tmpdir(), 'zeroh-disclosure-removal-'),
+  );
+  if (process.platform === 'win32' && !protectWindowsPath(logDir, { env })) {
+    throw new Error('could not protect the removal log');
+  }
+  const log = path.join(logDir, 'removal.log');
+  onLog(log);
+  const fd = openSync(log, 'w', 0o600);
+  let lock;
+  try {
+    lock = reserveRemoval(env);
+    const child = spawn(process.execPath, [CLI, ...argv, '--cwd', cwd], {
+      cwd,
+      env: {
+        ...env,
+        [TICKET_ENV]: ticket,
+        ZEROH_REMOVAL_LOCK: lock.file,
+        ZEROH_REMOVAL_LOG_DIR: logDir,
+      },
+      detached: true,
+      stdio: ['ignore', fd, fd],
+      windowsHide: true,
+    });
+    if (!child.pid) throw new Error('removal process did not start');
+    ftruncateSync(lock.fd, 0);
+    writeSync(lock.fd, fileLockOwnerText(child.pid), 0);
+    child.unref();
+    return log;
+  } catch (error) {
+    if (lock) finishRemoval(lock.file);
+    throw error;
+  } finally {
+    closeSync(fd);
+    if (lock) closeSync(lock.fd);
+  }
+}
+
 // True when the typed prompt is one of ZeroH's own (namespaced) management
 // slash commands. Never throws.
 export function isManagementPrompt(prompt) {
@@ -566,6 +678,18 @@ export function handleManagementPrompt({
 }) {
   const slash = parseSlashPrompt(prompt);
   if (!slash) return null;
+  if (
+    slash.namespaced &&
+    slash.name === 'uninstall' &&
+    slash.args.includes('--dry-run') &&
+    isUninstalled(env)
+  ) {
+    return {
+      applied: false,
+      message:
+        'Nothing changed: ZeroH is already removed. The dry run has no remaining local cleanup to show.',
+    };
+  }
   const argv = slashToCli(slash.name, slash.args);
   if (!argv) return null;
   const pending = claimPending({ argv, sessionId, env });
@@ -579,9 +703,34 @@ export function handleManagementPrompt({
     };
   }
   markSideEffect(`running ${slashFor(argv)}`);
+  if (argv[0] === 'uninstall') {
+    let log;
+    try {
+      log = startDetachedRemoval({
+        argv,
+        cwd,
+        onLog: (file) =>
+          markSideEffect(`running ${slashFor(argv)}; log: ${file}`),
+        env: {
+          ...env,
+          CLAUDE_CODE_SESSION_ID: sessionId || '',
+          CLAUDE_PROJECT_DIR: cwd,
+        },
+      });
+    } catch (error) {
+      markSideEffect(null);
+      return { applied: false, message: error.message };
+    }
+    markSideEffect(null);
+    return {
+      applied: true,
+      message: `ZeroH Disclosure removal is running in the background. Read its log: ${log}. If the log is gone, every removal step finished. If it remains, follow the Remaining steps at its end; if it says "local cleanup failed", type /zeroh-disclosure:uninstall again. Check \`claude plugin list\`; if the plugin remains after local cleanup, run \`claude plugin uninstall zeroh-disclosure@zeroh\`.`,
+    };
+  }
   const run = runAsUser({
     argv,
     cwd,
+    timeoutMs: 6_000,
     env: {
       ...env,
       CLAUDE_CODE_SESSION_ID: sessionId || '',
@@ -589,11 +738,12 @@ export function handleManagementPrompt({
     },
   });
   markSideEffect(null);
-  if (run.timedOut)
+  if (run.timedOut) {
     return {
       applied: false,
-      message: `ZeroH started ${slashFor(argv)} but it did not finish in time. /zeroh-disclosure:status shows where it stands.`,
+      message: `ZeroH started ${slashFor(argv)} and it was still finishing when the wait ended. Run /zeroh-disclosure:doctor to check the current state.`,
     };
+  }
   const applied =
     run.status === 0 && !/^(?:Nothing changed|Cancelled)/u.test(run.output);
   // Claude Code shows this under "operation blocked by hook": the command

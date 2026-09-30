@@ -20,6 +20,7 @@ function run(env, args) {
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 60_000,
     shell: process.platform === 'win32',
+    windowsHide: true,
   });
 }
 

@@ -2143,7 +2143,8 @@ test('ZEROH_PROXY=1 in the environment never skips the typed-secret block or the
     },
   };
   // Block mode keeps the typed-secret stop; by default (A1) it is sent with
-  // the "proxy not running" notice, and the variable claims no masking.
+  // the notice naming the outside ANTHROPIC_BASE_URL, and the variable claims
+  // no masking.
   const prompt = runHook(
     'user-prompt-submit',
     { prompt: `deploy with ${FAKE_STRIPE}` },
@@ -2158,7 +2159,7 @@ test('ZEROH_PROXY=1 in the environment never skips the typed-secret block or the
   assert.equal(passed.code, 0, passed.stderr);
   assert.match(
     passed.json.systemMessage,
-    /this prompt was not protected \(proxy not running\)/u,
+    /this prompt was not protected \(ANTHROPIC_BASE_URL is set outside ZeroH\)/u,
   );
   assert.doesNotMatch(prompt.stdout, new RegExp(FAKE_STRIPE, 'u'));
   const background = runHook(

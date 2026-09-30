@@ -22,6 +22,7 @@
 // settings file that can't be read is tried again at the next prompt.
 import path from 'node:path';
 import os from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 import {
   installId,
   readSettings,
@@ -40,6 +41,34 @@ import {
 } from './statusline-settings.js';
 
 export const FIRST_RUN_FILE = 'first-run.json';
+
+// Remove only the auto-update entry this install created. A user's later
+// changes to that entry, and entries for other marketplaces, stay theirs.
+export function removeFirstRunMarketplace({
+  home,
+  settingsPath,
+  env = process.env,
+}) {
+  const record = readJsonOr(path.join(path.resolve(home), FIRST_RUN_FILE));
+  const added = record?.installs?.[installId(settingsPath)]?.autoUpdate;
+  if (added?.decision !== 'on' || !added.marketplace) return false;
+  const { document } = readSettings(settingsPath);
+  const markets = document.extraKnownMarketplaces;
+  const entry = markets?.[added.marketplace];
+  const source = added.source ?? knownSource(added.marketplace, env);
+  if (!source || !isDeepStrictEqual(entry, { source, autoUpdate: true })) {
+    return false;
+  }
+  if (added.created === false) {
+    delete entry.autoUpdate;
+  } else {
+    // Older records did not store ownership; keep their original behavior.
+    delete markets[added.marketplace];
+    if (!Object.keys(markets).length) delete document.extraKnownMarketplaces;
+  }
+  writeSettingsFile(settingsPath, `${JSON.stringify(document, null, 2)}\n`);
+  return added.created === false ? 'autoUpdate' : 'entry';
+}
 
 export const FIRST_RUN_LINES = Object.freeze({
   statuslineOn:
@@ -119,8 +148,8 @@ function knownSource(name, env) {
 // under that name, so `zeroh-disclosure@zeroh` is "not found in marketplace
 // zeroh" and Claude Code's hint names the wrong marketplace (Windows re-test,
 // finding 9). Only a GitHub source for this repository counts: a local
-// directory or another repository named `zeroh-marketplace` (the internal
-// one) is a different marketplace and is left alone.
+// directory or another repository with the same name is a different
+// marketplace and is left alone.
 export const PUBLIC_MARKETPLACE_REPO = 'Blade-Labs/zeroh-marketplace';
 export const PUBLIC_MARKETPLACE_NAME = 'zeroh';
 
@@ -256,7 +285,13 @@ export function applyFirstRunDefaults({
               [name]: { ...(entry ?? {}), source, autoUpdate: true },
             };
             changed = true;
-            decided.autoUpdate = { decision: 'on', marketplace: name, at };
+            decided.autoUpdate = {
+              decision: 'on',
+              marketplace: name,
+              source,
+              created: !entry,
+              at,
+            };
             lines.push(FIRST_RUN_LINES.autoUpdate(name));
           }
         }

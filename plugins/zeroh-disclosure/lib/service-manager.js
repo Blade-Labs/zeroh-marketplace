@@ -261,7 +261,11 @@ export function createServiceManager({
   function run(file, args) {
     if (!executeCommands) return;
     try {
-      execute(file, args, { stdio: ['ignore', 'ignore', 'pipe'], env });
+      execute(file, args, {
+        stdio: ['ignore', 'ignore', 'pipe'],
+        env,
+        windowsHide: true,
+      });
     } catch (error) {
       const text = Buffer.isBuffer(error?.stderr)
         ? error.stderr.toString(platform === 'win32' ? 'latin1' : 'utf8')

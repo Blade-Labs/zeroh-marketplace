@@ -5,9 +5,9 @@
 // Code; a Claude
 // Code session already running keeps the plugin's hooks loaded until the user
 // exits it, and those hooks must not set ZeroH up again. While it exists
-// every hook does nothing, except the SessionStart of a newly started
-// session: a new session only loads the plugin when it was installed again,
-// so that SessionStart removes the tombstone and ZeroH works as before.
+// hooks stand down except a typed uninstall retry and the SessionStart of a
+// newly started session: a new session only loads the plugin when it was
+// installed again, so that SessionStart removes the tombstone.
 //
 // It lives in ZEROH_HOME (private to the user, 0700, and guarded from the
 // model like the rest of it), not in the shared temporary folder where any
@@ -69,10 +69,20 @@ export function clearUninstalled(env = process.env) {
   }
 }
 
-// Whether hook `name` should do nothing for this event: after uninstall,
-// every hook but a new session's SessionStart (which clears the tombstone).
+// Whether hook `name` should do nothing for this event after uninstall.
 export function hookStandsDown(name, event, env = process.env) {
   if (!isUninstalled(env)) return false;
+  // A crashed removal child can leave this marker before local cleanup is
+  // complete. The user's exact uninstall command must still reach the hook
+  // so it can issue a fresh ticket and finish that cleanup.
+  if (
+    name === 'user-prompt-submit' &&
+    /^\/zeroh-disclosure:uninstall(?:\s|$)/u.test(
+      String(event?.prompt ?? event?.user_prompt ?? '').trim(),
+    )
+  ) {
+    return false;
+  }
   if (name === 'session-start' && (event?.source ?? 'startup') === 'startup') {
     clearUninstalled(env);
     return false;

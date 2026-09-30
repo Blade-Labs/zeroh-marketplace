@@ -73,9 +73,13 @@ export function writeProxyConfig(paths, config) {
   writePrivateJson(paths.config, config);
 }
 
-export async function withProxyLock(paths, work, { waitMs } = {}) {
+export async function withProxyLock(paths, work, { waitMs, deadlineMs } = {}) {
   ensurePrivateDir(paths.directory);
-  const lock = acquireFileLock(paths.lock, waitMs ? { waitMs } : {});
+  const lock = acquireFileLock(paths.lock, {
+    ...(waitMs === undefined ? {} : { waitMs }),
+    ...(deadlineMs === undefined ? {} : { deadlineMs }),
+    reclaimDeadOwner: true,
+  });
   try {
     return await work();
   } finally {

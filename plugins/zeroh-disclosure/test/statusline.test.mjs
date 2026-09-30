@@ -533,13 +533,13 @@ test('disabled: user, project, local and managed settings, and several ids', () 
   // Another id still on: enabled.
   write(managed, {
     'zeroh-disclosure@zeroh': false,
-    'zeroh-disclosure@zeroh-internal': true,
+    'zeroh-disclosure@other-marketplace': true,
   });
   assert.equal(pluginEnabled(f.root, f.env, managed), true);
   // Every id off: disabled.
   write(local, {
     'zeroh-disclosure@zeroh': false,
-    'zeroh-disclosure@zeroh-internal': false,
+    'zeroh-disclosure@other-marketplace': false,
   });
   write(managed, {});
   assert.equal(pluginEnabled(f.root, f.env, managed), false);

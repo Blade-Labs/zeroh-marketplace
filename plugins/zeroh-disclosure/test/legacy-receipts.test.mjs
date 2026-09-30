@@ -163,9 +163,17 @@ test('doctor --fix never deletes receipts ZeroH Disclosure 0.1 kept in a project
 test('uninstall keeps the public part of 0.1 receipts in a project and leaves a folder with keys or typed values', async () => {
   const { before, fakeClaude, keysFolder, publicFolder, receiptsDir, run } =
     await setup('legacy-uninstall');
+  const logDir = path.join(path.dirname(keysFolder), 'removal-log');
+  mkdirSync(logDir);
   const removed = run(['uninstall', '--yes'], {
+    ZEROH_REMOVAL_LOG_DIR: logDir,
     ZEROH_CLAUDE_BIN: fakeProgram(fakeClaude),
   });
+  assert.equal(existsSync(logDir), true);
+  assert.equal(
+    removed.stdout.trimEnd().split('\n').at(-1),
+    `Remaining steps: delete ${keysFolder} with rm -rf "${keysFolder}"`,
+  );
   assert.equal(removed.status, 0, removed.stderr);
   const text = removed.stdout.replace(/\s+/gu, ' ');
   // The folder with keys and typed values stays, untouched, and the user

@@ -167,11 +167,19 @@ function valueNameLabel(name) {
 // call', 'tool output' or 'prompt'. valueName: the name or type of a value
 // involved (never the value). mode 'block' words it as a stop, for a denial
 // reason. hint: add the reason's tightening sentence (UNCHECKED_HINTS).
+// why: the words in brackets, when the caller knows the cause better than
+// the reason's own text (the receipt still records the reason).
 export function uncheckedNotice(
   reason,
-  { subject = 'command', valueName = null, mode = 'pass', hint = false } = {},
+  {
+    subject = 'command',
+    valueName = null,
+    mode = 'pass',
+    hint = false,
+    why = null,
+  } = {},
 ) {
-  const text = UNCHECKED_TEXT[reason] ?? 'unknown reason';
+  const text = why ?? UNCHECKED_TEXT[reason] ?? 'unknown reason';
   const what = SUBJECTS[subject] ?? SUBJECTS.command;
   const name = valueNameLabel(valueName);
   const line = TOKEN_REASONS.has(reason)
@@ -242,6 +250,7 @@ export async function recordUnchecked({
   sessionId,
   subject = 'command',
   valueName = null,
+  why = null,
   env = process.env,
   waitMs = 500,
   count = 1,
@@ -255,7 +264,7 @@ export async function recordUnchecked({
   // The hint is claimed only when the notice is actually shown.
   const noticeNow = () => {
     hinted ??= dir ? claimSessionHint(dir, hintKind(reason)) : true;
-    return uncheckedNotice(reason, { subject, valueName, hint: hinted });
+    return uncheckedNotice(reason, { subject, valueName, hint: hinted, why });
   };
   let lock = null;
   try {

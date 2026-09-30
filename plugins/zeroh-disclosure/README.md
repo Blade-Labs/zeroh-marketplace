@@ -1,7 +1,7 @@
 # ZeroH Disclosure for Claude Code
 
 [![Licence: AGPL-3.0-only](https://img.shields.io/badge/licence-AGPL--3.0--only-blue)](LICENSE)
-[![Version 1.0.3](https://img.shields.io/badge/version-1.0.3-green)](CHANGELOG.md)
+[![Version 1.0.4](https://img.shields.io/badge/version-1.0.4-green)](CHANGELOG.md)
 
 ZeroH Disclosure is a Claude Code plugin that lets Claude work with your API keys, passwords and
 personal data without the model receiving them. Before anything reaches the model, it replaces
@@ -541,8 +541,12 @@ scanned-PDF redaction, custom detectors, and ProofPack reports for auditors.
 ```
 
 It removes ZeroH's entry in your Claude Code settings (your own setting goes back), ZeroH's
-status line if you turned it on, the proxy's login item, ZeroH's folder with the vault, keys and
-settings, and last the plugin from Claude Code, then says how to install it again. It keeps your signed
+status line if you turned it on, marketplace auto-update that ZeroH added, the proxy's login item,
+ZeroH's folder with the vault, keys and settings, and last the plugin from Claude Code. Your own
+marketplace entry and source stay. The command starts removal in the background. Read the removal
+log shown by the hook. A missing log means every removal step finished. If the log remains, follow
+the Remaining steps at its end; if local cleanup failed, type `/zeroh-disclosure:uninstall` again. Check
+`claude plugin list` to confirm removal. It keeps your signed
 receipts, with the public keys that verify them and no values, in `~/ZeroH Receipts`
 (`%LOCALAPPDATA%\ZeroH Receipts` on Windows); `--delete-receipts` removes them too. The session you
 ran it in keeps working until you exit, without ZeroH's masking (with the vault gone, nothing could

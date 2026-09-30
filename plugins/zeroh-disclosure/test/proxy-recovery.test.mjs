@@ -64,6 +64,22 @@ function alive(pid) {
   }
 }
 
+test('proxy startup reports the elapsed health wait when no daemon answers', async () => {
+  const isolated = isolatedEnvironment('startup-timeout');
+  writeFileSync(isolated.settings, '{}\n');
+  await assert.rejects(
+    ensureDefaultProxy({
+      env: isolated.env,
+      root: isolated.root,
+      pluginRoot: PLUGIN,
+      sessionId: 'ZEROHFAKE-startup-timeout',
+      startTimeoutMs: 150,
+      spawnProcess: () => ({ once() {}, unref() {} }),
+    }),
+    /local proxy did not become healthy after \d+ ms/u,
+  );
+});
+
 test('a dead proxy is restarted within the budget, else the prompt is stopped fast and the next session is safe', async (t) => {
   const isolated = isolatedEnvironment('proxy-dead');
   const gateway = await fakeUpstream();
@@ -285,7 +301,10 @@ test('doctor --fix resets: the settings entry goes, every ZeroH proxy it finds s
     createServiceManager({ env: isolated.env }).isRegistered(),
     false,
   );
-  const clean = await diagnoseProxy({ env: isolated.env });
+  // A session started now has no ANTHROPIC_BASE_URL (the test's upstream
+  // would be one set outside ZeroH: doctor-base-url.test.mjs).
+  const { ANTHROPIC_BASE_URL: _upstream, ...sessionEnv } = isolated.env;
+  const clean = await diagnoseProxy({ env: sessionEnv });
   assert.deepEqual(clean.findings, []);
   assert.equal(clean.entry, 'none');
 });
@@ -400,11 +419,15 @@ test('doctor says what it checked, what it fixed and what to do next', async (t)
   // doctor --fix retires the daemon; it leaves soon after.
   isolated.env.ZEROH_RETIRED_IDLE_MS = '1500';
   t.after(async () => stopDefaultProxy({ env: isolated.env }));
+  // Doctor runs inside a Claude Code session, whose environment does not
+  // carry the test's upstream: that would be an ANTHROPIC_BASE_URL set
+  // outside ZeroH, a finding of its own (doctor-base-url.test.mjs).
+  const { ANTHROPIC_BASE_URL: _upstream, ...sessionEnv } = isolated.env;
   const cli = (...args) =>
     spawnSync(
       process.execPath,
       [path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs'), ...args],
-      { env: asUser(args, isolated.env), cwd: isolated.root, encoding: 'utf8' },
+      { env: asUser(args, sessionEnv), cwd: isolated.root, encoding: 'utf8' },
     );
 
   const clean = cli('doctor');
@@ -420,6 +443,9 @@ test('doctor says what it checked, what it fixed and what to do next', async (t)
     sessionId: 'ZEROHFAKE-doctor-output',
   });
   const key = new URL(installed.proxyUrl).pathname.slice(3);
+  const healthy = cli('doctor');
+  assert.equal(healthy.status, 0, healthy.stderr);
+  assert.match(healthy.stdout, /^Nothing to fix\.$/mu);
   writePrivateJson(
     path.join(proxyPaths(isolated.env).directory, 'install.json'),
     {},

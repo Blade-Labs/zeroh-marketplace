@@ -19,7 +19,7 @@ import {
 import http from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
-import { restoreRecordPath } from '../lib/claude-settings.js';
+import { installId, restoreRecordPath } from '../lib/claude-settings.js';
 import {
   checkSessionProxy,
   diagnoseProxy,
@@ -483,7 +483,14 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   const isolated = isolatedEnvironment('uninstall');
   const upstream = await fakeUpstream();
   t.after(() => upstream.close());
-  const original = { env: { ANTHROPIC_BASE_URL: upstream.url } };
+  const foreign = {
+    source: { source: 'github', repo: 'someone/else' },
+    autoUpdate: false,
+  };
+  const original = {
+    env: { ANTHROPIC_BASE_URL: upstream.url },
+    extraKnownMarketplaces: { foreign },
+  };
   writeFileSync(isolated.settings, `${JSON.stringify(original)}\n`);
   // The retired daemon leaves soon after its last request (hooks run
   // between requests here, so not too soon).
@@ -506,6 +513,14 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
     project,
   );
   assert.equal(prompt.code, 0, prompt.stderr);
+  const source = { source: 'github', repo: 'Blade-Labs/zeroh-marketplace' };
+  const withMarketplace = settingsDoc(isolated.settings);
+  withMarketplace.extraKnownMarketplaces.zeroh = { source, autoUpdate: true };
+  writeFileSync(isolated.settings, `${JSON.stringify(withMarketplace)}\n`);
+  writeFileSync(
+    path.join(env.ZEROH_HOME, 'first-run.json'),
+    `${JSON.stringify({ installs: { [installId(isolated.settings)]: { autoUpdate: { decision: 'on', marketplace: 'zeroh', source } } } })}\n`,
+  );
   const installed = settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL;
   assert.match(installed, /\/z\//u);
   const withSecret = JSON.stringify({

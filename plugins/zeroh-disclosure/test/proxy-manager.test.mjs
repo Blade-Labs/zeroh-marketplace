@@ -1049,6 +1049,156 @@ test('SessionStart repair removes only a dead ZeroH entry', async () => {
   );
 });
 
+test('SessionStart lock wait and a never-answering daemon share the loader deadline', async (t) => {
+  const isolated = isolatedEnvironment('proxy-start-deadline');
+  const gateway = 'https://gateway.zerohfake.invalid/anthropic';
+  const dead = 'http://127.0.0.1:9/z/ZEROHFAKEdeadproxykey000000000000';
+  installSetting(
+    isolated,
+    `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: gateway }, theme: 'dark' })}\n`,
+    dead,
+  );
+  const pidFile = path.join(isolated.root, 'never-answering-daemon.pid');
+  const preload = path.join(isolated.root, 'never-answering-daemon.mjs');
+  writeFileSync(
+    preload,
+    [
+      "import { writeFileSync } from 'node:fs';",
+      "if (process.argv[1]?.endsWith('proxy-daemon.mjs')) {",
+      `  writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+      '  setInterval(() => {}, 1000);',
+      '  await new Promise(() => {});',
+      '}',
+    ].join('\n'),
+  );
+  t.after(() => {
+    if (existsSync(pidFile)) {
+      try {
+        process.kill(Number(readFileSync(pidFile, 'utf8')));
+      } catch {}
+    }
+  });
+  const lock = path.join(isolated.env.ZEROH_HOME, 'proxy', 'manager.lock');
+  mkdirSync(path.dirname(lock), { recursive: true });
+  const holder = spawn(
+    process.execPath,
+    [
+      '-e',
+      `const fs=require('node:fs'); fs.writeFileSync(process.argv[1], process.pid+'\\n'); setTimeout(()=>{fs.rmSync(process.argv[1],{force:true})},2500);`,
+      lock,
+    ],
+    { stdio: 'ignore' },
+  );
+  t.after(() => holder.kill());
+  for (let attempt = 0; !existsSync(lock) && attempt < 100; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.ok(existsSync(lock));
+  const started = Date.now();
+  const result = spawnSync(
+    process.execPath,
+    [path.join(PLUGIN, 'hooks', 'run.js'), 'session-start'],
+    {
+      input: JSON.stringify({
+        session_id: 'ZEROHFAKE-deadline',
+        cwd: isolated.root,
+        source: 'startup',
+      }),
+      encoding: 'utf8',
+      env: {
+        ...isolated.env,
+        ZEROH_CLAUDE_SETTINGS: isolated.settings,
+        CLAUDE_PROJECT_DIR: isolated.root,
+        NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`,
+      },
+      timeout: 15_000,
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 13_000, result.stdout);
+  assert.match(result.stdout, /could not start/u);
+  assert.equal(settingsDoc(isolated).env.ANTHROPIC_BASE_URL, gateway);
+  assert.equal(settingsDoc(isolated).theme, 'dark');
+});
+
+test('SessionStart reclaims a proxy lock left by a killed owner', async () => {
+  const isolated = isolatedEnvironment('proxy-dead-owner');
+  const lock = path.join(isolated.env.ZEROH_HOME, 'proxy', 'manager.lock');
+  mkdirSync(path.dirname(lock), { recursive: true });
+  const owner = spawn(
+    process.execPath,
+    [
+      '-e',
+      `const fs=require('node:fs'); fs.writeFileSync(process.argv[1], process.pid+'\\n'); setInterval(()=>{},1000);`,
+      lock,
+    ],
+    { stdio: 'ignore' },
+  );
+  for (let attempt = 0; !existsSync(lock) && attempt < 100; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.ok(existsSync(lock));
+  const exited = new Promise((resolve) => owner.once('exit', resolve));
+  owner.kill('SIGKILL');
+  await exited;
+  const started = Date.now();
+  const result = spawnSync(
+    process.execPath,
+    [path.join(PLUGIN, 'hooks', 'run.js'), 'session-start'],
+    {
+      input: JSON.stringify({
+        session_id: 'dead-owner',
+        cwd: isolated.root,
+        source: 'startup',
+      }),
+      encoding: 'utf8',
+      env: { ...isolated.env, ZEROH_PROXY: 'off', ZEROH_BANNER: 'off' },
+      timeout: 15_000,
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(Date.now() - started < 5_000, result.stdout);
+  assert.equal(existsSync(lock), false);
+});
+
+test('a registered login item with a slow replacement reports daemon startup failure', async (t) => {
+  const isolated = isolatedEnvironment('registered-slow-daemon');
+  writeFileSync(isolated.settings, '{}\n');
+  const first = await ensureDefaultProxy({
+    env: isolated.env,
+    root: isolated.root,
+    pluginRoot: PLUGIN,
+    sessionId: 'registered-slow-first',
+    registerLoginItem: false,
+  });
+  t.after(async () => stopDefaultProxy({ env: isolated.env }));
+  let registered = false;
+  const manager = {
+    isRegistered: () => registered,
+    register() {
+      registered = true;
+      process.kill(first.pid, 'SIGKILL');
+    },
+  };
+  await assert.rejects(
+    ensureDefaultProxy({
+      env: isolated.env,
+      root: isolated.root,
+      pluginRoot: PLUGIN,
+      sessionId: 'registered-slow-second',
+      serviceManager: manager,
+      deadlineMs: Date.now() + 1_500,
+      spawnProcess: () => ({ once() {}, unref() {} }),
+    }),
+    /could not start|deadline|proxy/u,
+  );
+  assert.equal(registered, true);
+  assert.equal(
+    readProxyConfig(proxyPaths(isolated.env)).loginItemRefused,
+    undefined,
+  );
+});
+
 test('settings writes follow symlinks, keep the file mode and retry a locked rename', (t) => {
   const isolated = isolatedEnvironment('proxy-symlink');
   const target = path.join(isolated.root, 'dotfiles', 'settings.json');

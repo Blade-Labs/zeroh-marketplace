@@ -6,6 +6,7 @@
 // for the user's own typed slash command, or after the user confirms it in a
 // terminal outside Claude Code; from anywhere else it changes nothing.
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { writePrivateFile } from '../lib/private-fs.js';
 import os from 'node:os';
 import path from 'node:path';
@@ -80,6 +81,10 @@ import {
 const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
+let removalLock = null;
+let localCleanupDone = false;
+let removalFailure = null;
+let remainingRemovalSteps = [];
 // --cwd wins; otherwise the project root the hooks use (projectRootFromEnv:
 // CLAUDE_PROJECT_DIR, else the project this directory belongs to).
 const cwd = path.resolve(args.cwd || projectRootFromEnv(process.cwd()));
@@ -116,9 +121,52 @@ try {
   else if (command === 'uncertain') await cmdUncertain(args);
   else help(command ? 1 : 0);
 } catch (e) {
+  removalFailure = e.message;
   console.error(`zeroh-disclosure: ${e.message}`);
   if (process.env.DEBUG && e.stack) console.error(e.stack);
-  process.exit(1);
+  process.exitCode = 1;
+} finally {
+  if (removalLock && !localCleanupDone) {
+    const { clearUninstalled } = await import('../lib/uninstall-marker.js');
+    clearUninstalled();
+  }
+  if (command === 'uninstall' && args.yes && !args['dry-run']) {
+    console.log(
+      localCleanupDone
+        ? 'ZeroH Disclosure: local cleanup finished.'
+        : `ZeroH Disclosure: local cleanup failed${removalFailure ? ` (${removalFailure})` : ' before completion'}.`,
+    );
+    if (remainingRemovalSteps.length)
+      console.log(`Remaining steps: ${remainingRemovalSteps.join('; ')}`);
+  }
+  if (removalLock) {
+    const { finishRemoval } = await import('../lib/user-authority.js');
+    finishRemoval(removalLock, { cleanupDirectory: localCleanupDone });
+  }
+  if (
+    localCleanupDone &&
+    !removalFailure &&
+    remainingRemovalSteps.length === 0 &&
+    process.env.ZEROH_REMOVAL_LOG_DIR
+  ) {
+    const logDir = process.env.ZEROH_REMOVAL_LOG_DIR;
+    if (process.platform === 'win32') {
+      // Windows keeps the redirected log open until this process exits.
+      const cleaner = spawn(
+        process.execPath,
+        [
+          '-e',
+          `const fs=require('node:fs'); const dir=process.argv[1]; const pid=Number(process.argv[2]); let attempts=0; const retry=()=>{if(++attempts>8)return; try{process.kill(pid,0);setTimeout(retry,Math.min(100*attempts,800))}catch{try{fs.rmSync(dir,{recursive:true,force:true})}catch{setTimeout(retry,Math.min(100*attempts,800))}}};retry();`,
+          logDir,
+          String(process.pid),
+        ],
+        { detached: true, stdio: 'ignore', windowsHide: true },
+      );
+      cleaner.unref();
+    } else {
+      rmSync(logDir, { recursive: true, force: true });
+    }
+  }
 }
 
 // How long receipts are kept (D-16): `receipts` shows the policy, `receipts
@@ -828,6 +876,7 @@ async function cmdUninstall(args) {
     { removeProxyEverywhere },
     { resolveClaudeSettingsPath },
     { removeEverywhere },
+    { removeFirstRunMarketplace },
     { writeSessionReceiptHtml },
   ] = await Promise.all([
     import('../lib/proxy-state.js'),
@@ -837,6 +886,7 @@ async function cmdUninstall(args) {
     import('../lib/proxy-manager.js'),
     import('../lib/claude-settings.js'),
     import('../lib/statusline-settings.js'),
+    import('../lib/first-run.js'),
     import('../lib/report.js'),
   ]);
   const live = [...liveMaskingRoots(proxyPaths())];
@@ -851,6 +901,7 @@ async function cmdUninstall(args) {
     'This removes ZeroH Disclosure from this machine, in this order:',
     "  - the local proxy's entry in your Claude Code settings (your own setting goes back), the proxy's login item and its runtime copy; a proxy still serving an open session passes it through unmasked until it is idle, then exits, and nothing starts it again",
     "  - ZeroH's status line in your Claude Code settings, if you turned it on (your own status line stays)",
+    '  - marketplace auto-update added by ZeroH, if unchanged; your own marketplace entry and source stay',
     deleteReceipts
       ? `  - ${home}: the vault and its key, the signing and allow-list keys, your settings, allow rules, unmask grants, reports and receipts (--delete-receipts)`
       : `  - ${home}: the vault and its key, the signing and allow-list keys, your settings, allow rules, unmask grants and reports`,
@@ -886,15 +937,25 @@ async function cmdUninstall(args) {
     return;
   }
   if (!(await authorized(plan))) return;
+  const { beginRemoval } = await import('../lib/user-authority.js');
+  removalLock = beginRemoval();
   // The tombstone first, so a session still running does nothing more
   // (T-38).
-  try {
-    markUninstalled();
-  } catch {
-    // A ZeroH folder that can't be written: sessions still running may set
-    // ZeroH up again until they exit (said below).
-  }
+  markUninstalled();
   const proxy = await removeProxyEverywhere({ retire: true });
+  let marketplaceAutoUpdate = false;
+  let localCleanupFailed = false;
+  try {
+    marketplaceAutoUpdate = removeFirstRunMarketplace({
+      home,
+      settingsPath: resolveClaudeSettingsPath(),
+    });
+  } catch (error) {
+    localCleanupFailed = true;
+    console.error(
+      `zeroh-disclosure: could not remove the marketplace auto-update entry (${error.message})`,
+    );
+  }
   // Only ZeroH's own statusLine entry, from every settings file it was
   // written to; a status line of the user's stays.
   let statusline = [];
@@ -904,6 +965,7 @@ async function cmdUninstall(args) {
       settingsPaths: [resolveClaudeSettingsPath()],
     });
   } catch (error) {
+    localCleanupFailed = true;
     console.error(
       `zeroh-disclosure: could not remove the status line entry (${error.message})`,
     );
@@ -935,10 +997,16 @@ async function cmdUninstall(args) {
     try {
       legacyKept = keepLegacyReceipts({ scans: legacyHeld, dir: receiptsDir });
     } catch (error) {
+      localCleanupFailed = true;
       console.error(
         `zeroh-disclosure: could not copy the receipts of ZeroH Disclosure 0.1 to ${receiptsDir} (${error.code || error.message}); they stay where they are`,
       );
     }
+  }
+  if (localCleanupFailed || keepFailed) {
+    throw new Error(
+      'local cleanup could not finish; the plugin remains so uninstall can be retried',
+    );
   }
   const legacyRemovable = new Set(
     legacyKept.folders
@@ -972,13 +1040,31 @@ async function cmdUninstall(args) {
       }
       removed.push(dir);
     } catch (error) {
+      if (dir === home) localCleanupFailed = true;
+      else remainingRemovalSteps.push(`remove ${dir}`);
       console.error(
         `zeroh-disclosure: could not remove ${dir} (${error.code || 'error'})`,
       );
     }
   }
   // Last: the plugin, whose folder this command runs from.
+  localCleanupDone = removed.includes(home) && !localCleanupFailed;
+  if (!localCleanupDone) {
+    throw new Error(
+      'local cleanup could not finish; the plugin remains so uninstall can be retried',
+    );
+  }
   const plugin = removePlugin();
+  remainingRemovalSteps = [
+    ...remainingRemovalSteps,
+    ...(plugin.unavailable
+      ? ['run claude plugin uninstall zeroh-disclosure@zeroh']
+      : plugin.failed.map((entry) => `run ${uninstallCommandFor(entry)}`)),
+    ...legacyLeft.map(
+      (scan) =>
+        `delete ${scan.dir} with ${process.platform === 'win32' ? `Remove-Item -Recurse -Force \"${scan.dir}\"` : `rm -rf \"${scan.dir}\"`}`,
+    ),
+  ];
   const pluginLines = plugin.unavailable
     ? [
         "Couldn't run Claude Code's `claude` command to remove the plugin. Remove it with: claude plugin uninstall zeroh-disclosure@zeroh",
@@ -1037,6 +1123,7 @@ async function cmdUninstall(args) {
       plugin,
       removed,
       statusline,
+      marketplaceAutoUpdate,
       receipts: deleteReceipts
         ? { kept: false, deleted: true }
         : {
@@ -1054,6 +1141,13 @@ async function cmdUninstall(args) {
     args.json,
     [
       ...statusline.map((file) => `Removed ZeroH's status line from ${file}.`),
+      ...(marketplaceAutoUpdate === 'entry'
+        ? ['Removed the marketplace auto-update entry ZeroH created.']
+        : marketplaceAutoUpdate === 'autoUpdate'
+          ? [
+              'Removed auto-update added by ZeroH; kept your marketplace entry and source.',
+            ]
+          : []),
       proxy.restored.length
         ? `Took the ZeroH entry out of ${proxy.restored.length} Claude Code settings file(s).`
         : 'No Claude Code settings file had a ZeroH entry.',
@@ -1224,6 +1318,18 @@ function doctorFinding(id) {
   );
 }
 
+// Doctor's line for an ANTHROPIC_BASE_URL set outside ZeroH: where it is
+// set (lib/proxy-manager.js baseUrlOverrideSource) and that only removing it
+// helps. Names the host, never the value.
+function baseUrlOverriddenText({ host, file } = {}) {
+  const where = file
+    ? `in ${file}`
+    : process.platform === 'win32'
+      ? 'in the environment Claude Code started in (a Windows user or system environment variable: Settings > System > About > Advanced system settings > Environment Variables, or the terminal you started it from)'
+      : 'in the environment Claude Code started in (your shell profile, or the terminal you started it from)';
+  return `ANTHROPIC_BASE_URL is set ${where}${host ? ` to ${host}` : ''}, so Claude Code sends there instead of through the local proxy and what you type is not masked (files and command output still are). doctor --fix can't change this: remove it and start Claude Code again. If you use that address on purpose, leave it: typed prompts then go as typed, with a notice.`;
+}
+
 // The vault key and every project vault under ZEROH_HOME, whatever folder
 // doctor runs in (RB-2): a lost key affects every project. Projects are
 // named from the registry (and this folder); a vault of a project it does
@@ -1321,7 +1427,8 @@ async function cmdDoctor(args, cwd) {
   }
   const fix = Boolean(args.fix);
   if (fix && !(await authorized())) return;
-  const { diagnoseProxy } = await import('../lib/proxy-manager.js');
+  const { baseUrlOverrideSource, diagnoseProxy } =
+    await import('../lib/proxy-manager.js');
   let proxy;
   try {
     proxy = await diagnoseProxy({ fix, retire: true });
@@ -1394,13 +1501,20 @@ async function cmdDoctor(args, cwd) {
   const { staleMarketplaceName, staleMarketplaceText } =
     await import('../lib/first-run.js');
   const staleMarketplace = staleMarketplaceName();
+  // Findings --fix can't change stay open after it.
+  const unfixable = ['proxy-check-failed', 'base-url-overridden'];
+  const override = proxy.findings.includes('base-url-overridden')
+    ? await baseUrlOverrideSource({ cwd })
+    : null;
   const open = [
     ...proxy.findings
-      .filter((finding) => !fix || finding === 'proxy-check-failed')
+      .filter((finding) => !fix || unfixable.includes(finding))
       .map((finding) =>
         finding === 'login-item-refused'
           ? `No login item: ${loginItemReason(proxy.loginItemRefused)}. The local proxy runs while Claude Code does (a new session starts it again, and what you type is masked), but nothing starts it after a restart. To fix: ${loginItemFix(proxy.loginItemRefused)}.`
-          : doctorFinding(finding),
+          : finding === 'base-url-overridden'
+            ? baseUrlOverriddenText(override)
+            : doctorFinding(finding),
       ),
     ...integrityFound,
     ...(staleMarketplace ? [staleMarketplaceText(staleMarketplace)] : []),
@@ -1425,7 +1539,10 @@ async function cmdDoctor(args, cwd) {
   const next = [...integrityFix, ...vaults.next];
   if (
     !fix &&
-    proxy.findings.some((finding) => finding !== 'login-item-refused')
+    proxy.findings.some(
+      (finding) =>
+        !['login-item-refused', 'base-url-overridden'].includes(finding),
+    )
   ) {
     next.push(
       '/zeroh-disclosure:doctor --fix resets the local proxy: it takes the ZeroH entry out of your Claude Code settings, retires this proxy (sessions still open keep working until you exit them) and stops any other ZeroH proxy it finds. The next Claude Code session sets it up again.',

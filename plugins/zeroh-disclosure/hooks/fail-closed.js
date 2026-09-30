@@ -172,6 +172,15 @@ export function plainNotice(name, raw, why, mode = 'pass') {
     : `ZeroH Disclosure: ${what} was not protected (${why}).`;
 }
 
+function halfDoneNotice(state, timedOut) {
+  if (!state.sideEffect) return '';
+  if (state.sideEffect.includes('/zeroh-disclosure:uninstall')) {
+    const log = /; log: (.+)$/u.exec(state.sideEffect)?.[1];
+    return ` ZeroH Disclosure removal may be running in the background.${log ? ` Read its log: ${log}. Follow the Remaining steps at its end;` : ' Check the removal log;'} if local cleanup failed, type /zeroh-disclosure:uninstall again. Check \`claude plugin list\`; if the plugin remains after local cleanup, run \`claude plugin uninstall zeroh-disclosure@zeroh\`.`;
+  }
+  return ` ZeroH was ${state.sideEffect} when it ${timedOut ? 'ran out of time' : 'failed'}, so that may be half-done: run \`/zeroh-disclosure:doctor\` to check it.`;
+}
+
 // The answer in the default `uncertain` mode, pass: the event goes on
 // unprotected, as Claude Code does itself when a hook times out, and the
 // user is told in one line on screen (a systemMessage, never an instruction
@@ -182,9 +191,7 @@ export function plainNotice(name, raw, why, mode = 'pass') {
 export function passAnswer(name, raw, state, error, { notice } = {}) {
   const label = errorLabel(error);
   const timedOut = error?.code === 'TIMEOUT';
-  const halfDone = state.sideEffect
-    ? ` ZeroH was ${state.sideEffect} when it ${timedOut ? 'ran out of time' : 'failed'}, so that may be half-done: run \`/zeroh-disclosure:doctor\` to check it.`
-    : '';
+  const halfDone = halfDoneNotice(state, timedOut);
   const guards = ['user-prompt-submit', 'pre-tool-use', 'post-tool-use'];
   if (!guards.includes(name)) return failClosedAnswer(name, raw, state, error);
   if (state.emitted) return { code: 0 };
@@ -222,9 +229,7 @@ export function failClosedAnswer(name, raw, state, error) {
   const why = timedOut
     ? `checking it took too long (over ${error.seconds} s)`
     : `it could not check it (${label})`;
-  const halfDone = state.sideEffect
-    ? ` ZeroH was ${state.sideEffect} when it ${timedOut ? 'ran out of time' : 'failed'}, so that may be half-done: run \`/zeroh-disclosure:doctor\` to check it.`
-    : '';
+  const halfDone = halfDoneNotice(state, timedOut);
   const retry =
     halfDone ||
     ' Try again; if it keeps happening, run `/zeroh-disclosure:doctor`.';

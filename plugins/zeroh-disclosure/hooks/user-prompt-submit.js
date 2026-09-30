@@ -50,12 +50,17 @@ import {
 } from '../lib/unmask.js';
 import { recordMaskedOutput } from '../lib/report.js';
 import { persistedEntries, UNSAVEABLE_REASON } from '../lib/restorable.js';
-import { checkSessionProxy, routeSession } from '../lib/proxy-manager.js';
+import {
+  baseUrlOverrideSource,
+  checkSessionProxy,
+  routeSession,
+} from '../lib/proxy-manager.js';
 import { stopMessage } from '../lib/stop-message.js';
 import {
   handleManagementPrompt,
   isManagementPrompt,
 } from '../lib/user-authority.js';
+import { isUninstalled } from '../lib/uninstall-marker.js';
 
 // A prompt larger than this is stopped rather than scanned, so the hook finishes
 // well inside its timeout (Claude Code sends the prompt when a hook times out).
@@ -140,6 +145,9 @@ if (Buffer.byteLength(userPrompt) > MAX_CHECKED_PROMPT_BYTES) {
   // deny-inventory: management-request
   if (managed) stopPrompt(managed.message);
 }
+// The loader permits an uninstall retry past the tombstone. If it was a dry
+// run or could not be matched, never continue into proxy and settings setup.
+if (isUninstalled()) process.exit(0);
 // One project root for sessions, vault and configuration (see projectDir).
 const cwd = projectDir(event);
 await loadConfig({ cwd });
@@ -219,7 +227,15 @@ const UNMASKED_FIX = {
     'Claude Code talks to Bedrock, Vertex or Foundry directly, so there is no proxy to mask it.',
   'not-ready':
     'This session was just switched to the proxy; from your next prompt it is masked.',
+  // doctor --fix can't change it: the value comes from outside ZeroH.
+  overridden:
+    'Remove ANTHROPIC_BASE_URL where it is set and start Claude Code again; /zeroh-disclosure:doctor shows where.',
   default: 'Fix it with /zeroh-disclosure:doctor.',
+};
+// The words in the notice's brackets, when the reason is not a proxy that is
+// down.
+const UNMASKED_WHY = {
+  overridden: 'ANTHROPIC_BASE_URL is set outside ZeroH',
 };
 // Every prompt — clean, tokenized re-submit, or PII-bearing — gets a turn and
 // a receipt. The receipt is the deliverable: it records that the policy was
@@ -520,16 +536,21 @@ if (holdsFindings && passUnmasked) {
     cwd,
     sessionId,
     subject: 'prompt',
+    why: UNMASKED_WHY[stopReason] ?? null,
     valueName:
       knownHits[0]?.name && /^[A-Z][A-Z0-9_]*$/u.test(knownHits[0].name)
         ? knownHits[0].name
         : (result.findings[0]?.type ?? knownHits[0]?.type ?? null),
   });
+  const overriddenHost =
+    stopReason === 'overridden'
+      ? (await baseUrlOverrideSource({ cwd })).host
+      : null;
   emitPromptNotice({
     systemMessage: [
       grantStatus,
       notice
-        ? `${notice} ${UNMASKED_FIX[stopReason] ?? UNMASKED_FIX.default}`
+        ? `${notice} ${stopReason === 'overridden' ? `Claude Code sends to ${overriddenHost ?? 'that address'} instead of the local proxy. ` : ''}${UNMASKED_FIX[stopReason] ?? UNMASKED_FIX.default}`
         : null,
     ]
       .filter(Boolean)

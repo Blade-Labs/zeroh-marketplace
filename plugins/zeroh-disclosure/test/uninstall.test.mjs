@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Isolated temporary homes for every test (see helpers.mjs).
-import { fakeProgram } from './helpers.mjs';
+import { fakeProgram, runHook, tempProject } from './helpers.mjs';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -32,13 +32,13 @@ test('installed plugin ids are read from `claude plugin list --json`', () => {
     installedPluginIds(
       fakeClaude([
         { id: 'zeroh-disclosure@zeroh', scope: 'user' },
-        { id: 'zeroh-disclosure@zeroh-internal', scope: 'project' },
+        { id: 'zeroh-disclosure@other-marketplace', scope: 'project' },
         { id: 'zeroh-sdd@zeroh', scope: 'user' },
       ]),
     ),
     [
       { id: 'zeroh-disclosure@zeroh', scope: 'user' },
-      { id: 'zeroh-disclosure@zeroh-internal', scope: 'project' },
+      { id: 'zeroh-disclosure@other-marketplace', scope: 'project' },
     ],
   );
   assert.deepEqual(
@@ -61,6 +61,14 @@ test('after uninstall every hook stands down until a new session starts', () => 
   assert.equal(hookStandsDown('user-prompt-submit', {}, env), false);
   markUninstalled(env);
   assert.equal(isUninstalled(env), true);
+  assert.equal(
+    hookStandsDown(
+      'user-prompt-submit',
+      { prompt: '/zeroh-disclosure:uninstall' },
+      env,
+    ),
+    false,
+  );
   for (const [name, event] of [
     ['user-prompt-submit', {}],
     ['pre-tool-use', {}],
@@ -84,4 +92,24 @@ test('after uninstall every hook stands down until a new session starts', () => 
   );
   assert.equal(isUninstalled(env), false);
   assert.equal(hookStandsDown('stop', {}, env), false);
+});
+
+test('a tombstoned install accepts an uninstall retry through the hook loader', () => {
+  const project = tempProject({ env: false, firstRun: true });
+  markUninstalled({ ...process.env, ZEROH_HOME: project.home });
+  const result = runHook(
+    'user-prompt-submit',
+    { prompt: '  /zeroh-disclosure:uninstall', session_id: 'retry' },
+    { project, extraEnv: { ZEROH_PROXY: 'on' } },
+  );
+  assert.match(result.json?.reason ?? '', /no matching request/u);
+  const dryRun = runHook(
+    'user-prompt-submit',
+    { prompt: '/zeroh-disclosure:uninstall --dry-run', session_id: 'retry' },
+    { project, extraEnv: { ZEROH_PROXY: 'on' } },
+  );
+  assert.match(dryRun.json?.reason ?? '', /already removed/u);
+  assert.deepEqual(readdirSync(project.home), ['uninstalled']);
+  assert.equal(existsSync(project.settings), false);
+  assert.equal(existsSync(path.join(project.home, 'proxy')), false);
 });

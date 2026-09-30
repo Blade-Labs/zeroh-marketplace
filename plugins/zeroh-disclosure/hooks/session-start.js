@@ -38,8 +38,10 @@ import {
 import { shadowedStatusline } from '../lib/first-run.js';
 import { managedSettingsPath } from '../lib/statusline.js';
 import { zerohHome } from '../lib/private-fs.js';
+import { hookDeadlineMs } from './fail-closed.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const hookStartedAt = Date.now() - process.uptime() * 1_000;
 const event = await readStdinJson();
 // The status line shows "starting" until this hook has finished.
 updateSessionStatus(
@@ -66,10 +68,16 @@ let proxyRecovery = null;
 try {
   // The daemon starts now; the first prompt puts this session behind it
   // (a settings write here would land before Claude Code watches the file).
+  const deadlineMs = Math.min(
+    Date.now() + 8_000,
+    hookStartedAt + hookDeadlineMs('session-start') - 5_000,
+  );
   proxyResult = await ensureDefaultProxy({
     root,
     sessionId: event?.session_id,
     writeSettings: false,
+    // Leave time for dead-setting repair and the rest of SessionStart.
+    deadlineMs,
   });
 } catch (error) {
   proxyError = error;

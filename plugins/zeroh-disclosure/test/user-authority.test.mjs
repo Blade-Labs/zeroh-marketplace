@@ -9,21 +9,29 @@
 // the spelling) changes nothing.
 import './helpers.mjs';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { PLUGIN, runHook, tempProject } from './helpers.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
+import { fakeProgram, PLUGIN, runHook, tempProject } from './helpers.mjs';
+import { asUser } from './as-user.mjs';
+import { applyFirstRunDefaults } from '../lib/first-run.js';
 import {
+  beginRemoval,
   canonicalArgv,
   claimPending,
+  handleManagementPrompt,
+  finishRemoval,
   managementAction,
   mintTicket,
   parseSlashPrompt,
@@ -31,6 +39,7 @@ import {
   requireUserAuthority,
   slashToCli,
 } from '../lib/user-authority.js';
+import { acquireFileLock, releaseFileLock, VAULT_LOCK } from '../lib/vault.js';
 
 const CLI = path.join(PLUGIN, 'bin', 'zeroh-disclosure.mjs');
 
@@ -76,6 +85,284 @@ function pendingFiles(project) {
     ? readdirSync(dir).filter((name) => name.startsWith('pending-'))
     : [];
 }
+
+test('typed uninstall returns through the loader while its detached child finishes', async () => {
+  const project = tempProject();
+  const fakeClaude = path.join(project.dir, 'slow-claude.mjs');
+  const finished = path.join(project.dir, 'removal-finished');
+  writeFileSync(
+    fakeClaude,
+    [
+      '#!/usr/bin/env node',
+      "import { writeFileSync } from 'node:fs';",
+      "import { setTimeout } from 'node:timers/promises';",
+      'await setTimeout(7000);',
+      "if (process.argv.includes('list')) console.log('[]');",
+      `writeFileSync(${JSON.stringify(finished)}, 'finished');`,
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  const env = envOf(project, {
+    CLAUDE_CODE_SESSION_ID: 'slow-uninstall',
+    ZEROH_CLAUDE_BIN: fakeProgram(fakeClaude),
+  });
+  const argv = ['uninstall', '--yes'];
+  recordPending({ argv, sessionId: 'slow-uninstall', env });
+  const started = Date.now();
+  const result = runHook(
+    'user-prompt-submit',
+    { session_id: 'slow-uninstall', prompt: '/zeroh-disclosure:uninstall' },
+    { project, extraEnv: env },
+  );
+  assert.ok(Date.now() - started < 8000, result.stderr);
+  assert.match(
+    result.json?.reason ?? '',
+    /removal is running in the background/u,
+  );
+  assert.match(result.json?.reason ?? '', /every removal step finished/u);
+  assert.match(
+    result.json?.reason ?? '',
+    /type \/zeroh-disclosure:uninstall again/u,
+  );
+  assert.match(
+    result.json?.reason ?? '',
+    /claude plugin uninstall zeroh-disclosure@zeroh/u,
+  );
+  assert.doesNotMatch(result.json?.reason ?? '', /zeroh-disclosure:doctor/u);
+  const log = /Read its log: (.+?)\. If/u.exec(result.json.reason)?.[1];
+  assert.ok(log);
+  assert.equal(result.json.reason.split(log).length - 1, 1);
+  assert.throws(() => beginRemoval(env), /removal is already running/u);
+  if (process.platform !== 'win32') {
+    assert.equal(statSync(path.dirname(log)).mode & 0o777, 0o700);
+    assert.equal(statSync(log).mode & 0o777, 0o600);
+  }
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (existsSync(finished) && !existsSync(path.dirname(log))) break;
+    await delay(200);
+  }
+  assert.ok(
+    existsSync(finished),
+    'the detached child completed after the hook',
+  );
+  assert.equal(existsSync(path.dirname(log)), false);
+  const lockKey = createHash('sha256')
+    .update(path.resolve(project.home))
+    .digest('hex')
+    .slice(0, 24);
+  assert.equal(
+    existsSync(
+      path.join(
+        path.dirname(project.home),
+        `.zeroh-disclosure-removal-${lockKey}`,
+      ),
+    ),
+    false,
+  );
+});
+
+test('detached removal logs failure before cleanup and advises retrying ZeroH uninstall', async () => {
+  const project = tempProject();
+  const env = envOf(project, {
+    ZEROH_HOME: path.join(project.dir, 'user-home'),
+    CLAUDE_CODE_SESSION_ID: 'failed-uninstall',
+  });
+  const argv = ['uninstall', '--yes'];
+  recordPending({ argv, sessionId: 'failed-uninstall', env });
+  const result = runHook(
+    'user-prompt-submit',
+    { session_id: 'failed-uninstall', prompt: '/zeroh-disclosure:uninstall' },
+    { project, extraEnv: env },
+  );
+  assert.match(
+    result.json?.reason ?? '',
+    /type \/zeroh-disclosure:uninstall again/u,
+  );
+  const log = /Read its log: (.+?)\. If/u.exec(result.json.reason)?.[1];
+  assert.ok(log);
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (/local cleanup failed/u.test(readFileSync(log, 'utf8'))) break;
+    await delay(100);
+  }
+  assert.match(readFileSync(log, 'utf8'), /local cleanup failed/u);
+  assert.doesNotMatch(readFileSync(log, 'utf8'), /local cleanup finished/u);
+});
+
+test('removal keeps its log when Claude Code cannot remove the plugin', () => {
+  for (const mode of ['failed', 'unavailable']) {
+    const project = tempProject();
+    const logDir = path.join(project.dir, `removal-log-${mode}`);
+    mkdirSync(logDir);
+    const fakeClaude = path.join(project.dir, 'failed-claude.mjs');
+    writeFileSync(
+      fakeClaude,
+      [
+        '#!/usr/bin/env node',
+        "if (process.argv.includes('list')) console.log(JSON.stringify([{ id: 'zeroh-disclosure@zeroh', scope: 'user' }]));",
+        'else process.exitCode = 1;',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+    const argv = ['uninstall', '--yes'];
+    const env = envOf(project, {
+      ZEROH_REMOVAL_LOG_DIR: logDir,
+      ZEROH_CLAUDE_BIN:
+        mode === 'failed'
+          ? fakeProgram(fakeClaude)
+          : path.join(project.dir, 'missing-claude'),
+    });
+    const result = spawnSync(process.execPath, [CLI, ...argv], {
+      cwd: project.dir,
+      encoding: 'utf8',
+      env: asUser(argv, env),
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(existsSync(logDir), true);
+    assert.match(result.stdout, /local cleanup finished/u);
+    assert.match(
+      result.stdout.trimEnd().split('\n').at(-1),
+      /^Remaining steps: run claude plugin uninstall zeroh-disclosure@zeroh$/u,
+    );
+  }
+});
+
+test('a removal lock left by a dead process is reclaimed', () => {
+  const project = tempProject();
+  const env = envOf(project);
+  const file = beginRemoval(env);
+  writeFileSync(file, '99999999\n');
+  assert.equal(beginRemoval(env), file);
+  finishRemoval(file);
+});
+
+test('a reused PID remains live until the stale mtime rule applies', async () => {
+  const project = tempProject();
+  const file = path.join(project.home, 'reused-pid.lock');
+  const sleeper = spawn(process.execPath, [
+    '-e',
+    'setTimeout(() => {}, 10000)',
+  ]);
+  try {
+    assert.ok(sleeper.pid);
+    writeFileSync(file, `${sleeper.pid}\n`);
+    assert.throws(
+      () =>
+        acquireFileLock(file, { ...VAULT_LOCK, deadlineMs: Date.now() + 50 }),
+      /Timed out waiting/u,
+    );
+    assert.equal(readFileSync(file, 'utf8'), `${sleeper.pid}\n`);
+    utimesSync(file, new Date(0), new Date(0));
+    const lock = acquireFileLock(file, VAULT_LOCK);
+    releaseFileLock(lock);
+    assert.equal(existsSync(file), false);
+  } finally {
+    if (sleeper.exitCode === null) {
+      const exited = new Promise((resolve) => sleeper.once('exit', resolve));
+      sleeper.kill();
+      await exited;
+    }
+  }
+});
+
+test('failed local cleanup clears the tombstone so uninstall can be retried', () => {
+  const project = tempProject();
+  const proxyDir = path.join(project.home, 'proxy');
+  mkdirSync(proxyDir, { recursive: true });
+  writeFileSync(path.join(proxyDir, 'manager.lock'), `${process.pid}\n`);
+  const argv = ['uninstall', '--yes'];
+  const result = spawnSync(
+    process.execPath,
+    [CLI, ...argv, '--cwd', project.dir],
+    {
+      cwd: project.dir,
+      env: asUser(argv, envOf(project)),
+      encoding: 'utf8',
+      timeout: 20_000,
+    },
+  );
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /local cleanup failed/u);
+  assert.equal(existsSync(path.join(project.home, 'uninstalled')), false);
+});
+
+test('CLI removal respects marketplace entry ownership recorded by first run', () => {
+  const source = { source: 'github', repo: 'Blade-Labs/zeroh-marketplace' };
+  for (const scenario of ['owned', 'created', 'modified']) {
+    const project = tempProject();
+    const config = path.join(project.dir, 'claude-config');
+    const plugins = path.join(config, 'plugins');
+    mkdirSync(plugins, { recursive: true });
+    writeFileSync(
+      path.join(plugins, 'known_marketplaces.json'),
+      JSON.stringify({ zeroh: { source } }),
+    );
+    const pluginRoot = path.join(
+      plugins,
+      'cache',
+      'zeroh',
+      'zeroh-disclosure',
+      '1.0.4',
+    );
+    const initial =
+      scenario === 'created'
+        ? {}
+        : { extraKnownMarketplaces: { zeroh: { source } } };
+    mkdirSync(path.dirname(project.settings), { recursive: true });
+    writeFileSync(project.settings, JSON.stringify(initial));
+    const env = envOf(project, { CLAUDE_CONFIG_DIR: config });
+    applyFirstRunDefaults({
+      home: project.home,
+      settingsPath: project.settings,
+      pluginRoot,
+      env,
+    });
+    const record = JSON.parse(
+      readFileSync(path.join(project.home, 'first-run.json'), 'utf8'),
+    );
+    const decision = Object.values(record.installs)[0].autoUpdate;
+    assert.equal(decision.created, scenario === 'created');
+    if (scenario === 'modified') {
+      const settings = JSON.parse(readFileSync(project.settings, 'utf8'));
+      settings.extraKnownMarketplaces.zeroh.source = {
+        source: 'github',
+        repo: 'someone/else',
+      };
+      writeFileSync(project.settings, JSON.stringify(settings));
+    }
+    const fakeClaude = path.join(project.dir, 'claude.mjs');
+    writeFileSync(
+      fakeClaude,
+      "#!/usr/bin/env node\nif (process.argv.includes('list')) console.log('[]');\n",
+      { mode: 0o755 },
+    );
+    const args = ['uninstall', '--yes'];
+    const result = spawnSync(process.execPath, [CLI, ...args], {
+      cwd: project.dir,
+      env: asUser(args, { ...env, ZEROH_CLAUDE_BIN: fakeProgram(fakeClaude) }),
+      encoding: 'utf8',
+      timeout: 20000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const remaining = JSON.parse(readFileSync(project.settings, 'utf8'))
+      .extraKnownMarketplaces?.zeroh;
+    if (scenario === 'created') {
+      assert.equal(remaining, undefined);
+      assert.match(
+        result.stdout,
+        /Removed the marketplace auto-update entry ZeroH created/u,
+      );
+    } else if (scenario === 'owned') {
+      assert.deepEqual(remaining, { source });
+      assert.match(result.stdout, /kept your marketplace entry and source/u);
+    } else {
+      assert.deepEqual(remaining, {
+        source: { source: 'github', repo: 'someone/else' },
+        autoUpdate: true,
+      });
+      assert.doesNotMatch(result.stdout, /Kept the marketplace entry/u);
+    }
+  }
+});
 
 // Every state-changing subcommand, as the model could run it from a shell.
 const MANAGEMENT = [
@@ -357,7 +644,7 @@ test('UserPromptSubmit applies a typed management command and stops the prompt',
   );
 });
 
-test('typing /zeroh-disclosure:uninstall removes ZeroH in one step', () => {
+test('typing /zeroh-disclosure:uninstall starts removal in one step', async () => {
   const project = tempProject();
   mkdirSync(path.join(project.home, 'vault'), { recursive: true });
   const extra = {
@@ -371,19 +658,23 @@ test('typing /zeroh-disclosure:uninstall removes ZeroH in one step', () => {
   });
   assert.match(bang.stdout, /^Nothing changed/mu);
   assert.ok(existsSync(path.join(project.home, 'vault')));
+  // --dry-run only shows the plan and needs no authority.
+  const preview = cli(project, ['uninstall', '--yes', '--dry-run'], extra);
+  assert.match(preview.stdout, /Nothing was removed yet/u);
+  assert.match(preview.stdout, /marketplace auto-update added by ZeroH/u);
+  assert.doesNotMatch(preview.stdout, /Nothing changed: /u);
   const hook = runHook(
     'user-prompt-submit',
     { session_id: 'sess-u', prompt: '/zeroh-disclosure:uninstall' },
     { project, extraEnv: extra },
   );
   assert.equal(hook.json?.decision, 'block', hook.stderr);
-  assert.match(hook.json.reason, /^✓ Done by ZeroH Disclosure/u);
-  assert.match(hook.json.reason, /To install it again: claude plugin install/u);
+  assert.match(hook.json.reason, /removal is running in the background/u);
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (readdirSync(project.home).join(',') === 'uninstalled') break;
+    await delay(100);
+  }
   assert.deepEqual(readdirSync(project.home), ['uninstalled']);
-  // --dry-run only shows the plan and needs no authority.
-  const preview = cli(project, ['uninstall', '--yes', '--dry-run'], extra);
-  assert.match(preview.stdout, /Nothing was removed yet/u);
-  assert.doesNotMatch(preview.stdout, /Nothing changed: /u);
 });
 
 test('a request the model recorded is not applied without the matching typed prompt', () => {

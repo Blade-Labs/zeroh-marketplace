@@ -222,6 +222,32 @@ for (;;) {}
   assert.match(r.json.reason, /\/zeroh-disclosure:doctor/u);
 });
 
+test('loader timeout during removal gives Claude Code plugin commands', () => {
+  const project = tempProject();
+  const plugin = pluginWith(
+    'user-prompt-submit',
+    `import { markSideEffect } from '../lib/hook-io.js';
+markSideEffect('running /zeroh-disclosure:uninstall --yes');
+for (;;) {}
+`,
+  );
+  const result = run(
+    plugin,
+    'user-prompt-submit',
+    { prompt: '/zeroh-disclosure:uninstall' },
+    project,
+    BLOCK,
+  );
+  assert.equal(result.code, 2);
+  assert.match(result.json.reason, /removal may be running in the background/u);
+  assert.match(result.json.reason, /type \/zeroh-disclosure:uninstall again/u);
+  assert.match(
+    result.json.reason,
+    /claude plugin uninstall zeroh-disclosure@zeroh/u,
+  );
+  assert.doesNotMatch(result.json.reason, /zeroh-disclosure:doctor/u);
+});
+
 test('answers written before a hang are kept; exit codes come through the loader', () => {
   const p = tempProject();
   const emitted = pluginWith(

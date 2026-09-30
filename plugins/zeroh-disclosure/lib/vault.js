@@ -74,7 +74,11 @@ const LOCK_WAIT_MS = 10_000;
 // 2 s, hooks/fail-closed.js), so a held lock is reported by the hook itself,
 // not by the watchdog; a lock left by a killed hook is reclaimed as soon as
 // its owner is gone or after ten seconds.
-const VAULT_LOCK = { waitMs: 2_000, staleMs: 10_000, reclaimDeadOwner: true };
+export const VAULT_LOCK = {
+  waitMs: 2_000,
+  staleMs: 10_000,
+  reclaimDeadOwner: true,
+};
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const TOUCH_INTERVAL_MS = HOUR_MS;
@@ -1084,6 +1088,10 @@ function writeState(
   writePrivateFile(file, body, { durable: true });
 }
 
+export function fileLockOwnerText(pid = process.pid) {
+  return `${pid}\n`;
+}
+
 // A lock whose owning process no longer exists on this machine (a hook killed
 // at its timeout) can be taken over at once.
 function lockOwnerGone(file) {
@@ -1117,16 +1125,35 @@ export function acquireFileLock(
   file,
   {
     waitMs = LOCK_WAIT_MS,
+    deadlineMs = Date.now() + waitMs,
     staleMs = LOCK_STALE_MS,
     reclaimDeadOwner = false,
   } = {},
 ) {
-  const deadline = Date.now() + waitMs;
+  const deadline = deadlineMs;
+  const ownerText = fileLockOwnerText();
   let deniedAbsent = 0;
+  let nextOwnerCheck = 0;
+  // Best effort: tidying retired lock files must never stop a lock (Windows
+  // antivirus can hold one briefly and fail the unlink with EPERM).
+  try {
+    for (const name of readdirSync(path.dirname(file))) {
+      if (!name.startsWith(`${path.basename(file)}.stale-`)) continue;
+      const retired = path.join(path.dirname(file), name);
+      try {
+        if (Date.now() - statSync(retired).mtimeMs > staleMs)
+          unlinkSync(retired);
+      } catch {
+        // left for the next acquisition
+      }
+    }
+  } catch {
+    // no directory yet, or not readable: nothing to tidy
+  }
   for (;;) {
     try {
       const fd = openSync(file, 'wx', 0o600);
-      writeFileSync(fd, `${process.pid}\n`);
+      writeFileSync(fd, ownerText);
       return { fd, file };
     } catch (error) {
       // Windows refuses to create a file another process is still deleting
@@ -1148,11 +1175,36 @@ export function acquireFileLock(
       }
       if (error.code !== 'EEXIST') throw error;
       try {
-        if (
-          Date.now() - statSync(file).mtimeMs > staleMs ||
-          (reclaimDeadOwner && lockOwnerGone(file))
-        ) {
-          unlinkSync(file);
+        const now = Date.now();
+        const judged = statSync(file);
+        const stale = now - judged.mtimeMs > staleMs;
+        const checkOwner = reclaimDeadOwner && now >= nextOwnerCheck;
+        if (checkOwner) nextOwnerCheck = now + 1_000;
+        if (stale || (checkOwner && lockOwnerGone(file))) {
+          const retired = `${file}.stale-${process.pid}-${randomBytes(8).toString('hex')}`;
+          renameWithRetry(file, retired, { attempts: 1, keepSource: true });
+          const moved = statSync(retired);
+          if (moved.ino !== judged.ino || moved.mtimeMs !== judged.mtimeMs) {
+            try {
+              linkSync(retired, file);
+              unlinkSync(retired);
+            } catch (restoreError) {
+              if (restoreError.code !== 'EEXIST' && !lockFilePresent(file)) {
+                try {
+                  renameWithRetry(retired, file, {
+                    attempts: 1,
+                    keepSource: true,
+                  });
+                } catch {
+                  throw new Error(
+                    `Timed out waiting for ZeroH vault lock ${file}`,
+                  );
+                }
+              }
+            }
+            continue;
+          }
+          unlinkSync(retired);
           continue;
         }
       } catch (statError) {

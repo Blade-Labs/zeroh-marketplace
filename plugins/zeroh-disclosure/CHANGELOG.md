@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.4
+
+Features: ~doctor, ~uninstall.clean, ~proxy.lifecycle (see [docs/features.md](docs/features.md))
+
+- **An ANTHROPIC_BASE_URL set outside ZeroH is named, not called "proxy not running".** A variable in your shell, a Windows environment variable or a project settings file keeps Claude Code off the local proxy, so typed prompts go as typed. The line under such a prompt now says so and how to remove it, and doctor says where it is set (a settings file, or the environment Claude Code started in) and that `--fix` can't change it. It used to send you to doctor, which found nothing about it.
+- **Doctor stays clear on a healthy install.** The running proxy's `daemon.pid` is now recognized as a current file; an unknown file in the proxy folder is still reported.
+- **Uninstall removes marketplace auto-update only where ZeroH added it.** If your marketplace entry was already there, its source stays; an entry you changed later stays untouched.
+- **Typed uninstall continues after the hook returns.** Removal runs in the background with a private log. If the log is gone, every removal step finished. If it remains, follow the remaining steps at its end. Check `claude plugin list` to confirm that Claude Code no longer lists ZeroH Disclosure.
+- **Proxy startup leaves time for SessionStart repair.** SessionStart shares one deadline of at most eight seconds between the proxy lock wait and daemon startup, then removes a dead proxy setting if startup fails. The terminal CLI can still wait up to 20 seconds.
+
 ## 1.0.3
 
 Features: ~statusline (see [docs/features.md](docs/features.md))

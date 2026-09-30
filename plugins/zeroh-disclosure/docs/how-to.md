@@ -691,10 +691,12 @@ Code settings.
 ZeroH treats typed text as masked when the session's own environment names this install's proxy
 and the proxy answers, or once the proxy has seen a request of the session.
 
-If your shell (or a settings file that takes precedence, such as a project's
-`.claude/settings.json`) sets `ANTHROPIC_BASE_URL`, Claude Code ignores ZeroH's entry, so what you
-type cannot be masked in that setup: the session start says so, and a prompt with a secret is
-sent with a "not protected" line (`uncertain block` stops it). Files and command output are still
+If `ANTHROPIC_BASE_URL` is set anywhere other than ZeroH's entry (your shell, a Windows
+environment variable, or a settings file such as a project's `.claude/settings.json`), ZeroH leaves
+your address alone and does not put the session behind its proxy, so what you type cannot be masked
+in that setup: the session start says so, a prompt with a secret is sent with a "not protected"
+line (`uncertain block` stops it), and `/zeroh-disclosure:doctor` says where the variable is set.
+Remove it and start Claude Code again to have typed text masked. Files and command output are still
 masked.
 
 ### Where it forwards

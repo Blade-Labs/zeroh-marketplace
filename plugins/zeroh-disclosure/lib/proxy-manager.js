@@ -84,7 +84,7 @@ import {
 } from './service-manager.js';
 
 const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const START_TIMEOUT_MS = 8_000;
+const START_TIMEOUT_MS = 20_000;
 // A prompt waits at most this long for a proxy restart (D-10).
 export const PROMPT_RESTART_BUDGET_MS = 3_000;
 const HEALTH_TIMEOUT_MS = 800;
@@ -506,6 +506,7 @@ async function startDaemon({
   replacing = null,
 }) {
   const fixed = fixedPort(env);
+  const startedAt = Date.now();
   let port = fixed || config.port || preferredPort || (await freePort());
   let waited = false;
   let takeover = Boolean(replacing) && port === config.port;
@@ -547,7 +548,9 @@ async function startDaemon({
       continue;
     }
     if (exited === null) {
-      throw new Error('local proxy did not become healthy before the timeout');
+      throw new Error(
+        `local proxy did not become healthy after ${Date.now() - startedAt} ms`,
+      );
     }
     if (!(await portInUse(port))) {
       throw new Error(`local proxy exited while starting (code ${exited})`);
@@ -632,10 +635,13 @@ export async function prepareInstall({ env, paths, settingsPath }) {
 export async function ensureDefaultProxy(options = {}) {
   const env = options.env || process.env;
   const paths = proxyPaths(env);
+  const deadlineMs =
+    options.deadlineMs ??
+    Date.now() + (options.startTimeoutMs ?? START_TIMEOUT_MS);
   return withProxyLock(
     paths,
-    () => ensureDefaultProxyLocked({ ...options, env, paths }),
-    { waitMs: options.lockWaitMs },
+    () => ensureDefaultProxyLocked({ ...options, env, paths, deadlineMs }),
+    { waitMs: options.lockWaitMs, deadlineMs: options.deadlineMs },
   );
 }
 
@@ -649,13 +655,16 @@ async function ensureDefaultProxyLocked({
   serviceManager,
   spawnProcess = spawn,
   startTimeoutMs = START_TIMEOUT_MS,
+  deadlineMs = Date.now() + startTimeoutMs,
   // SessionStart only starts the daemon: a settings write there lands before
   // Claude Code watches the file, so the first prompt writes the entry.
   writeSettings = true,
   // Prompts only check the login item; SessionStart (re)registers it.
   registerLoginItem = true,
 }) {
-  const deadline = Date.now() + startTimeoutMs;
+  const deadline = deadlineMs;
+  if (Date.now() >= deadline)
+    throw new Error('ZeroH proxy start deadline expired');
   const optedOut = proxyDisabled(env);
   const target = path.resolve(
     settingsPath || resolveClaudeSettingsPath({ env }),
@@ -770,9 +779,12 @@ async function ensureDefaultProxyLocked({
             config,
             preferredPort: config.port,
             spawnProcess,
-            deadline: Math.max(deadline, Date.now() + START_TIMEOUT_MS),
+            deadline,
           }));
       } catch (error) {
+        // Registration already succeeded; a later probe can exhaust the
+        // shared deadline without changing the login item's state.
+        if (loginItem) throw error;
         const refusal = loginItemRefusal(error);
         // Said once as a notice (LP-B3); the banner, status and doctor say
         // it every time from the record below.
@@ -1055,6 +1067,32 @@ export function baseUrlOverridden(env = process.env) {
     record?.originalBaseUrlPresent &&
     record.originalBaseUrlValue === base
   );
+}
+
+// Where the ANTHROPIC_BASE_URL that keeps Claude Code off the proxy comes
+// from, for doctor: the Claude Code settings file that sets it (managed, then
+// the project's), else null for the environment Claude Code started in.
+// Returns { host, file }; never the value itself, which may hold a key.
+export async function baseUrlOverrideSource({
+  env = process.env,
+  cwd = process.cwd(),
+  platform = process.platform,
+} = {}) {
+  const base = env.ANTHROPIC_BASE_URL;
+  let host = null;
+  try {
+    host = new URL(String(base)).host || null;
+  } catch {
+    // Not a URL: named without its host.
+  }
+  const { managedSettingsPath } = await import('./statusline.js');
+  const file =
+    [
+      managedSettingsPath(platform, env),
+      path.join(cwd, '.claude', 'settings.local.json'),
+      path.join(cwd, '.claude', 'settings.json'),
+    ].find((candidate) => base && settingsBaseUrl(candidate) === base) ?? null;
+  return { host, file };
 }
 
 // Puts THIS running session behind the proxy (T-19). Claude Code applies a
@@ -1538,14 +1576,18 @@ export async function diagnoseProxy({
             'proxy.json',
             'routes',
             'manager.lock',
+            'daemon.pid',
             'zeroh-disclosure-proxy.xml',
-          ].includes(name),
+          ].includes(name) && !/\.lock\.stale-.+/u.test(name),
       );
     } catch {
       return [];
     }
   })();
   if (leftovers.length) findings.push('files-from-an-earlier-build');
+  // Claude Code was started with another ANTHROPIC_BASE_URL, so it does not
+  // use the proxy at all (routeSession's `overridden`); --fix can't change it.
+  if (baseUrlOverridden(env)) findings.push('base-url-overridden');
   const loginItem = manager.isRegistered();
   if (loginItem && !Object.keys(config?.installs || {}).length) {
     findings.push('login-item-without-install');
