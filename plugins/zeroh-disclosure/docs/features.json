@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
+  "version": "1.0.3",
   "platforms": [
     "claude-code",
     "codex",
@@ -2635,7 +2635,7 @@
       "area": "status",
       "core": true,
       "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt. It is added with the first message unless you have your own; then `/zeroh-disclosure:settings statusline on` adds ZeroH's part on its own line under yours in one step (or after it, `position: \"end\"`; not yet on Windows, 1.1), without changing your script, stopping your command after 2 seconds so it never hides ZeroH's part, and `off` or uninstall put your line back exactly. `/zeroh-disclosure:settings statusline off`, or removing it, turns it off for good.",
-      "claude_code": "`statusLine` command (a minimal `node -e` resolver, in `wrap` mode around the user's own command); hooks keep status.json and a heartbeat; choice recorded per settings file",
+      "claude_code": "`statusLine` command (a minimal `node -e` resolver, in `wrap` mode around the user's own command); hooks keep status.json and a heartbeat, compared with the latest prompt or tool result in the transcript's tail; choice recorded per settings file",
       "evidence": [
         "lib/statusline.js",
         "lib/statusline-settings.js",

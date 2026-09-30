@@ -46,6 +46,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { hasContext } from './context.js';
+import { textIndex } from '../text-index.js';
 
 const require = createRequire(import.meta.url);
 function validator(name) {
@@ -571,22 +572,52 @@ for (const rule of ID_RULES)
   for (const shape of rule.shapes)
     shape.pattern = new RegExp(shape.re, `gu${shape.flags ?? ''}`);
 
-// All numbers `rule` finds in `text`: [{ start, end }].
-export function findIds(rule, text) {
-  const out = [];
+// All numbers `rule` finds in `text`: [{ start, end }]. `index` is a
+// TextIndex of `text`. A number an earlier shape already took is not taken
+// again: each shape's numbers are in text order and do not overlap, so they
+// are checked against the numbers kept so far by binary search and merged in.
+export function findIds(rule, text, index = textIndex(text)) {
+  let out = [];
   for (const shape of rule.shapes) {
+    const found = [];
     shape.pattern.lastIndex = 0;
     for (const m of text.matchAll(shape.pattern)) {
       const start = m.index;
       const end = start + m[0].length;
-      if (shape.context && !hasContext(text, start, end, shape.context))
+      if (shape.context && !hasContext(index, start, end, shape.context))
         continue;
       const ascii = toAsciiDigits(m[0]);
       const value = shape.normalize ? shape.normalize(ascii) : ascii;
       if (rule.validate && !rule.validate(value)) continue;
-      if (!out.some((o) => o.start < end && start < o.end))
-        out.push({ start, end });
+      if (!overlapsSorted(out, start, end)) found.push({ start, end });
     }
+    out = mergeSorted(out, found);
   }
+  return out;
+}
+
+// True when a span in `spans` (sorted, not overlapping) overlaps [start, end).
+function overlapsSorted(spans, start, end) {
+  let lo = 0;
+  let hi = spans.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (spans[mid].end <= start) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo < spans.length && spans[lo].start < end;
+}
+
+function mergeSorted(a, b) {
+  if (!b.length) return a;
+  const out = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length)
+    out.push(
+      j >= b.length || (i < a.length && a[i].start <= b[j].start)
+        ? a[i++]
+        : b[j++],
+    );
   return out;
 }

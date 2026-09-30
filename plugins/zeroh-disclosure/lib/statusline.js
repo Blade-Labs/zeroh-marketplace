@@ -26,7 +26,16 @@
 // without OSC 8 show the plain text. Colour follows NO_COLOR and TERM=dumb.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -223,6 +232,112 @@ function mtimeOf(file) {
   }
 }
 
+// Hooks stopped: the transcript holds a prompt or a tool result the hooks
+// never saw. Claude Code also appends entries that run no hook (titles,
+// file-history snapshots, summaries, attachments, system and meta notes,
+// local commands), so an idle session's transcript moves on by itself: the
+// file's mtime only gates the check, and what counts is the timestamp of
+// the latest entry that always runs a ZeroH hook, compared with the
+// heartbeat every hook run touches.
+export function hooksStopped(transcriptPath, heartbeatPath) {
+  if (typeof transcriptPath !== 'string' || !transcriptPath) return false;
+  const heartbeat = mtimeOf(heartbeatPath);
+  const moved = mtimeOf(transcriptPath);
+  if (heartbeat === null || moved === null) return false;
+  if (moved - heartbeat <= STOPPED_MS) return false;
+  const hooked = lastHookedEntryAt(transcriptPath);
+  return hooked !== null && hooked - heartbeat > STOPPED_MS;
+}
+
+// The transcript is read from its end, at most TAIL_BYTES of it, so a long
+// session costs the same as a short one. A hooked entry further back than
+// that (after a very large one) is not looked for: the check answers "not
+// stopped" rather than guess.
+export const TAIL_BYTES = 256 * 1024;
+const TAIL_CHUNK = 64 * 1024;
+const NEWLINE = 0x0a;
+
+// The time (ms) of the latest transcript entry that ran a ZeroH hook, or
+// null. Partial or invalid lines (one being written) are skipped.
+export function lastHookedEntryAt(file, maxBytes = TAIL_BYTES) {
+  let fd;
+  try {
+    fd = openSync(file, 'r');
+    let position = fstatSync(fd).size;
+    const floor = Math.max(0, position - maxBytes);
+    let carry = Buffer.alloc(0);
+    while (position > floor) {
+      const length = Math.min(TAIL_CHUNK, position - floor);
+      position -= length;
+      const chunk = Buffer.allocUnsafe(length);
+      const got = readSync(fd, chunk, 0, length, position);
+      const data = Buffer.concat([chunk.subarray(0, got), carry]);
+      let end = data.length;
+      while (end > 0) {
+        const newline = data.lastIndexOf(NEWLINE, end - 1);
+        if (newline < 0) break;
+        const at = hookedEntryAt(data.subarray(newline + 1, end));
+        if (at !== null) return at;
+        end = newline;
+      }
+      // The start of a line whose beginning is further back.
+      carry = data.subarray(0, end);
+    }
+    // At the start of the file the carry is a whole first line.
+    return position === 0 ? hookedEntryAt(carry) : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // Nothing to do.
+      }
+    }
+  }
+}
+
+// Text Claude Code wraps in its own tags (<command-name>, <local-command-
+// stdout>, <bash-input>, <task-notification>, …) or writes for an
+// interrupt: typed or injected without a UserPromptSubmit hook.
+const INJECTED_RE = /^\s*(?:<[a-z][\w-]*[\s>]|\[Request interrupted)/u;
+
+// The entries that always run a ZeroH hook (hooks/hooks.json):
+//   - a user prompt (UserPromptSubmit, matcher *), not a meta, sidechain,
+//     compact-summary or injected one;
+//   - a tool result that is not an error (PostToolUse, matcher *; a denied
+//     or failed tool runs PostToolUseFailure or PermissionDenied, and only
+//     for some tools).
+// A tool_use is not one: PreToolUse matches only some tools, and a tool
+// that runs long is caught by its result.
+function hookedEntryAt(bytes) {
+  if (bytes.length < 2) return null;
+  let item;
+  try {
+    item = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!item || typeof item !== 'object' || item.type !== 'user') return null;
+  if (item.isMeta || item.isCompactSummary || item.isVisibleInTranscriptOnly) {
+    return null;
+  }
+  const at = Date.parse(item.timestamp);
+  if (!Number.isFinite(at)) return null;
+  const content = item.message?.content;
+  const prompt = (text) =>
+    item.isSidechain !== true && !INJECTED_RE.test(text) ? at : null;
+  if (typeof content === 'string') return prompt(content);
+  if (!Array.isArray(content) || content.length === 0) return null;
+  const results = content.filter((block) => block?.type === 'tool_result');
+  if (results.length > 0) {
+    return results.some((block) => block.is_error !== true) ? at : null;
+  }
+  const text = content.find((block) => block?.type === 'text');
+  return prompt(typeof text?.text === 'string' ? text.text : '');
+}
+
 // The project root the hooks key on (lib/session.js projectRootFromEnv).
 // Claude Code's own project dir wins, as CLAUDE_PROJECT_DIR does for hooks.
 function projectRootOf(input, env) {
@@ -388,16 +503,7 @@ export function statuslineModel({
       return set('off', "state can't be read", DOCTOR);
     }
     if (failingHook(status)) return set('off', 'hooks failing', DOCTOR);
-    const transcript =
-      typeof input?.transcript_path === 'string'
-        ? mtimeOf(input.transcript_path)
-        : null;
-    const heartbeat = mtimeOf(path.join(dir, 'hooks.alive'));
-    if (
-      transcript !== null &&
-      heartbeat !== null &&
-      transcript - heartbeat > STOPPED_MS
-    ) {
+    if (hooksStopped(input?.transcript_path, path.join(dir, 'hooks.alive'))) {
       return set('off', 'hooks stopped', DOCTOR);
     }
     if (status.paused === true)

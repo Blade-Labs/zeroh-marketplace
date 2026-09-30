@@ -1,7 +1,7 @@
 # ZeroH Disclosure for Claude Code
 
 [![Licence: AGPL-3.0-only](https://img.shields.io/badge/licence-AGPL--3.0--only-blue)](LICENSE)
-[![Version 1.0.2](https://img.shields.io/badge/version-1.0.2-green)](CHANGELOG.md)
+[![Version 1.0.3](https://img.shields.io/badge/version-1.0.3-green)](CHANGELOG.md)
 
 ZeroH Disclosure is a Claude Code plugin that lets Claude work with your API keys, passwords and
 personal data without the model receiving them. Before anything reaches the model, it replaces

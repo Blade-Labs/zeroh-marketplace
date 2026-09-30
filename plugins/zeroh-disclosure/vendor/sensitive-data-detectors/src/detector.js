@@ -17,6 +17,7 @@ import {
   TLD_VERSION,
   VALIDATOR_VERSION,
 } from './pii/index.js';
+import { lowerBound, TextIndex } from './text-index.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -758,6 +759,10 @@ const GITLEAKS_RULES = GITLEAKS_CATALOG.rules.map((rule) => {
       : {}),
     allowlists: (rule.allowlists ?? []).map((allowlist) => ({
       ...allowlist,
+      // Lower-cased once here; allowlistHit compares a lower-cased target.
+      stopwords: (allowlist.stopwords ?? []).map((word) =>
+        String(word).toLowerCase(),
+      ),
       regexes: (allowlist.regexes ?? []).map(
         (regex) => new RegExp(regex.regex, regex.flags),
       ),
@@ -812,59 +817,92 @@ function isEntropyGuess(value) {
   return value.length >= 24 && shannonEntropy(value) >= 4.3;
 }
 
-function isKnownNegative(value) {
+// Two kinds of value that look random but are not secrets, told apart by
+// what makes them so:
+//   - a public value is public by its own format, whatever names it: a
+//     Stripe publishable key, an SSH public key line. No rule that locates a
+//     value by a key name takes one (`STRIPE_KEY=pk_live_…`).
+//   - a digest shape (a SHA-1, SHA-256 or SHA-512 hex digest, a UUID) is
+//     only a shape: a commit, a content hash or a request id when nothing
+//     names it, and a secret when something does. `openssl rand -hex 32`,
+//     `secrets.token_hex(32)` and many providers' API keys have this shape.
+//     So only a check that has nothing but the shape to go on refuses it:
+//     the entropy warning below. Every rule locates its value by something
+//     other than the shape (a key name, an `Authorization` header, a URL
+//     password, `Password=`, a signed-URL parameter, a provider prefix) and
+//     keeps it; test/digest-values.test.mjs holds both sides.
+function isPublicValue(value) {
   return (
-    /^(?:[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})$/i.test(value) ||
-    /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(
-      value,
-    ) ||
     /^pk_(?:live|test)_/i.test(value) ||
     /^ssh-(?:ed25519|rsa|ecdsa)\s/i.test(value)
   );
 }
 
-function allowlisted(rule, value, match, floor = 0) {
+function isDigestShape(value) {
+  return (
+    /^(?:[a-f0-9]{40}|[a-f0-9]{64}|[a-f0-9]{128})$/i.test(value) ||
+    /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(
+      value,
+    )
+  );
+}
+
+function allowlisted(rule, value, match, floor, index) {
   for (const allowlist of rule.allowlists ?? []) {
     // File and commit allowlists cannot be proven by the text-only detector.
     // Failing closed avoids suppressing a finding on a different path.
     if (allowlist.paths?.length || allowlist.commits?.length) continue;
-    const target =
-      allowlist.regexTarget === 'match'
-        ? withLeading(rule, match, floor)
-        : allowlist.regexTarget === 'line'
-          ? match.input.slice(
-              match.input.lastIndexOf('\n', match.index) + 1,
-              match.input.indexOf('\n', match.index) === -1
-                ? match.input.length
-                : match.input.indexOf('\n', match.index),
-            )
-          : value;
-    const checks = [];
-    if (allowlist.stopwords?.length) {
-      checks.push(
-        allowlist.stopwords.some((word) =>
-          target.toLowerCase().includes(String(word).toLowerCase()),
-        ),
-      );
-    }
-    if (allowlist.regexes?.length) {
-      checks.push(
-        allowlist.regexes.some((regex) => {
-          regex.lastIndex = 0;
-          return regex.test(target);
-        }),
-      );
-    }
-    if (
-      checks.length &&
-      (allowlist.condition === 'AND'
-        ? checks.every(Boolean)
-        : checks.some(Boolean))
-    ) {
-      return true;
-    }
+    const hit =
+      allowlist.regexTarget === 'line'
+        ? lineAllowlisted(allowlist, match.index, index)
+        : allowlistHit(
+            allowlist,
+            allowlist.regexTarget === 'match'
+              ? withLeading(rule, match, floor)
+              : value,
+          );
+    if (hit) return true;
   }
   return false;
+}
+
+function allowlistHit(allowlist, target) {
+  const checks = [];
+  if (allowlist.stopwords?.length) {
+    const lower = target.toLowerCase();
+    checks.push(allowlist.stopwords.some((word) => lower.includes(word)));
+  }
+  if (allowlist.regexes?.length) {
+    checks.push(
+      allowlist.regexes.some((regex) => {
+        regex.lastIndex = 0;
+        return regex.test(target);
+      }),
+    );
+  }
+  return (
+    checks.length > 0 &&
+    (allowlist.condition === 'AND'
+      ? checks.every(Boolean)
+      : checks.some(Boolean))
+  );
+}
+
+// gitleaks' `regexTarget = "line"`: the allowlist reads the whole line of
+// the match. Every match on one line reads the same line, so the verdict is
+// kept per line (in the TextIndex of the text): a long line with many
+// matches is read once per allowlist, not once per match.
+function lineAllowlisted(allowlist, at, index) {
+  const newline = index.indexOf('\n', at);
+  const start = index.lastIndexOf('\n', at) + 1;
+  const end = newline === -1 ? index.text.length : newline;
+  const verdicts = index.memo('allowlisted lines', () => new WeakMap());
+  let lines = verdicts.get(allowlist);
+  if (!lines) verdicts.set(allowlist, (lines = new Map()));
+  const key = `${start}:${end}`;
+  if (!lines.has(key))
+    lines.set(key, allowlistHit(allowlist, index.text.slice(start, end)));
+  return lines.get(key);
 }
 
 // The match as gitleaks sees it: with the leading `[\w.-]{0,N}?` context the
@@ -951,19 +989,30 @@ function credentialOver(f, o) {
   );
 }
 
+// Resolves overlaps in `fs`, sorted by start: each finding meets the first
+// kept finding it overlaps. A kept finding starts at or before the current
+// one (it is an earlier finding, or credentialOver's union with one), so it
+// overlaps the current finding exactly when it ends after the current start. Starts only grow, so
+// a kept finding that ends at or before one start overlaps no later finding
+// either: `live` moves past it once, and the first kept finding from `live`
+// on is the one the current finding meets. Linear in the number of findings,
+// not quadratic on a log with tens of thousands of addresses.
 function dedupe(fs) {
   const out = [];
+  let live = 0;
   for (const f of fs) {
-    const o = out.find((x) => f.start < x.end && x.start < f.end);
+    while (live < out.length && out[live].end <= f.start) live += 1;
+    const at = live;
+    const o = out[at];
     if (!o) out.push(f);
     else if (isCredentialFinding(f) && !isCredentialFinding(o)) {
-      out[out.indexOf(o)] = credentialOver(f, o);
+      out[at] = credentialOver(f, o);
     } else if (
       isCredentialFinding(o) &&
       !isCredentialFinding(f) &&
       !covers(o, f)
     ) {
-      out[out.indexOf(o)] = credentialOver(o, f);
+      out[at] = credentialOver(o, f);
     } else if (
       (isCredentialFinding(f) &&
         isCredentialFinding(o) &&
@@ -973,7 +1022,7 @@ function dedupe(fs) {
         !(isCredentialFinding(f) && covers(o, f)) &&
         score(f) > score(o))
     ) {
-      out[out.indexOf(o)] = f;
+      out[at] = f;
     }
   }
   return out.sort((a, b) => a.start - b.start);
@@ -1006,8 +1055,8 @@ export function detectSensitiveData(
   if (typeof text !== 'string' || text.length === 0) return [];
   const rules = PROFILES[profile] ?? PROFILES.prompt;
   const lowerText = text.toLowerCase();
-  const tokens = ignoreSpans(ignore, text);
-  const insideToken = (s, e) => tokens.some(([a, b]) => s < b && a < e);
+  const index = new TextIndex(text);
+  const insideToken = spanOverlap(ignoreSpans(ignore, text));
   const findings = [];
   const national = NATIONAL_PHONE_PROFILES.has(profile)
     ? region === undefined
@@ -1020,6 +1069,7 @@ export function detectSensitiveData(
       for (const hit of findPersonalData(rule, text, {
         phoneRegion: national,
         profile,
+        index,
       })) {
         if (insideToken(hit.start, hit.end)) continue;
         findings.push({
@@ -1066,13 +1116,14 @@ export function detectSensitiveData(
         if (!value) return null;
       }
       if (rule.validate && !rule.validate(value, match)) return null;
-      // Hex digests and UUIDs are not secrets on their own; a provider rule
-      // anchored on its own name (`MERAKI: <40 hex>`) still takes them.
-      if ((!rule.imported || rule.genericShape) && isKnownNegative(value))
+      // A public value is refused wherever a key name locates the value; a
+      // provider rule matches its own format. A digest shape is kept: the
+      // rule located it (see isPublicValue and isDigestShape).
+      if ((!rule.imported || rule.genericShape) && isPublicValue(value))
         return null;
       if (rule.entropy !== undefined && shannonEntropy(value) < rule.entropy)
         return null;
-      if (allowlisted(rule, value, match, previous)) return null;
+      if (allowlisted(rule, value, match, previous, index)) return null;
       if (insideToken(start, end)) return null;
       const type = rule.typeOf ? rule.typeOf(match) : rule.type;
       if (enabledTypes && !enabledTypes.includes(type)) return null;
@@ -1113,6 +1164,24 @@ function ignoreSpans(ignore, text) {
   return typeof ignore === 'function' ? ignore(text) : ignore;
 }
 
+// A test for "[s, e) overlaps one of `spans`" in O(log n): the spans sorted
+// by start, and the largest end among each prefix. A caller's placeholders
+// can number in the thousands in long tool output.
+function spanOverlap(spans) {
+  if (!spans.length) return () => false;
+  const sorted = [...spans].sort((x, y) => x[0] - y[0]);
+  const starts = sorted.map(([a]) => a);
+  const maxEnd = [];
+  for (const [, b] of sorted)
+    maxEnd.push(Math.max(maxEnd.at(-1) ?? -Infinity, b));
+  // The spans that start before `e` are a prefix; one of them overlaps when
+  // the largest end among them is after `s`.
+  return (s, e) => {
+    const before = lowerBound(starts, e);
+    return before > 0 && maxEnd[before - 1] > s;
+  };
+}
+
 // A random-looking value that no rule masked and that has no key-like name
 // in front of it (a value next to TOKEN=, secret: … is masked by the key-name
 // rules above). It is sent as is; the typed-prompt hook only warns.
@@ -1131,18 +1200,26 @@ export function detectEntropyWarnings(text, { ignore = null, region } = {}) {
     region,
   });
   const warnings = [];
+  // Values come in text order and findings are sorted by start: `seen`
+  // findings start before the current value's end, and `reach` is the
+  // largest end among them, so the overlap test is one comparison.
+  let seen = 0;
+  let reach = -1;
   for (const match of text.matchAll(RANDOM_VALUE)) {
     const value = match[0];
     const start = match.index;
     const end = start + value.length;
     if (!/[A-Za-z]/u.test(value) || !/\d/u.test(value)) continue;
-    if (isKnownNegative(value) || !isEntropyGuess(value)) continue;
+    if (isDigestShape(value) || isPublicValue(value) || !isEntropyGuess(value))
+      continue;
     const before = text.slice(Math.max(0, start - 64), start);
     if (KEY_BEFORE.test(before)) continue;
     // The body of an SSH public key (`ssh-ed25519 AAAA… comment`).
     if (/(?:ssh-[a-z0-9]+|ecdsa-sha2-[a-z0-9]+)@?[\w.]*\s+$/u.test(before))
       continue;
-    if (findings.some((f) => start < f.end && f.start < end)) continue;
+    while (seen < findings.length && findings[seen].start < end)
+      reach = Math.max(reach, findings[seen++].end);
+    if (reach > start) continue;
     warnings.push({
       type: 'ENTROPY_WARNING',
       risk: 'warning',

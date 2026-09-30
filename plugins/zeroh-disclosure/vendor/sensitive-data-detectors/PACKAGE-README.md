@@ -90,6 +90,11 @@ International phone numbers (`+44 …`) are found with any region.
 - **Secrets next to key-like names**: `password: …`, `db_password = …`, `"apiKey": "…"`,
   `AUTH_TOKEN=<random>`. Code after the name (`process.env.X`, a type, a call, a package
   version) and plain words are left alone.
+- **Hex and UUID values** (`openssl rand -hex 32`, `secrets.token_hex(32)`, UUID API keys) are
+  masked wherever a key name, an `Authorization` header, a URL password, `Password=` or a
+  signed-URL parameter introduces them. A bare commit hash, content hash or UUID in a log line
+  is only a shape and is left alone; the entropy warning skips it too. Publishable Stripe keys
+  and SSH public key lines are public whatever names them.
 - **Private keys** (PEM, OpenSSH, PuTTY, age), `Authorization` headers, credentials in URLs and
   connection strings, signed-URL signatures, OTP seeds and password hashes. A value after
   `Password=` is a value, a plain word in a sentence too: syntax cannot tell a word from a

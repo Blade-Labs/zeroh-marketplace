@@ -22,6 +22,7 @@ import {
   phoneRegion,
   supportedRegion,
 } from './phone.js';
+import { textIndex } from '../text-index.js';
 import { findCryptoAddresses } from './crypto.js';
 import { findIpAddresses } from './ip.js';
 import { findIds, ID_RULES } from './national-ids.js';
@@ -211,12 +212,14 @@ function insideUuid(input, start, end) {
 }
 
 // A number whose `+` is the marker of an added line in a unified diff.
-function diffMarker(input, start) {
-  const lineStart = input.lastIndexOf('\n', start - 1) + 1;
+// Whether the text is a diff is decided once per text (`index`).
+function diffMarker(input, start, index) {
   return (
-    lineStart === start &&
+    (start === 0 || input[start - 1] === '\n') &&
     input[start] === '+' &&
-    /^(?:diff --git |@@ |\+\+\+ |--- )/mu.test(input)
+    index.memo('diff', (text) =>
+      /^(?:diff --git |@@ |\+\+\+ |--- )/mu.test(text),
+    )
   );
 }
 
@@ -390,11 +393,11 @@ export const PII_RULES = [
         (p) =>
           p.international || TYPED_NATIONAL.test(text.slice(p.start, p.end)),
       ),
-    guard: (input, start, end) => {
+    guard: (input, start, end, index) => {
       const value = input.slice(start, end);
       return (
         afterWordCharacter(input, start) ||
-        diffMarker(input, start) ||
+        diffMarker(input, start, index) ||
         afterReferenceWord(input, start) ||
         looksLikeNumberList(value) ||
         looksLikeGroupedNumber(value) ||
@@ -419,7 +422,8 @@ export const PII_RULES = [
     risk: 'medium',
     confidence: 0.8,
     source: 'validator.isBtcAddress, validator.isEthereumAddress',
-    find: (text, { profile }) => findCryptoAddresses(text, { profile }),
+    find: (text, { profile, index }) =>
+      findCryptoAddresses(text, { profile, index }),
   },
   ...ID_RULES.map((rule) => ({
     type: rule.type,
@@ -428,7 +432,7 @@ export const PII_RULES = [
     risk: 'high',
     confidence: 0.9,
     source: rule.source,
-    find: (text) => findIds(rule, text),
+    find: (text, { index }) => findIds(rule, text, index),
   })),
 ];
 
@@ -442,15 +446,17 @@ export const PERSONAL_DATA_KINDS = Object.freeze(
 
 export { LIBPHONENUMBER_VERSION, phoneRegion, supportedRegion };
 
-// Findings for one rule on `text`.
+// Findings for one rule on `text`. `index` is a TextIndex of `text`
+// (../text-index.js), shared by every rule of one detect call.
 export function findPersonalData(
   rule,
   text,
-  { phoneRegion: region, profile = 'prompt' } = {},
+  { phoneRegion: region, profile = 'prompt', index: given } = {},
 ) {
+  const index = textIndex(text, given);
   const out = [];
-  for (const hit of rule.find(text, { phoneRegion: region, profile })) {
-    if (rule.guard?.(text, hit.start, hit.end)) continue;
+  for (const hit of rule.find(text, { phoneRegion: region, profile, index })) {
+    if (rule.guard?.(text, hit.start, hit.end, index)) continue;
     out.push({ start: hit.start, end: hit.end, confidence: rule.confidence });
   }
   return out;

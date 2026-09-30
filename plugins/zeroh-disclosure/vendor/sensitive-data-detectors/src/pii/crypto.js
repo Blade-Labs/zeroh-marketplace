@@ -9,6 +9,7 @@
 
 import { createRequire } from 'node:module';
 import { hasContext } from './context.js';
+import { textIndex } from '../text-index.js';
 
 const require = createRequire(import.meta.url);
 const load = (name) => {
@@ -24,7 +25,7 @@ const ETH = /(?<![\p{L}\p{N}_])0x[0-9a-fA-F]{40}(?![\p{L}\p{N}_])/gu;
 const WALLET =
   /(?<![\p{L}\p{N}])(?:wallet|(?:eth|ethereum|btc|bitcoin)[\s_.-]*(?:address|addr)|send[\s_-]*to|recipient|beneficiary)(?![\p{L}\p{N}])/iu;
 
-export function findCryptoAddresses(text, { profile = 'prompt' } = {}) {
+export function findCryptoAddresses(text, { profile = 'prompt', index } = {}) {
   const out = [];
   for (const m of text.matchAll(BTC)) {
     const legacy = !m[0].startsWith('bc1');
@@ -37,7 +38,10 @@ export function findCryptoAddresses(text, { profile = 'prompt' } = {}) {
     for (const m of text.matchAll(ETH)) {
       if (!isEthereumAddress(m[0])) continue;
       const end = m.index + m[0].length;
-      if (profile === 'tool' && !hasContext(text, m.index, end, WALLET))
+      if (
+        profile === 'tool' &&
+        !hasContext(textIndex(text, index), m.index, end, WALLET)
+      )
         continue;
       out.push({ start: m.index, end });
     }

@@ -324,25 +324,191 @@ test('a failing hook stays red until the same hook succeeds', () => {
   assert.match(plain(line(fixture({ status: recovered }))), /🟢 protected/u);
 });
 
-test('hooks that stopped while the transcript moves on turn it red', () => {
+// A synthetic Claude Code 2.1.x transcript: one JSON object per line, each
+// with a top-level ISO `timestamp` (bookkeeping entries may have none).
+const T0 = Date.parse('2026-09-27T11:00:00Z');
+const iso = (ms) => new Date(T0 + ms).toISOString();
+const entry = {
+  prompt: (ms, text = 'fix the build') => ({
+    type: 'user',
+    uuid: `u${ms}`,
+    timestamp: iso(ms),
+    isSidechain: false,
+    message: { role: 'user', content: text },
+  }),
+  toolUse: (ms, name = 'Bash') => ({
+    type: 'assistant',
+    timestamp: iso(ms),
+    message: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: `t${ms}`, name, input: {} }],
+    },
+  }),
+  toolResult: (ms, { isError = false } = {}) => ({
+    type: 'user',
+    timestamp: iso(ms),
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: `t${ms}`,
+          content: 'ok',
+          ...(isError ? { is_error: true } : {}),
+        },
+      ],
+    },
+    toolUseResult: { stdout: 'ok' },
+  }),
+  text: (ms) => ({
+    type: 'assistant',
+    timestamp: iso(ms),
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
+  }),
+};
+// What Claude Code appends with no hook: titles, snapshots, summaries,
+// attachments, system notes, meta and local-command entries, interrupts.
+const bookkeeping = (ms) => [
+  {
+    type: 'file-history-snapshot',
+    messageId: 'm1',
+    snapshot: { timestamp: iso(ms) },
+    isSnapshotUpdate: true,
+  },
+  { type: 'custom-title', customTitle: 'Fix the build', sessionId: 's1' },
+  { type: 'ai-title', aiTitle: 'Fix the build', sessionId: 's1' },
+  { type: 'summary', summary: 'Build fixed', leafUuid: 'u1' },
+  { type: 'last-prompt', lastPrompt: 'fix the build', sessionId: 's1' },
+  { type: 'queue-operation', operation: 'dequeue', timestamp: iso(ms) },
+  { type: 'attachment', timestamp: iso(ms), attachment: { type: 'todo' } },
+  { type: 'system', subtype: 'turn_duration', timestamp: iso(ms) },
+  { type: 'progress', timestamp: iso(ms), data: { type: 'hook_progress' } },
+  { ...entry.prompt(ms, 'Caveat: local commands'), isMeta: true },
+  entry.prompt(ms, '<command-name>/model</command-name>'),
+  entry.prompt(ms, '<local-command-stdout>Set model</local-command-stdout>'),
+  entry.prompt(ms, '[Request interrupted by user]'),
+  { ...entry.prompt(ms, 'summary of earlier turns'), isCompactSummary: true },
+  { ...entry.prompt(ms, 'a subagent task'), isSidechain: true },
+  entry.toolResult(ms, { isError: true }),
+];
+
+// Writes the transcript, the heartbeat at `heartbeatAt` and the transcript
+// mtime at the last entry (or `mtimeAt`); returns the status line's words.
+function stoppedCheck(
+  entries,
+  { heartbeatAt = 5_000, mtimeAt, tail = '' } = {},
+) {
   const f = fixture({ status: HEALTHY });
   const heartbeat = path.join(f.dir, 'hooks.alive');
   writeFileSync(heartbeat, '');
   const transcript = path.join(f.base, 'transcript.jsonl');
-  writeFileSync(transcript, '{}\n');
-  const t0 = new Date('2026-09-27T11:00:00Z').getTime();
-  const at = (ms) => new Date(t0 + ms);
-  utimesSync(heartbeat, at(0), at(0));
-  utimesSync(transcript, at(10_000), at(10_000));
+  writeFileSync(
+    transcript,
+    entries.map((item) => JSON.stringify(item)).join('\n') + '\n' + tail,
+  );
+  utimesSync(heartbeat, new Date(T0 + heartbeatAt), new Date(T0 + heartbeatAt));
+  const mtime = new Date(T0 + (mtimeAt ?? 600_000));
+  utimesSync(transcript, mtime, mtime);
+  return plain(line(f, { input: { transcript_path: transcript } }));
+}
+const STOPPED = `${SHIELD} ZeroH · 🔴 hooks stopped · /zeroh-disclosure:doctor`;
+
+test('an idle session stays green while Claude Code writes bookkeeping', () => {
+  const turn = [entry.prompt(0), entry.toolUse(2_000), entry.toolResult(5_000)];
+  // The heartbeat is the last hook (PostToolUse at 5 s); ten minutes of
+  // titles, snapshots and summaries follow and no hook runs for them.
   assert.match(
-    plain(line(f, { input: { transcript_path: transcript } })),
+    stoppedCheck([...turn, entry.text(8_000), ...bookkeeping(600_000)]),
     /🟢 protected/u,
   );
-  utimesSync(transcript, at(60_000), at(60_000));
+});
+
+test('a prompt or tool call newer than the heartbeat by >30 s is red', () => {
+  const turn = [entry.prompt(0), entry.toolResult(5_000)];
+  assert.equal(stoppedCheck([...turn, entry.prompt(60_000)]), STOPPED);
   assert.equal(
-    plain(line(f, { input: { transcript_path: transcript } })),
-    `${SHIELD} ZeroH · 🔴 hooks stopped · /zeroh-disclosure:doctor`,
+    stoppedCheck([...turn, entry.prompt(40_000), entry.toolResult(60_000)]),
+    STOPPED,
   );
+  // Still red when bookkeeping follows the unhooked prompt.
+  assert.equal(
+    stoppedCheck([...turn, entry.prompt(60_000), ...bookkeeping(600_000)]),
+    STOPPED,
+  );
+  // Within 30 s of the heartbeat is the hooks catching up, not stopped.
+  assert.match(stoppedCheck([...turn, entry.prompt(30_000)]), /🟢 protected/u);
+  // A heartbeat after the latest prompt clears it.
+  assert.match(
+    stoppedCheck([...turn, entry.prompt(60_000)], { heartbeatAt: 60_500 }),
+    /🟢 protected/u,
+  );
+});
+
+test('hooks stopped: a truncated or invalid last line is skipped', () => {
+  const turn = [entry.prompt(0), entry.toolResult(5_000)];
+  const half = JSON.stringify(entry.prompt(900_000)).slice(0, 40);
+  assert.equal(
+    stoppedCheck([...turn, entry.prompt(60_000)], { tail: half }),
+    STOPPED,
+  );
+  assert.match(
+    stoppedCheck([...turn, entry.text(8_000)], { tail: `not json\n${half}` }),
+    /🟢 protected/u,
+  );
+  // No hooked entry at all (a bare or foreign transcript): not stopped.
+  assert.match(stoppedCheck([{}], { tail: '\u0000\u0000' }), /🟢 protected/u);
+});
+
+test('hooks stopped: a 50 MB transcript is checked from its tail, fast', () => {
+  const f = fixture({ status: HEALTHY });
+  const heartbeat = path.join(f.dir, 'hooks.alive');
+  writeFileSync(heartbeat, '');
+  utimesSync(heartbeat, new Date(T0), new Date(T0));
+  const transcript = path.join(f.base, 'transcript.jsonl');
+  const filler = `${JSON.stringify({
+    ...entry.toolResult(-60_000),
+    toolUseResult: { stdout: 'x'.repeat(4_000) },
+  })}\n`;
+  const block = filler.repeat(Math.ceil(1_048_576 / filler.length));
+  const chunks = Array.from({ length: 50 }, () => block);
+  const huge = `${JSON.stringify({
+    type: 'user',
+    timestamp: iso(1_000),
+    message: { role: 'user', content: 'y'.repeat(2_000_000) },
+  })}\n`;
+  const write = (last) => {
+    writeFileSync(transcript, [...chunks, last].join(''));
+    utimesSync(transcript, new Date(T0 + 600_000), new Date(T0 + 600_000));
+  };
+  const time = () => {
+    const runs = [];
+    for (let run = 0; run < 7; run += 1) {
+      const started = process.hrtime.bigint();
+      const text = plain(line(f, { input: { transcript_path: transcript } }));
+      runs.push({ ms: Number(process.hrtime.bigint() - started) / 1e6, text });
+    }
+    runs.sort((a, b) => a.ms - b.ms);
+    return runs[3];
+  };
+  write(
+    [
+      JSON.stringify(entry.prompt(60_000)),
+      ...bookkeeping(600_000).map((e) => JSON.stringify(e)),
+    ].join('\n') + '\n',
+  );
+  const red = time();
+  assert.equal(red.text, STOPPED);
+  assert.ok(red.ms < 30, `status line took ${red.ms} ms`);
+  // A prompt line bigger than the tail window: the check gives up, green.
+  write(
+    huge +
+      bookkeeping(600_000)
+        .map((e) => JSON.stringify(e))
+        .join('\n'),
+  );
+  const green = time();
+  assert.match(green.text, /🟢 protected/u);
+  assert.ok(green.ms < 30, `status line took ${green.ms} ms`);
 });
 
 test('disabled: user, project, local and managed settings, and several ids', () => {

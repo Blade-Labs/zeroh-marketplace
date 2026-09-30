@@ -10,7 +10,7 @@
     {
       "name": "zeroh-disclosure",
       "description": "Keeps API keys, passwords and personal data away from the model in Claude Code: masks prompts and tool output as tokens, puts real values back only on your machine for allowed hosts, shows real values on screen, and signs a local receipt per turn. A local proxy, on by default, masks what you type.",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "source": "./plugins/zeroh-disclosure",
       "category": "security",
       "license": "AGPL-3.0-only",

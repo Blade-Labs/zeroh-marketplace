@@ -25,6 +25,11 @@ What it _says_ stays ZeroH's: no style or script can make it show 🟢 when Zero
 | 🟡 protected in part | `files only`, `proxy starts with your first prompt`, `proxy on from your next prompt`, `proxy down`, `starting`, `N not protected this turn`        | `/zeroh-disclosure:doctor`, or `/zeroh-disclosure:proxy on` after `proxy off`       |
 | 🔴 not protecting    | `hooks failing`, `hooks stopped`, `hooks never ran`, `vault can't be opened`, `state can't be read`, `plugin disabled`, `uninstalled`, `no session` | `/zeroh-disclosure:doctor`, `enable it in /plugin`, or `remove it with /statusline` |
 
+`hooks stopped` means your latest prompt or tool result in the transcript is more than 30 seconds
+newer than the last time a ZeroH hook ran (the plugin was disabled or its hooks removed
+mid-session). The line reads only the end of the transcript, and entries Claude Code writes on its
+own while a session is idle (titles, file-history snapshots, summaries) don't count.
+
 When the plugin itself is gone (removed without uninstalling), the line says
 `🛡️ ZeroH · 🔴 not installed · remove it with /statusline`.
 

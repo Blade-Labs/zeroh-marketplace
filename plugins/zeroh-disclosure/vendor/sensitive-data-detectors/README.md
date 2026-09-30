@@ -15,7 +15,7 @@ masking and the hooks) in `lib/`.
   of ZeroH Disclosure is AGPL-3.0-only. The vendored upstream code under
   [vendor/](vendor) keeps its own licences.
 - **Version:** @bladelabs/sensitive-data-detectors 0.1.0, from monorepo commit
-  `b88fea42d4c7338bc41ea52b670d3dcfc8dac268`. [SOURCE.json](SOURCE.json) records the SHA-256 of
+  `867e88f42cc6a0261bec76301dda5b0c5eea23f8`. [SOURCE.json](SOURCE.json) records the SHA-256 of
   every file in this copy.
 - **Upstream credits** ([NOTICE](NOTICE)): gitleaks (MIT), validator.js (MIT),
   libphonenumber-js (MIT, with Google libphonenumber metadata under

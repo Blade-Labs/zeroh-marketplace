@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.3
+
+Features: ~statusline (see [docs/features.md](docs/features.md))
+
+- **An idle session no longer shows 🔴 hooks stopped.** The status line compared the time the
+  transcript file last changed with the last hook run, and Claude Code keeps writing to the
+  transcript while a session sits idle (titles, file-history snapshots, summaries, attachments)
+  with no hook to run. After 30 seconds of that, the line said `🔴 hooks stopped` until you typed
+  something. Now it reads only the end of the transcript and compares the time of your latest
+  prompt or tool result, the entries that always run ZeroH's hooks, with the last hook run.
+  Hooks that really stopped (the plugin disabled or its hooks removed mid-session) still turn it
+  red at the next prompt or tool call. A 50 MB transcript costs the same few milliseconds as a
+  short one.
+
+- **Hex keys named as secrets are masked again.** A 40-, 64- or 128-character hex value or a UUID
+  was never masked, even after a key name, an `Authorization` header, a URL password or
+  `Password=` (for example `SECRET_KEY=<openssl rand -hex 32>`), because the detector treated every
+  digest-shaped value as a hash. Now only a value with nothing marking it as a secret is treated
+  that way: bare git SHAs, checksums and UUIDs in logs stay unmasked.
+- **Large tool output is scanned in linear time.** Two helpers took time that grew with the
+  square of the input (one long JSON line of numbers, a wide CSV table, tens of thousands of
+  findings): a 20,000-row table took up to 113 s and now takes about half a second.
+
 ## 1.0.2
 
 Features: ~uninstall.clean, ~doctor, ~proxy.lifecycle (see [docs/features.md](docs/features.md))
