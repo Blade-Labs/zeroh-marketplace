@@ -45,7 +45,7 @@ import { allowKeyPath, signatureFor, signaturesMatch } from './allow-rules.js';
 import { canonicalJson, importPrivateJwk, sha256B64u } from './crypto.js';
 import { createSignedReceipt } from './selective-disclosure.js';
 import { LocalSigningKey } from './signing-key.js';
-import { zerohHome } from './vault.js';
+import { projectKey, zerohHome } from './vault.js';
 
 export const KEPT_MANIFEST = 'zeroh-receipts.json';
 export const KEPT_SCHEMA = 'zeroh-kept-receipts/v1';
@@ -200,6 +200,10 @@ const README = (dir) =>
     'To check one after installing ZeroH Disclosure again:',
     '  zeroh-disclosure verify --receipt <turn-n.json>',
     '',
+    'A legacy/<project>/sessions/<session>/ folder holds receipts of ZeroH',
+    'Disclosure 0.1, copied from <project>/.zeroh: the signed receipts',
+    '(turn-<n>.json), ProofPacks, evidence events and the public key (wallet.json).',
+    '',
     `To delete them, remove this folder: ${dir}`,
     '',
   ].join('\n');
@@ -287,20 +291,7 @@ export async function keepReceipts({
     }
   }
   if (!count && !manifest) return { dir: null, receipts: 0, sessions: 0 };
-  writePrivate(
-    manifestFile,
-    `${JSON.stringify(
-      {
-        schema: KEPT_SCHEMA,
-        kept_at: now.toISOString(),
-        note: "Receipts kept at uninstall. reveal_record: the unmask record checked with the local key before uninstall deleted it (verified, mismatch or none); a verified one is bound to the exact record kept by reveal_attestation, signed with the receipt's key.",
-        receipts,
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  writePrivate(path.join(dir, KEPT_README), README(dir));
+  writeManifest(dir, { receipts, legacy: manifest?.legacy_receipts, now });
   for (const session of sessions) {
     // receipt.html again, from the kept receipts and without value previews.
     if (!renderHtml) continue;
@@ -319,6 +310,211 @@ export async function keepReceipts({
       file.split(path.sep).join('/'),
     ),
   };
+}
+
+function writeManifest(dir, { receipts = {}, legacy = null, now }) {
+  writePrivate(
+    path.join(dir, KEPT_MANIFEST),
+    `${JSON.stringify(
+      {
+        schema: KEPT_SCHEMA,
+        kept_at: now.toISOString(),
+        note: "Receipts kept at uninstall. reveal_record: the unmask record checked with the local key before uninstall deleted it (verified, mismatch or none); a verified one is bound to the exact record kept by reveal_attestation, signed with the receipt's key.",
+        receipts,
+        ...(legacy && Object.keys(legacy).length
+          ? { legacy_receipts: legacy }
+          : {}),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  writePrivate(path.join(dir, KEPT_README), README(dir));
+}
+
+// --- receipts ZeroH Disclosure 0.1 kept inside the project -----------------
+//
+// 0.1.x wrote each session to <project>/.zeroh/sessions/<sid>/ (its
+// lib/session.js): state.json (the session's HMAC key behind the value
+// commitments), wallet.json (the public signing key), wallet.key.json (the
+// PRIVATE signing key), turn-<n>.json (the signed receipt; a turn Stop had
+// not finalised still holds the typed text in `local_private`),
+// turn-<n>.proofpack.json, event-<n>.json (signed tool evidence) and
+// tool-<id>.json (the original values of a tool call). 1.0 keeps nothing in
+// the project (D-15), so doctor --fix and uninstall meet these folders.
+// Receipts are never deleted: uninstall copies the public part (receipts
+// without `local_private`, ProofPacks, evidence events, the public key) into
+// the kept-receipts folder, and a folder that still holds anything private
+// (a key, a value, a file this code does not know) stays where it is, for
+// the user to delete.
+const LEGACY_OURS = new Set(['sessions', 'allow.json', '.gitignore']);
+const LEGACY_PUBLIC = [
+  /^turn-\d+\.proofpack\.json$/u,
+  /^event-\d+\.json$/u,
+  /^wallet\.json$/u,
+];
+const LEGACY_PRIVATE = [
+  /^state\.json$/u,
+  /^wallet\.key\.json$/u,
+  /^tool-.+\.json$/u,
+];
+const LEGACY_RECEIPT_RE = /^turn-\d+(?:\.proofpack)?\.json$/u;
+
+// What a <project>/.zeroh folder holds, or null when it is not one ZeroH
+// left (anything but sessions/, allow.json and .gitignore at its top):
+// { dir, sessions: [{ id, dir, public, private }], receipts, private,
+//   files }. `public` lists the files uninstall may keep; `private` the ones
+// it never copies (keys, values, and anything unknown).
+export function scanLegacyFolder(dir) {
+  let names;
+  try {
+    if (!lstatSync(dir).isDirectory()) return null;
+    names = readdirSync(dir);
+  } catch {
+    return null;
+  }
+  if (!names.length || !names.every((name) => LEGACY_OURS.has(name))) {
+    return null;
+  }
+  const result = { dir, sessions: [], receipts: 0, private: 0, files: 0 };
+  const sessionsRoot = path.join(dir, 'sessions');
+  let entries = [];
+  try {
+    entries = readdirSync(sessionsRoot, { withFileTypes: true });
+  } catch {
+    // No sessions folder: nothing but allow.json and .gitignore.
+  }
+  for (const entry of entries) {
+    const sessionDir = path.join(sessionsRoot, entry.name);
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      result.private += 1;
+      result.files += 1;
+      continue;
+    }
+    const session = {
+      id: entry.name,
+      dir: sessionDir,
+      public: [],
+      private: [],
+    };
+    for (const item of readdirSync(sessionDir, { withFileTypes: true })) {
+      result.files += 1;
+      const name = item.name;
+      const file = path.join(sessionDir, name);
+      if (!item.isFile()) {
+        session.private.push(name);
+      } else if (/^turn-\d+\.json$/u.test(name)) {
+        const ledger = readJsonFile(file);
+        if (ledger?.receipt) session.public.push(name);
+        // The typed text of a turn Stop had not finalised.
+        if (!ledger?.receipt || ledger.local_private !== undefined) {
+          session.private.push(name);
+        }
+      } else if (LEGACY_PUBLIC.some((re) => re.test(name))) {
+        session.public.push(name);
+      } else {
+        // LEGACY_PRIVATE, and anything else: never copied.
+        session.private.push(name);
+      }
+      if (LEGACY_RECEIPT_RE.test(name) && session.public.includes(name)) {
+        result.receipts += 1;
+      }
+    }
+    result.private += session.private.length;
+    result.sessions.push(session);
+  }
+  return result;
+}
+
+// Whether doctor --fix may delete a scanned folder: it holds no file at all
+// in its sessions (only allow.json, .gitignore and empty folders).
+export function legacyFolderEmpty(scan) {
+  return Boolean(scan) && scan.files === 0;
+}
+
+// Copies the public part of 0.1 receipts from scanned <project>/.zeroh
+// folders (scanLegacyFolder) into `dir`, under
+// legacy/<project>-<key>/sessions/<sid>/. Returns { dir, receipts, folders:
+// [{ dir, kept, receipts, removable }] }: `removable` when everything in the
+// folder was public and is now kept, so nothing is lost by deleting it.
+export function keepLegacyReceipts({
+  scans,
+  env = process.env,
+  dir = keptReceiptsDir(env),
+  now = new Date(),
+}) {
+  const manifest = readJsonFile(path.join(dir, KEPT_MANIFEST));
+  const known = manifest?.schema === KEPT_SCHEMA ? manifest : null;
+  const legacy = { ...(known?.legacy_receipts ?? {}) };
+  const folders = [];
+  let total = 0;
+  for (const scan of scans) {
+    const root = path.dirname(scan.dir);
+    const label = `${path.basename(root) || 'project'}-${projectKey(root)}`;
+    let receipts = 0;
+    let copied = 0;
+    let wanted = 0;
+    for (const session of scan.sessions) {
+      const relative = path.join('legacy', label, 'sessions', session.id);
+      for (const name of session.public) {
+        wanted += 1;
+        const source = path.join(session.dir, name);
+        let text;
+        if (/^turn-\d+\.json$/u.test(name)) {
+          const ledger = readJsonFile(source);
+          if (!ledger?.receipt) continue;
+          delete ledger.local_private;
+          text = `${JSON.stringify(ledger, null, 2)}\n`;
+          const id = ledger.receipt.receipt_id;
+          if (id) {
+            legacy[id] = {
+              file: path.join(relative, name).split(path.sep).join('/'),
+              from: path.join(session.dir, name),
+              version: '0.1',
+            };
+          }
+        } else if (name === 'wallet.json') {
+          const wallet = readJsonFile(source);
+          const publicKey = publicKeyOnly(wallet);
+          if (!publicKey) continue;
+          text = `${JSON.stringify(
+            {
+              accountId: wallet.accountId ?? null,
+              network: wallet.network ?? null,
+              publicJwk: publicKey.publicJwk,
+            },
+            null,
+            2,
+          )}\n`;
+        } else {
+          try {
+            text = readFileSync(source, 'utf8');
+          } catch {
+            continue;
+          }
+        }
+        writePrivate(path.join(dir, relative, name), text);
+        copied += 1;
+        if (LEGACY_RECEIPT_RE.test(name)) receipts += 1;
+      }
+    }
+    total += receipts;
+    folders.push({
+      dir: scan.dir,
+      kept: copied > 0,
+      receipts,
+      removable: scan.private === 0 && copied === wanted,
+    });
+  }
+  if (!total && !folders.some((folder) => folder.kept)) {
+    return { dir: null, receipts: 0, folders };
+  }
+  writeManifest(dir, {
+    receipts: known?.receipts ?? {},
+    legacy,
+    now,
+  });
+  return { dir, receipts: total, folders };
 }
 
 // Whether `dir` is a folder of kept receipts (it holds the manifest).

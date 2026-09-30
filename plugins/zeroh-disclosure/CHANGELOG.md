@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.2
+
+Features: ~uninstall.clean, ~doctor, ~proxy.lifecycle (see [docs/features.md](docs/features.md))
+
+- **Receipts ZeroH Disclosure 0.1 kept in your projects are never deleted.** 0.1 wrote each
+  session's signed receipts, ProofPacks and keys to `<project>/.zeroh/sessions/<session>/`.
+  1.0.1's `doctor --fix` and `uninstall` deleted those folders as "left by an earlier test build".
+  Now `doctor --fix` never touches them (it removes only an empty one, and names the others).
+  `uninstall` copies their public part (the signed receipts without the typed text of an
+  unfinished turn, ProofPacks, evidence events and the public key) to
+  `<receipts folder>/legacy/`, and never copies a private key, the session key or a typed value.
+  A folder that still holds one of those stays where it is; uninstall says where it is and gives
+  the command that deletes it. `--delete-receipts` doesn't delete them either.
+- **Uninstall removes the plugin last.** It loads everything it needs first, then takes out the
+  proxy, its settings entry, the status line and ZeroH's folder, keeps the receipts, and only
+  then runs `claude plugin uninstall`, so Claude Code deleting the plugin's folder can't stop the
+  cleanup halfway.
+- **A plugin update no longer refuses the requests of other open sessions.** The proxy is shared
+  by every Claude Code session. When one session started a newer version, the old proxy stopped
+  before the new one had loaded, and requests other sessions sent in that time failed with
+  "connection refused" (a subagent died in dogfooding). Now the new proxy loads first and then
+  takes the port over from the old one within milliseconds. The old one finishes its open
+  requests and still serves requests already on its open connections. A connection attempt in
+  those milliseconds is refused once, and Claude Code's retry succeeds. A handover with no gap at
+  all (passing the listening port itself) is planned for 1.1.
+
 ## 1.0.1
 
 - The settings guard no longer refuses paths that merely start with ZeroH's folder name (`~/.zeroh-backup`, `<home>-something`): a path counts as ZeroH's only when it is the folder or inside it.

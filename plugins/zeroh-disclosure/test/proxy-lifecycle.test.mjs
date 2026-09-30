@@ -520,8 +520,8 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   assert.equal(existsSync(path.join(project, '.zeroh')), false);
   assert.ok(existsSync(path.join(env.ZEROH_HOME, 'projects')));
   assert.ok(existsSync(path.join(env.ZEROH_HOME, 'vault.key')));
-  // A folder an earlier test build left in the project goes too; one that
-  // holds anything else is left alone.
+  // An empty folder an earlier build left in the project goes too; one that
+  // holds anything else is left alone (0.1 receipts: legacy-receipts.test).
   mkdirSync(path.join(project, '.zeroh', 'sessions', 'old'), {
     recursive: true,
   });
@@ -586,8 +586,8 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   assert.match(mistaken.stderr, /leaves it alone/u);
   assert.ok(existsSync(env.HOME));
 
-  // T-38: with the session still running, uninstall removes the plugin
-  // first, then everything else, and tells the user to exit the session.
+  // T-38: with the session still running, uninstall removes everything,
+  // the plugin last, and tells the user to exit the session.
   const removed = uninstall('--yes');
   assert.equal(removed.status, 0, removed.stderr);
   assert.deepEqual(readFileSync(calls, 'utf8').trim().split('\n'), [

@@ -1127,6 +1127,80 @@ test('a plugin update restarts the daemon with the new code; an older copy never
   assert.equal(readJsonFile(path.join(runtime, 'build.json')).version, '1.0.1');
 });
 
+// Dogfood, 2026-09-30: a session that loaded 1.0.1 upgraded the shared
+// daemon, and model requests other sessions sent meanwhile failed with
+// ECONNREFUSED (a subagent died). The new daemon now loads first and takes
+// the port over from the old one at once; the old one finishes its open
+// requests and serves what arrives on its open connections. A client's
+// quick retry of a connection error (Claude Code retries them) covers the
+// few milliseconds the port changes hands; before 1.0.2 the port stayed
+// closed while the new daemon loaded, longer than those retries.
+test('a plugin update hands the port over: requests of running sessions are served throughout', async (t) => {
+  const isolated = isolatedEnvironment('proxy-handover');
+  const upstream = await fakeUpstream();
+  t.after(() => upstream.close());
+  isolated.env.ANTHROPIC_BASE_URL = upstream.url;
+  writeFileSync(isolated.settings, '{}\n');
+  t.after(async () => stopDefaultProxy({ env: isolated.env }));
+  const older = pluginCopy(isolated.root, { version: '1.0.0', name: 'h100' });
+  const newer = pluginCopy(isolated.root, { version: '1.0.1', name: 'h101' });
+  const first = await ensureDefaultProxy({
+    env: isolated.env,
+    root: isolated.root,
+    pluginRoot: older,
+    sessionId: 'ZEROHFAKE-handover',
+  });
+  const send = async () => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await postJson(`${first.proxyUrl}/v1/messages`, CLEAN_BODY, {
+          sessionId: 'ZEROHFAKE-handover',
+          headers: { connection: 'close' },
+        });
+      } catch (error) {
+        if (
+          !['ECONNREFUSED', 'ECONNRESET'].includes(error.code) ||
+          attempt >= 2
+        )
+          throw error;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+  };
+  let upgrading = true;
+  const results = [];
+  const traffic = (async () => {
+    while (upgrading) {
+      results.push(
+        await send().then(
+          (response) => response.status,
+          (error) => error.code || error.message,
+        ),
+      );
+    }
+  })();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const updated = await ensureDefaultProxy({
+    env: isolated.env,
+    root: isolated.root,
+    pluginRoot: newer,
+    sessionId: 'ZEROHFAKE-handover',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  upgrading = false;
+  await traffic;
+  assert.equal(updated.upgraded, true);
+  assert.notEqual(updated.pid, first.pid);
+  assert.equal(updated.proxyUrl, first.proxyUrl);
+  assert.equal((await probeProxy(updated.proxyUrl)).build.version, '1.0.1');
+  assert.ok(results.length > 10, `only ${results.length} request(s) sent`);
+  assert.deepEqual(
+    results.filter((status) => status !== 200),
+    [],
+    `${results.length} request(s) during the upgrade`,
+  );
+});
+
 // Windows re-test (rc.2): with no login item, typed secrets went out
 // unmasked. A machine that refuses login items now still gets the proxy for
 // its sessions: the entry is written, typing is masked, and the daemon takes

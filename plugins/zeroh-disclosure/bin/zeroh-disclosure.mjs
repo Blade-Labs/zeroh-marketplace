@@ -5,13 +5,7 @@
 // what ZeroH protects asks lib/user-authority.js first (Astra R3): it runs
 // for the user's own typed slash command, or after the user confirms it in a
 // terminal outside Claude Code; from anywhere else it changes nothing.
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { writePrivateFile } from '../lib/private-fs.js';
 import os from 'node:os';
 import path from 'node:path';
@@ -795,18 +789,29 @@ async function cmdProxy(args) {
 
 // Removes everything ZeroH Disclosure keeps on this machine (LV-F8, LP-F6):
 // the proxy entry in every Claude Code settings file it wrote to, the proxy
-// and its login item, every <project>/.zeroh it knows about, and ZEROH_HOME
-// (vault, keys, config, allow list, grants, receipts' commitment keys,
-// reports, the proxy's runtime copy). The receipts are kept, value-free,
+// and its login item, the <project>/.zeroh folders earlier builds left
+// (never their receipts, see below), ZEROH_HOME (vault, keys, config, allow
+// list, grants, receipts' commitment keys, reports, the proxy's runtime
+// copy), and last the plugin itself. The receipts are kept, value-free,
 // with the public keys that verify them, in a folder of their own
-// (lib/receipt-keep.js), unless --delete-receipts. Run it before removing
-// the plugin; it asks first unless --yes.
+// (lib/receipt-keep.js), unless --delete-receipts. It asks first unless
+// --yes.
+//
+// Receipts ZeroH Disclosure 0.1 wrote inside a project
+// (<project>/.zeroh/sessions/<sid>/) are never deleted, not even with
+// --delete-receipts: their public part is copied to the kept-receipts
+// folder, and a folder that also holds that version's private keys or typed
+// values stays where it is; uninstall says where and how to delete it.
+//
+// Every module it needs is loaded before anything is removed, and the
+// plugin goes last: Claude Code may delete the plugin's folder when it
+// uninstalls it, and this command runs from there.
 //
 // A Claude Code session that still runs with the plugin would set ZeroH up
-// again at its next prompt, so uninstall refuses while one is live (--force
-// when none really is: a session that crashed never said it ended). It never
-// deletes a folder that does not look like a ZeroH home (a mistaken
-// ZEROH_HOME=%LOCALAPPDATA% must not wipe it).
+// again at its next prompt, so the tombstone is written first: a session
+// still running then does nothing more (T-38). It never deletes a folder
+// that does not look like a ZeroH home (a mistaken ZEROH_HOME=%LOCALAPPDATA%
+// must not wipe it).
 async function cmdUninstall(args) {
   const home = path.resolve(zerohHome());
   const unsafe = notAZerohHome(home);
@@ -815,19 +820,35 @@ async function cmdUninstall(args) {
       `${home} ${unsafe}, so uninstall leaves it alone. Check ZEROH_HOME; nothing was removed.`,
     );
   }
-  const { liveMaskingRoots, proxyPaths } =
-    await import('../lib/proxy-state.js');
+  const [
+    { liveMaskingRoots, proxyPaths },
+    { isKeptReceiptsDir, keepLegacyReceipts, keepReceipts, keptReceiptsDir },
+    { removePlugin, uninstallCommandFor },
+    { markUninstalled, UNINSTALL_MARKER },
+    { removeProxyEverywhere },
+    { resolveClaudeSettingsPath },
+    { removeEverywhere },
+    { writeSessionReceiptHtml },
+  ] = await Promise.all([
+    import('../lib/proxy-state.js'),
+    import('../lib/receipt-keep.js'),
+    import('../lib/plugin-removal.js'),
+    import('../lib/uninstall-marker.js'),
+    import('../lib/proxy-manager.js'),
+    import('../lib/claude-settings.js'),
+    import('../lib/statusline-settings.js'),
+    import('../lib/report.js'),
+  ]);
   const live = [...liveMaskingRoots(proxyPaths())];
-  const projects = (await legacyProjectFolders()).filter(
-    (dir) => path.resolve(dir) !== home,
+  const legacy = (await legacyProjectFolders()).filter(
+    (scan) => path.resolve(scan.dir) !== home,
   );
-  const { isKeptReceiptsDir, keepReceipts, keptReceiptsDir } =
-    await import('../lib/receipt-keep.js');
+  const legacyEmpty = legacy.filter((scan) => scan.files === 0);
+  const legacyHeld = legacy.filter((scan) => scan.files > 0);
   const deleteReceipts = Boolean(args['delete-receipts']);
   const receiptsDir = keptReceiptsDir();
   const plan = [
     'This removes ZeroH Disclosure from this machine, in this order:',
-    '  - the plugin from Claude Code (claude plugin uninstall), so no new session sets ZeroH up again',
     "  - the local proxy's entry in your Claude Code settings (your own setting goes back), the proxy's login item and its runtime copy; a proxy still serving an open session passes it through unmasked until it is idle, then exits, and nothing starts it again",
     "  - ZeroH's status line in your Claude Code settings, if you turned it on (your own status line stays)",
     deleteReceipts
@@ -836,7 +857,15 @@ async function cmdUninstall(args) {
     ...(deleteReceipts && isKeptReceiptsDir(receiptsDir)
       ? [`  - ${receiptsDir}: receipts an earlier uninstall kept`]
       : []),
-    ...projects.map((dir) => `  - ${dir} (left by an earlier test build)`),
+    ...legacyEmpty.map(
+      (scan) => `  - ${scan.dir} (empty, left by an earlier build)`,
+    ),
+    ...legacyHeld.map((scan) =>
+      deleteReceipts
+        ? `  - not ${scan.dir}: it holds files of ZeroH Disclosure 0.1 (${scan.receipts} receipt(s)); uninstall never deletes them and says how to`
+        : `  - ${scan.dir}: files of ZeroH Disclosure 0.1 (${scan.receipts} receipt(s)); their public part is copied to ${receiptsDir}, and the folder is removed only when nothing private is left in it`,
+    ),
+    '  - last, the plugin from Claude Code (claude plugin uninstall)',
     ...(deleteReceipts
       ? []
       : [
@@ -857,27 +886,19 @@ async function cmdUninstall(args) {
     return;
   }
   if (!(await authorized(plan))) return;
-  // The plugin first, so no new session sets ZeroH up again; then the
-  // tombstone, so a session still running does nothing more (T-38).
-  const { removePlugin, uninstallCommandFor } =
-    await import('../lib/plugin-removal.js');
-  const plugin = removePlugin();
-  const { markUninstalled } = await import('../lib/uninstall-marker.js');
+  // The tombstone first, so a session still running does nothing more
+  // (T-38).
   try {
     markUninstalled();
   } catch {
     // A ZeroH folder that can't be written: sessions still running may set
     // ZeroH up again until they exit (said below).
   }
-  const { removeProxyEverywhere } = await import('../lib/proxy-manager.js');
   const proxy = await removeProxyEverywhere({ retire: true });
   // Only ZeroH's own statusLine entry, from every settings file it was
   // written to; a status line of the user's stays.
   let statusline = [];
   try {
-    const { resolveClaudeSettingsPath } =
-      await import('../lib/claude-settings.js');
-    const { removeEverywhere } = await import('../lib/statusline-settings.js');
     statusline = removeEverywhere({
       home,
       settingsPaths: [resolveClaudeSettingsPath()],
@@ -893,7 +914,6 @@ async function cmdUninstall(args) {
   let keepFailed = null;
   if (!deleteReceipts) {
     try {
-      const { writeSessionReceiptHtml } = await import('../lib/report.js');
       kept = await keepReceipts({
         home,
         dir: receiptsDir,
@@ -907,13 +927,38 @@ async function cmdUninstall(args) {
       );
     }
   }
-  const { UNINSTALL_MARKER } = await import('../lib/uninstall-marker.js');
+  // 0.1 receipts in projects: copied, and a folder is deleted only when all
+  // it held is now kept. With --delete-receipts nothing is copied and the
+  // folders stay: uninstall never deletes them, it says how to.
+  let legacyKept = { receipts: 0, folders: [] };
+  if (legacyHeld.length && !deleteReceipts) {
+    try {
+      legacyKept = keepLegacyReceipts({ scans: legacyHeld, dir: receiptsDir });
+    } catch (error) {
+      console.error(
+        `zeroh-disclosure: could not copy the receipts of ZeroH Disclosure 0.1 to ${receiptsDir} (${error.code || error.message}); they stay where they are`,
+      );
+    }
+  }
+  const legacyRemovable = new Set(
+    legacyKept.folders
+      .filter((folder) => folder.removable)
+      .map((folder) => folder.dir),
+  );
+  const legacyLeft = legacyHeld.filter(
+    (scan) => !legacyRemovable.has(scan.dir),
+  );
   const removed = [];
   // --delete-receipts: a full wipe, receipts an earlier uninstall kept too
   // (only a folder that holds ZeroH's kept-receipts manifest).
   const keptBefore =
     deleteReceipts && isKeptReceiptsDir(receiptsDir) ? [receiptsDir] : [];
-  for (const dir of [home, ...projects, ...keptBefore]) {
+  for (const dir of [
+    home,
+    ...legacyEmpty.map((scan) => scan.dir),
+    ...legacyRemovable,
+    ...keptBefore,
+  ]) {
     try {
       if (dir === home) {
         // Everything but the tombstone, which running sessions still read.
@@ -932,6 +977,8 @@ async function cmdUninstall(args) {
       );
     }
   }
+  // Last: the plugin, whose folder this command runs from.
+  const plugin = removePlugin();
   const pluginLines = plugin.unavailable
     ? [
         "Couldn't run Claude Code's `claude` command to remove the plugin. Remove it with: claude plugin uninstall zeroh-disclosure@zeroh",
@@ -952,6 +999,10 @@ async function cmdUninstall(args) {
     plugin.removed?.[0]?.id ??
     plugin.failed?.[0]?.id ??
     'zeroh-disclosure@zeroh';
+  const removeCommand = (dir) =>
+    process.platform === 'win32'
+      ? `Remove-Item -Recurse -Force "${dir}"`
+      : `rm -rf "${dir}"`;
   const receiptLines = deleteReceipts
     ? ['Deleted your receipts too (--delete-receipts).']
     : keepFailed
@@ -960,13 +1011,26 @@ async function cmdUninstall(args) {
         ]
       : kept.receipts
         ? [
-            `Kept your receipts: ${kept.receipts} signed receipt(s) of ${kept.sessions} session(s), with receipt.html, the session bundles and the public keys that verify them, in ${receiptsDir}. They hold no values. To delete them, remove that folder (${
-              process.platform === 'win32'
-                ? `Remove-Item -Recurse -Force "${receiptsDir}"`
-                : `rm -rf "${receiptsDir}"`
-            }).`,
+            `Kept your receipts: ${kept.receipts} signed receipt(s) of ${kept.sessions} session(s), with receipt.html, the session bundles and the public keys that verify them, in ${receiptsDir}. They hold no values. To delete them, remove that folder (${removeCommand(receiptsDir)}).`,
           ]
-        : ['There were no receipts to keep.'];
+        : legacyKept.receipts
+          ? []
+          : ['There were no receipts to keep.'];
+  const legacyLines = [
+    ...(legacyKept.receipts
+      ? [
+          `Kept ${legacyKept.receipts} receipt(s) and ProofPack(s) of ZeroH Disclosure 0.1 from your projects, with the public keys that verify them, in ${path.join(receiptsDir, 'legacy')}. They hold no values.`,
+        ]
+      : []),
+    ...legacyLeft.map((scan) => {
+      const copied =
+        legacyKept.folders.find((folder) => folder.dir === scan.dir)
+          ?.receipts ?? 0;
+      return copied
+        ? `Left ${scan.dir}: besides the ${copied} receipt(s) and ProofPack(s) copied above, it holds files of ZeroH Disclosure 0.1 that are not kept anywhere else (that version's private signing key, session key or typed values). ZeroH no longer needs them; to delete the folder: ${removeCommand(scan.dir)}`
+        : `Left ${scan.dir}: it holds files of ZeroH Disclosure 0.1${scan.receipts ? `, ${scan.receipts} signed receipt(s) and ProofPack(s) among them,` : ''} and uninstall never deletes those. ZeroH no longer needs them; to delete the folder: ${removeCommand(scan.dir)}`;
+    }),
+  ];
   print(
     {
       ...proxy,
@@ -981,10 +1045,14 @@ async function cmdUninstall(args) {
             count: kept.receipts,
             sessions: kept.sessions,
           },
+      legacy: {
+        kept: legacyKept.receipts,
+        dir: legacyKept.receipts ? receiptsDir : null,
+        left: legacyLeft.map((scan) => scan.dir),
+      },
     },
     args.json,
     [
-      ...pluginLines,
       ...statusline.map((file) => `Removed ZeroH's status line from ${file}.`),
       proxy.restored.length
         ? `Took the ZeroH entry out of ${proxy.restored.length} Claude Code settings file(s).`
@@ -996,6 +1064,8 @@ async function cmdUninstall(args) {
           : `Removed ${dir}`,
       ),
       ...receiptLines,
+      ...legacyLines,
+      ...pluginLines,
       ...(running
         ? [
             // The retired proxy masks nothing: with the vault and the hooks
@@ -1012,40 +1082,36 @@ async function cmdUninstall(args) {
   );
 }
 
-// <project>/.zeroh folders left by earlier test builds (D-15: nothing lives in
-// the project any more), for the projects ZeroH knows, and only when they
-// hold nothing but ZeroH's own files.
+// <project>/.zeroh folders earlier builds left (D-15: nothing lives in the
+// project any more), for the projects ZeroH knows, and only when they hold
+// nothing but ZeroH's own files: each scanned (lib/receipt-keep.js
+// scanLegacyFolder), so what they hold is known before anything goes.
 async function legacyProjectFolders() {
-  // Declared here: the commands run while this module is still loading.
-  const ours = new Set(['sessions', 'allow.json', '.gitignore']);
+  const { scanLegacyFolder } = await import('../lib/receipt-keep.js');
   const roots = await registeredProjectRoots().catch(() => []);
   return roots
-    .map((root) => path.join(root, '.zeroh'))
-    .filter((dir) => {
-      try {
-        const names = readdirSync(dir);
-        return (
-          statSync(dir).isDirectory() &&
-          names.length > 0 &&
-          names.every((name) => ours.has(name))
-        );
-      } catch {
-        return false;
-      }
-    });
+    .map((root) => scanLegacyFolder(path.join(root, '.zeroh')))
+    .filter(Boolean);
 }
 
+// doctor --fix: never a receipt or a key. Only a folder with no file in its
+// sessions goes; the others are reported (uninstall keeps their receipts).
 async function removeLegacyProjectFolders() {
   const removed = [];
-  for (const dir of await legacyProjectFolders()) {
+  const held = [];
+  for (const scan of await legacyProjectFolders()) {
+    if (scan.files > 0) {
+      held.push(scan);
+      continue;
+    }
     try {
-      rmSync(dir, { recursive: true, force: true });
-      removed.push(dir);
+      rmSync(scan.dir, { recursive: true, force: true });
+      removed.push(scan.dir);
     } catch {
       // Left for uninstall or the next doctor --fix.
     }
   }
-  return removed;
+  return { removed, held };
 }
 
 // Why `dir` is not a folder uninstall may delete, or null: it is (or holds)
@@ -1284,9 +1350,12 @@ async function cmdDoctor(args, cwd) {
   const stale = integrity.filter(({ state }) => state === 'stale');
   const integrityFound = stale.map((result) => integrityLines(result)[0]);
   const integrityFix = stale.map((result) => integrityLines(result)[1]);
-  // Receipts are never touched here (D-15); only folders earlier test
-  // builds left inside projects go.
-  const legacy = fix ? await removeLegacyProjectFolders() : [];
+  // Receipts are never touched here (D-15): only an empty folder an earlier
+  // build left inside a project goes; one that holds 0.1 receipts or keys
+  // stays, and is named.
+  const legacy = fix
+    ? await removeLegacyProjectFolders()
+    : { removed: [], held: [] };
   const lines = [
     `ZeroH Disclosure doctor${fix ? ' --fix' : ''}`,
     `Checked: your Claude Code settings${proxy.settingsPath ? ` (${proxy.settingsPath})` : ''}, the plugin folders Claude Code runs, the local proxy and its login item, files left by earlier builds, and the vault key and every project vault in ${path.resolve(zerohHome())}.`,
@@ -1311,11 +1380,15 @@ async function cmdDoctor(args, cwd) {
           ? ['Removed files left by earlier builds.']
           : []),
         ...vaults.fixed,
-        ...legacy.map(
-          (dir) => `Removed ${dir}, left by an earlier test build.`,
+        ...legacy.removed.map(
+          (dir) => `Removed ${dir}, left empty by an earlier build.`,
         ),
       ]
     : [];
+  const legacyHeldLines = legacy.held.map(
+    (scan) =>
+      `Left ${scan.dir}: it holds files of ZeroH Disclosure 0.1${scan.receipts ? ` (${scan.receipts} signed receipt(s) and ProofPack(s))` : ''}. doctor never touches receipts; /zeroh-disclosure:uninstall keeps their public part.`,
+  );
   const { loginItemFix, loginItemReason } =
     await import('../lib/service-manager.js');
   const { staleMarketplaceName, staleMarketplaceText } =
@@ -1339,6 +1412,9 @@ async function cmdDoctor(args, cwd) {
         ? ['Fixed:', ...fixedLines.map((line) => `  - ${line}`)]
         : ['Nothing to fix: the local proxy was not set up.']),
     );
+  }
+  if (legacyHeldLines.length) {
+    lines.push('Kept:', ...legacyHeldLines.map((line) => `  - ${line}`));
   }
   if (open.length) {
     lines.push('Found:', ...open.map((finding) => `  - ${finding}`));
@@ -1373,6 +1449,9 @@ async function cmdDoctor(args, cwd) {
       plugin: integrity,
       vault: vaults.checked,
       actions: fixedLines,
+      ...(legacy.held.length
+        ? { legacyKept: legacy.held.map((scan) => scan.dir) }
+        : {}),
     },
     args.json,
     lines,

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "platforms": [
     "claude-code",
     "codex",
@@ -293,7 +293,7 @@
     {
       "id": "proxy.lifecycle",
       "area": "install",
-      "description": "The local proxy runs as you on 127.0.0.1 and starts at login. A proxy that stopped is restarted within the prompt's budget, restarts with new code after a plugin update, and removes itself 24 hours after the plugin is gone. Where the system refuses the login item, the proxy still runs for each session, so what you type is masked, and takes its settings entry out once no ZeroH session is open; the banner, status and doctor say why the login item failed and how to fix it.",
+      "description": "The local proxy runs as you on 127.0.0.1 and starts at login. A proxy that stopped is restarted within the prompt's budget, restarts with new code after a plugin update (the new proxy takes the port over from the old one once it is loaded, so requests of the sessions still open are not refused; the old one finishes its open requests), and removes itself 24 hours after the plugin is gone. Where the system refuses the login item, the proxy still runs for each session, so what you type is masked, and takes its settings entry out once no ZeroH session is open; the banner, status and doctor say why the login item failed and how to fix it.",
       "claude_code": "LaunchAgent, systemd user unit, XDG autostart or per-user scheduled task (task XML written as UTF-16 with a byte order mark); checkSessionProxy, code-hash restart, orphan cleanup, session-only daemon without a login item",
       "evidence": [
         "lib/service-manager.js",
@@ -3142,7 +3142,7 @@
     {
       "id": "doctor",
       "area": "management",
-      "description": "`/zeroh-disclosure:doctor` checks the proxy, its settings entry, the login item (and why the system refused it), the vaults, whether the plugin folder Claude Code runs matches its release and whether the public marketplace is still registered under its old name, and says what to do next; `--fix` is the one reset (it removes ZeroH's settings entry, retires this install's proxy so open sessions keep working, stops any other ZeroH proxy it finds and resets vaults that can't be read); `--report` prints a paste-safe summary with no values, keys, paths or user names.",
+      "description": "`/zeroh-disclosure:doctor` checks the proxy, its settings entry, the login item (and why the system refused it), the vaults, whether the plugin folder Claude Code runs matches its release and whether the public marketplace is still registered under its old name, and says what to do next; `--fix` is the one reset (it removes ZeroH's settings entry, retires this install's proxy so open sessions keep working, stops any other ZeroH proxy it finds and resets vaults that can't be read; it never deletes receipts, not even those ZeroH Disclosure 0.1 kept inside a project); `--report` prints a paste-safe summary with no values, keys, paths or user names.",
       "claude_code": "slash command `!` block; user-only CLI `doctor --fix`; `doctor --report` rebuilt from the fixed report schema",
       "evidence": [
         "bin/zeroh-disclosure.mjs",
@@ -3154,7 +3154,8 @@
         "test/vault-lifecycle.test.mjs",
         "test/plugin-integrity.test.mjs",
         "lib/first-run.js",
-        "test/marketplace-name.test.mjs"
+        "test/marketplace-name.test.mjs",
+        "test/legacy-receipts.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3293,7 +3294,7 @@
     {
       "id": "uninstall.clean",
       "area": "management",
-      "description": "`/zeroh-disclosure:uninstall` removes the plugin, the proxy's settings entry, login item and runtime copy, the status line and ZeroH's folder (vault, keys, settings, allow rules, grants) in one step (typing the user-only command is the confirmation; `--dry-run` only shows what it would do). It keeps the signed receipts, value-free, with the public keys that verify them, in a folder of their own (`~/ZeroH Receipts`, `%LOCALAPPDATA%\\ZeroH Receipts` on Windows); `--delete-receipts` removes them too. The session you ran it in keeps working until you exit: the proxy is retired, not stopped, passes it through unmasked, and every hook stands down.",
+      "description": "`/zeroh-disclosure:uninstall` removes the plugin, the proxy's settings entry, login item and runtime copy, the status line and ZeroH's folder (vault, keys, settings, allow rules, grants) in one step (typing the user-only command is the confirmation; `--dry-run` only shows what it would do). It keeps the signed receipts, value-free, with the public keys that verify them, in a folder of their own (`~/ZeroH Receipts`, `%LOCALAPPDATA%\\ZeroH Receipts` on Windows); `--delete-receipts` removes them too. Receipts ZeroH Disclosure 0.1 kept inside a project (`<project>/.zeroh`) are never deleted: their public part is copied there too, and a folder that also holds that version's private keys or typed values is left in place, with the command that deletes it. The plugin is removed last. The session you ran it in keeps working until you exit: the proxy is retired, not stopped, passes it through unmasked, and every hook stands down.",
       "claude_code": "user-only slash command and CLI",
       "evidence": [
         "lib/plugin-removal.js",
@@ -3302,7 +3303,8 @@
         "test/proxy-lifecycle.test.mjs",
         "test/statusline.test.mjs",
         "lib/receipt-keep.js",
-        "test/receipt-keep.test.mjs"
+        "test/receipt-keep.test.mjs",
+        "test/legacy-receipts.test.mjs"
       ],
       "platforms": {
         "claude-code": {

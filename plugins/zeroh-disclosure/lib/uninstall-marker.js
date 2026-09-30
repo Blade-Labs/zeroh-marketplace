@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The "uninstalled" tombstone (T-38). `uninstall` removes the plugin from
-// Claude Code and then everything in ZEROH_HOME except this file; a Claude
+// The "uninstalled" tombstone (T-38). `uninstall` writes it first, removes
+// everything in ZEROH_HOME except this file, and last the plugin from Claude
+// Code; a Claude
 // Code session already running keeps the plugin's hooks loaded until the user
 // exits it, and those hooks must not set ZeroH up again. While it exists
 // every hook does nothing, except the SessionStart of a newly started

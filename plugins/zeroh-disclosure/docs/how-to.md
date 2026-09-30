@@ -787,22 +787,28 @@ Code, where a script could call it, `node "<plugin>/bin/zeroh-disclosure.mjs" un
 what it removes, and `uninstall --yes` removes it after you type the code it shows. It never deletes a `ZEROH_HOME` that is your home, a system folder or holds none of
 ZeroH's files. It removes:
 
-- the plugin from Claude Code, through Claude Code's own `claude plugin list --json` and
-  `claude plugin uninstall <id> --scope <scope>` (never by editing Claude Code's files), first, so
-  no new session sets ZeroH up again; when the `claude` command isn't available it prints the
-  exact command to run;
 - ZeroH's entry in every Claude Code settings file it wrote to (your own `ANTHROPIC_BASE_URL`
   goes back) and the restore records next to them;
 - the proxy and its per-user `zeroh-disclosure-proxy` login item (a user systemd unit or XDG
   autostart entry on Linux, `~/Library/LaunchAgents` on macOS, the per-user Task Scheduler
   library on Windows; it never needs administrator rights);
-- a `<project>/.zeroh/` folder an earlier test build left in a project listed in
-  `<ZEROH_HOME>/projects.json`, only when it holds nothing but ZeroH's files (`doctor --fix`
-  removes these too);
+- an empty `<project>/.zeroh/` folder an earlier build left in a project listed in
+  `<ZEROH_HOME>/projects.json` (`doctor --fix` removes these too). A folder where ZeroH
+  Disclosure 0.1 kept receipts (`<project>/.zeroh/sessions/`) is never deleted: uninstall copies
+  their public part (signed receipts, ProofPacks, evidence events and the public key) to the
+  receipts folder below, under `legacy/`, never a private key or a typed value. A folder that
+  still holds one of those stays, and uninstall prints the command that deletes it. With
+  `--delete-receipts` it copies nothing and leaves these folders, with the same command; `doctor
+--fix` leaves all of them alone;
 - `<ZEROH_HOME>/` itself: the vault and its key, the signing and allow-list keys, your settings
   (`config.env`), allow rules, unmask grants, receipt commitment keys, reports and the proxy's
   runtime copy. Only an empty `uninstalled` marker stays, so sessions still open do nothing; you
-  can delete the folder once they are closed.
+  can delete the folder once they are closed;
+- last, the plugin from Claude Code, through Claude Code's own `claude plugin list --json` and
+  `claude plugin uninstall <id> --scope <scope>` (never by editing Claude Code's files); when the
+  `claude` command isn't available it prints the exact command to run. It goes last because
+  Claude Code may delete the plugin's folder, which uninstall runs from; everything uninstall
+  needs is loaded before it starts.
 
 It keeps your receipts. Every signed receipt, each session's `receipt.html` and receipt bundle,
 and the public key that verifies them move to one folder:

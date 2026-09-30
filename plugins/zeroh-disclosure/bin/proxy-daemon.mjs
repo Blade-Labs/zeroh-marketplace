@@ -17,7 +17,8 @@
 //   body, subagents, --resume, --continue and --fork-session included; the
 //   only exceptions seen are the body-less HEAD /api/hello and, on resume,
 //   one startup quota request under a new id.
-// - It exits when its port is taken, when proxy.json is deleted or replaced
+// - It exits when its port is taken (unless it was started to take the port
+//   over from this home's daemon: an update, see takePort), when proxy.json is deleted or replaced
 //   (ZEROH_HOME removed, `proxy off`, `doctor --fix`), and once the plugin
 //   has been gone for 24 hours (after restoring the settings files).
 // - Before it leaves for any reason other than handing over to a new daemon
@@ -50,6 +51,8 @@
 //   same way, passing everything (the sessions still on its port have no
 //   live hooks), instead of closing a port a session may still use (rule 1).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -71,7 +74,6 @@ import {
 import {
   createMaskingProxy,
   knownValueMasker,
-  listen,
   MESSAGES,
 } from '../lib/proxy.js';
 import {
@@ -343,6 +345,9 @@ const HEALTH_RE = /^(?:\/z\/([A-Za-z0-9_-]{16,128}))?\/_zeroh\/health$/u;
 // How long a leaving daemon lets open requests (long answers) finish. It
 // has released the port at once, so a new daemon is already serving.
 const DRAIN_MS = 10 * 60 * 1000;
+// How long a leaving daemon keeps an idle kept-alive connection open for a
+// request already on its way (see stop).
+const STOP_IDLE_GRACE_MS = 1_000;
 
 // A retired daemon exits once no request has come for this long. Long, on
 // purpose: a session left open over lunch must still answer (Rule 1: never
@@ -509,9 +514,14 @@ function stop(reason, { restore = false, unregister = false } = {}) {
     }
   }
   removePidFile();
-  // Open requests finish; idle connections close.
-  server.close(() => process.exit(0));
-  server.closeIdleConnections?.();
+  // It stops accepting at once (a new daemon may be taking the port over),
+  // but unlike http's close() it does not cut its idle kept-alive
+  // connections at once: a request already on its way on one is served,
+  // not reset. Every answer from now on closes its connection, the idle
+  // ones are closed after STOP_IDLE_GRACE_MS, and it exits when the last
+  // connection is gone.
+  net.Server.prototype.close.call(server, () => process.exit(0));
+  setTimeout(() => server.closeIdleConnections?.(), STOP_IDLE_GRACE_MS).unref();
   setTimeout(() => process.exit(0), DRAIN_MS).unref();
 }
 
@@ -566,11 +576,86 @@ const server = createMaskingProxy({
   },
 });
 
+// An update or a new network environment (lib/proxy-manager.js): this
+// daemon was started to replace the one on its port. It is loaded and ready
+// before it asks that one to let go (POST /_zeroh/shutdown with this home's
+// control token), then binds the port within milliseconds, so the sessions
+// still sending requests see no gap they would notice; the old daemon
+// finishes its open requests. Anything that doesn't answer with this home's
+// token (another program, another home's daemon) keeps the port.
+const TAKEOVER = process.env.ZEROH_PROXY_TAKEOVER === '1';
+delete process.env.ZEROH_PROXY_TAKEOVER;
+const TAKEOVER_BIND_MS = 5_000;
+
+function askToHandOver(port) {
+  return new Promise((resolve) => {
+    const request = http.request({
+      host: '127.0.0.1',
+      port,
+      path: '/_zeroh/shutdown',
+      method: 'POST',
+      headers: { 'x-zeroh-control': config.controlToken },
+      timeout: 2_000,
+      agent: false,
+    });
+    request.once('response', (response) => {
+      response.resume();
+      resolve(response.statusCode === 204);
+    });
+    request.once('timeout', () => request.destroy());
+    request.once('error', () => resolve(false));
+    request.end();
+  });
+}
+
+// One bind attempt that leaves no listener behind when it fails.
+function bindOnce(port) {
+  return new Promise((resolve, reject) => {
+    const failed = (error) => {
+      server.off('listening', bound);
+      reject(error);
+    };
+    const bound = () => {
+      server.off('error', failed);
+      resolve();
+    };
+    server.once('error', failed);
+    server.once('listening', bound);
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+async function takePort(port) {
+  try {
+    await bindOnce(port);
+    return true;
+  } catch (error) {
+    if (error.code !== 'EADDRINUSE' || !TAKEOVER) throw error;
+  }
+  if (!(await askToHandOver(port))) return false;
+  const deadline = Date.now() + TAKEOVER_BIND_MS;
+  while (Date.now() < deadline) {
+    try {
+      await bindOnce(port);
+      return true;
+    } catch (error) {
+      if (error.code !== 'EADDRINUSE') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+  }
+  return false;
+}
+
+// A stopping daemon closes each connection after its answer (see stop).
+server.on('request', (_request, response) => {
+  if (stopping) response.shouldKeepAlive = false;
+});
+
 try {
-  await listen(server, Number(config.port), '127.0.0.1');
-} catch (error) {
   // Another daemon (or program) holds the port. A clean exit, so no login
   // item restarts this one in a loop; SessionStart picks the next move.
+  if (!(await takePort(Number(config.port)))) process.exit(0);
+} catch (error) {
   if (error.code === 'EADDRINUSE') process.exit(0);
   throw error;
 }

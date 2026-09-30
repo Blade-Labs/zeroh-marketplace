@@ -466,23 +466,36 @@ test('legacy prose entries in the vault are not matched exactly', () => {
   assert.match(out.text.split('\n')[2], /^\[PASSWORD-[0-9a-f]{6}\]$/);
 });
 
+// Fast, and not slower per entry: on a busy machine (a shared CI runner) the
+// absolute budget can pass its seconds; then a vault ten times smaller must
+// not be several times faster (a matcher that scans once per entry would be
+// about ten times faster).
 test('the exact matcher stays fast with thousands of vault entries', () => {
-  const p = tempProject({ env: false });
-  const vault = vaultFor(p);
-  for (let i = 0; i < 3000; i += 1)
-    vault.tokenFor(
-      'PASSWORD',
-      `ZEROHFAKE-${i.toString(36)}-value-${i}`,
-      'detected',
-    );
-  const last999 = `ZEROHFAKE-${(2999).toString(36)}-value-2999`;
-  const text = `${'ordinary log line with nothing secret in it\n'.repeat(20000)}${last999}\n`;
-  const started = Date.now();
-  let last;
-  for (let i = 0; i < 5; i += 1) last = scrub(text, { vault, known: [] });
-  assert.ok(/\[PASSWORD-[0-9a-f]{6}\]\n$/.test(last.text.slice(-40)));
-  assert.equal(last.replacements.length, 1);
-  assert.ok(Date.now() - started < 10_000, `took ${Date.now() - started} ms`);
+  const run = (entries) => {
+    const p = tempProject({ env: false });
+    const vault = vaultFor(p);
+    for (let i = 0; i < entries; i += 1)
+      vault.tokenFor(
+        'PASSWORD',
+        `ZEROHFAKE-${i.toString(36)}-value-${i}`,
+        'detected',
+      );
+    const lastValue = `ZEROHFAKE-${(entries - 1).toString(36)}-value-${entries - 1}`;
+    const text = `${'ordinary log line with nothing secret in it\n'.repeat(20000)}${lastValue}\n`;
+    const started = Date.now();
+    let last;
+    for (let i = 0; i < 5; i += 1) last = scrub(text, { vault, known: [] });
+    assert.ok(/\[PASSWORD-[0-9a-f]{6}\]\n$/.test(last.text.slice(-40)));
+    assert.equal(last.replacements.length, 1);
+    return Date.now() - started;
+  };
+  const ms = run(3000);
+  if (ms < 10_000) return;
+  const small = run(300);
+  assert.ok(
+    ms < 3 * small,
+    `took ${ms} ms with 3000 entries, ${small} ms with 300`,
+  );
 });
 
 // ---- keyed tokens ----------------------------------------------------------

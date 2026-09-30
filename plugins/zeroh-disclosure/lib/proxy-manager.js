@@ -489,6 +489,13 @@ function fixedPort(env) {
 // port is taken: one from a deleted or replaced home leaves it within
 // seconds, anything else keeps it, and then the daemon moves to a free port
 // (the settings entry follows).
+//
+// `replacing` (the health of the daemon on that port, which an update or a
+// new network environment replaces): the new daemon takes the port over
+// from it once it is loaded (bin/proxy-daemon.mjs ZEROH_PROXY_TAKEOVER), so
+// the old one serves until the new one listens. When the new one could not
+// take it (the old one did not let go in time), the old one is stopped and
+// its port waited for, as before 1.0.2.
 async function startDaemon({
   env,
   paths,
@@ -496,10 +503,12 @@ async function startDaemon({
   preferredPort,
   spawnProcess,
   deadline,
+  replacing = null,
 }) {
   const fixed = fixedPort(env);
   let port = fixed || config.port || preferredPort || (await freePort());
   let waited = false;
+  let takeover = Boolean(replacing) && port === config.port;
   for (let attempt = 0; attempt < 4; attempt += 1) {
     config.port = port;
     writeProxyConfig(paths, config);
@@ -511,7 +520,10 @@ async function startDaemon({
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
-        env: daemonEnvironment(env),
+        env: {
+          ...daemonEnvironment(env),
+          ...(takeover ? { ZEROH_PROXY_TAKEOVER: '1' } : {}),
+        },
       },
     );
     child.once?.('exit', (code) => (exited = code ?? 1));
@@ -520,8 +532,19 @@ async function startDaemon({
       const health = await probeProxy(portUrl(port), {
         controlToken: config.controlToken,
       });
-      if (health) return health;
+      // The daemon being replaced answers until it has handed over.
+      if (health && !(takeover && health.pid === replacing.pid)) return health;
       await delay(50);
+    }
+    if (takeover && exited !== null) {
+      // It did not hand over: stopped first, as before 1.0.2.
+      takeover = false;
+      await shutdownDaemon(port, config.controlToken);
+      await waitForPortFree(
+        port,
+        Math.min(PORT_RELEASE_WAIT_MS, deadline - Date.now()),
+      );
+      continue;
     }
     if (exited === null) {
       throw new Error('local proxy did not become healthy before the timeout');
@@ -680,6 +703,7 @@ async function ensureDefaultProxyLocked({
       })
     : null;
   let upgraded = false;
+  let replacing = null;
   const networkChanged =
     health &&
     health.network !== networkFingerprint(network, config.controlToken);
@@ -690,11 +714,14 @@ async function ensureDefaultProxyLocked({
     (health.retired || newerBuild(build, health.build) || networkChanged)
   ) {
     // New code, or a new network environment (a corporate proxy or CA the
-    // daemon does not use yet, LP-B1): the old daemon hands over its port,
-    // finishes its open requests and leaves.
+    // daemon does not use yet, LP-B1): the new daemon starts first, and
+    // only once it is loaded does the old one hand over its port; it
+    // finishes its open requests and leaves. The old daemon serves until
+    // then, so the sessions sending requests meanwhile are not refused
+    // (dogfood 2026-09-30: stopping it first left the port closed while the
+    // new one loaded, and another session's subagent died).
     const draining = Boolean(health.retired);
-    await shutdownDaemon(config.port, config.controlToken);
-    await waitForPortFree(config.port, PORT_RELEASE_WAIT_MS);
+    replacing = health;
     health = null;
     upgraded = !draining;
   }
@@ -708,6 +735,7 @@ async function ensureDefaultProxyLocked({
       preferredPort: loopbackPort(install.proxyUrl) || install.lastPort,
       spawnProcess,
       deadline,
+      replacing,
     });
     restarted = true;
   }
