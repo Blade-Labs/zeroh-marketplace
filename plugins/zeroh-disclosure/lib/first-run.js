@@ -59,15 +59,17 @@ export function removeFirstRunMarketplace({
   if (!source || !isDeepStrictEqual(entry, { source, autoUpdate: true })) {
     return false;
   }
-  if (added.created === false) {
+  // Records written before 1.0.4 (by 1.0.2 and 1.0.3) do not say whether
+  // ZeroH created the entry or added autoUpdate to the user's own, so only
+  // the entry ZeroH is known to have created goes; otherwise only autoUpdate.
+  if (added.created !== true) {
     delete entry.autoUpdate;
   } else {
-    // Older records did not store ownership; keep their original behavior.
     delete markets[added.marketplace];
     if (!Object.keys(markets).length) delete document.extraKnownMarketplaces;
   }
   writeSettingsFile(settingsPath, `${JSON.stringify(document, null, 2)}\n`);
-  return added.created === false ? 'autoUpdate' : 'entry';
+  return added.created === true ? 'entry' : 'autoUpdate';
 }
 
 export const FIRST_RUN_LINES = Object.freeze({

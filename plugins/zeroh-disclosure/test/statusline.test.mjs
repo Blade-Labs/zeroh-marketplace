@@ -14,6 +14,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  statSync,
   symlinkSync,
   utimesSync,
   writeFileSync,
@@ -28,7 +29,9 @@ import {
   grantTimeLeft,
   managedSettingsPath,
   NEVER_RAN_MS,
+  normaliseStyle,
   pluginEnabled,
+  pluginsRoot,
   projectKey,
   projectRootFrom,
   readJson,
@@ -48,6 +51,7 @@ import * as vault from '../lib/vault.js';
 import * as claudeSettings from '../lib/claude-settings.js';
 import * as marker from '../lib/uninstall-marker.js';
 import * as sessionStatus from '../lib/session-status.js';
+import * as pluginIntegrity from '../lib/plugin-integrity.js';
 import {
   isOurStatusLine,
   isOutdated,
@@ -115,6 +119,40 @@ function fixture({ status = undefined, sessionId = 's1' } = {}) {
     workspace: { project_dir: root, current_dir: root },
   };
   return { base, root, home, env, dir, input };
+}
+
+function installedPluginsPath(f) {
+  f.env.CLAUDE_CONFIG_DIR ??= path.join(f.base, 'claude-config');
+  return path.join(
+    f.env.CLAUDE_CONFIG_DIR,
+    'plugins',
+    'installed_plugins.json',
+  );
+}
+
+// Claude Code's install list; an entry without a scope is a user-scope one.
+// `enabled` is what the user settings file enables (Claude Code writes
+// zeroh-disclosure@zeroh: true on install).
+function installedPlugins(
+  f,
+  plugins,
+  { enabled = { 'zeroh-disclosure@zeroh': true } } = {},
+) {
+  const file = installedPluginsPath(f);
+  mkdirSync(path.dirname(file), { recursive: true });
+  const scoped = Object.fromEntries(
+    Object.entries(plugins).map(([id, entries]) => [
+      id,
+      entries.map((entry) => ({ scope: 'user', ...entry })),
+    ]),
+  );
+  writeFileSync(file, JSON.stringify({ version: 2, plugins: scoped }));
+  mkdirSync(path.dirname(f.env.ZEROH_CLAUDE_SETTINGS), { recursive: true });
+  writeFileSync(
+    f.env.ZEROH_CLAUDE_SETTINGS,
+    JSON.stringify({ enabledPlugins: enabled }),
+  );
+  return file;
 }
 
 const HEALTHY = {
@@ -251,11 +289,64 @@ test('something passed unchecked this turn turns the state yellow', () => {
   );
 });
 
-test('starting, and hooks that never ran', () => {
+test('a session that predates the latest ZeroH install asks for a restart', () => {
   const missing = fixture();
-  assert.equal(plain(line(missing)), `${SHIELD} ZeroH · 🟡 starting`);
+  installedPlugins(missing, {
+    'zeroh-disclosure@older-marketplace': [
+      { installedAt: new Date(NOW - 60_000).toISOString() },
+    ],
+    'zeroh-disclosure@zeroh': [
+      {
+        installedAt: new Date(NOW - 40_000).toISOString(),
+        lastUpdated: new Date(NOW - 10_000).toISOString(),
+      },
+    ],
+    'another-plugin@zeroh': [
+      { lastUpdated: new Date(NOW + 60_000).toISOString() },
+    ],
+  });
+  const input = { cost: { total_duration_ms: 30_000 } };
+  const model = statuslineModel({
+    input: { ...missing.input, ...input },
+    env: missing.env,
+    now: NOW,
+  });
+  assert.deepEqual(
+    {
+      level: model.level,
+      word: model.word,
+      fix: model.fix,
+      counts: model.counts,
+    },
+    {
+      level: 'warn',
+      word: 'started before ZeroH',
+      fix: 'restart Claude Code to protect this session',
+      counts: false,
+    },
+  );
+  const output = plain(line(missing, { input }));
   assert.equal(
-    plain(line(missing, { input: { cost: { total_duration_ms: 5_000 } } })),
+    output,
+    `${SHIELD} ZeroH · 🟡 started before ZeroH · restart Claude Code to protect this session`,
+  );
+  assert.doesNotMatch(output, /doctor/u);
+});
+
+test('starting, and hooks that never ran after ZeroH was installed', () => {
+  const missing = fixture();
+  installedPlugins(missing, {
+    'zeroh-disclosure@zeroh': [
+      { installedAt: new Date(NOW - 60_000).toISOString() },
+    ],
+  });
+  assert.equal(plain(line(missing)), `${SHIELD} ZeroH · 🟡 starting`);
+  const recent = fixture();
+  installedPlugins(recent, {
+    'zeroh-disclosure@zeroh': [{ installedAt: new Date(NOW).toISOString() }],
+  });
+  assert.equal(
+    plain(line(recent, { input: { cost: { total_duration_ms: 5_000 } } })),
     `${SHIELD} ZeroH · 🟡 starting`,
   );
   assert.equal(
@@ -266,8 +357,123 @@ test('starting, and hooks that never ran', () => {
     ),
     `${SHIELD} ZeroH · 🔴 hooks never ran · /zeroh-disclosure:doctor`,
   );
+  const fallback = statSync(PLUGIN).mtimeMs;
+  for (const unreadable of [false, true]) {
+    const f = fixture();
+    if (unreadable) {
+      const file = installedPluginsPath(f);
+      mkdirSync(file, { recursive: true });
+    }
+    assert.equal(
+      plain(
+        line(f, {
+          now: fallback + NEVER_RAN_MS + 5_000,
+          input: { cost: { total_duration_ms: NEVER_RAN_MS + 10_000 } },
+        }),
+      ),
+      `${SHIELD} ZeroH · 🔴 hooks never ran · /zeroh-disclosure:doctor`,
+    );
+  }
   const starting = fixture({ status: { v: 1, phase: 'starting' } });
   assert.equal(plain(line(starting)), `${SHIELD} ZeroH · 🟡 starting`);
+});
+
+// Astra FINDINGS-105/105b: only a copy this session would load explains
+// missing hooks; anything uncertain stays red.
+test('another project, a disabled copy or an oversized list keep hooks never ran red', () => {
+  const input = { cost: { total_duration_ms: NEVER_RAN_MS + 40_000 } };
+  const red = `${SHIELD} ZeroH · 🔴 hooks never ran · /zeroh-disclosure:doctor`;
+  const recent = new Date(NOW - 10_000).toISOString();
+  const old = new Date(NOW - 86_400_000).toISOString();
+
+  const otherProject = fixture();
+  installedPlugins(otherProject, {
+    'zeroh-disclosure@zeroh': [
+      { installedAt: old },
+      {
+        scope: 'project',
+        projectPath: path.join(otherProject.base, 'elsewhere'),
+        lastUpdated: recent,
+      },
+    ],
+  });
+  assert.equal(plain(line(otherProject, { input })), red);
+
+  const thisProject = fixture();
+  installedPlugins(thisProject, {
+    'zeroh-disclosure@zeroh': [
+      { installedAt: old },
+      { scope: 'local', projectPath: thisProject.root, lastUpdated: recent },
+    ],
+  });
+  assert.match(plain(line(thisProject, { input })), /🟡 started before ZeroH/u);
+
+  const disabledCopy = fixture();
+  installedPlugins(
+    disabledCopy,
+    {
+      'zeroh-disclosure@zeroh': [{ installedAt: old }],
+      'zeroh-disclosure@other-market': [{ lastUpdated: recent }],
+    },
+    {
+      enabled: {
+        'zeroh-disclosure@zeroh': true,
+        'zeroh-disclosure@other-market': false,
+      },
+    },
+  );
+  assert.equal(plain(line(disabledCopy, { input })), red);
+
+  const notListed = fixture();
+  installedPlugins(
+    notListed,
+    { 'zeroh-disclosure@zeroh': [{ lastUpdated: recent }] },
+    { enabled: {} },
+  );
+  assert.equal(plain(line(notListed, { input })), red);
+
+  const huge = fixture();
+  const file = installedPlugins(huge, {
+    'zeroh-disclosure@zeroh': [{ lastUpdated: recent }],
+  });
+  writeFileSync(
+    file,
+    `${JSON.stringify({ version: 2, plugins: { 'zeroh-disclosure@zeroh': [{ scope: 'user', lastUpdated: recent }] } })}${' '.repeat(1024 * 1024)}`,
+  );
+  assert.equal(plain(line(huge, { input })), red);
+});
+
+test('started before ZeroH has a compact restart form', () => {
+  const missing = fixture();
+  installedPlugins(missing, {
+    'zeroh-disclosure@zeroh': [
+      { lastUpdated: new Date(NOW - 10_000).toISOString() },
+    ],
+  });
+  const model = statuslineModel({
+    input: {
+      ...missing.input,
+      cost: { total_duration_ms: NEVER_RAN_MS + 10_000 },
+    },
+    env: missing.env,
+    now: NOW,
+  });
+  const style = normaliseStyle({
+    version: 1,
+    wording: 'compact',
+    labels: { masked: 'started before ZeroH' },
+  });
+  assert.equal(style.labels.masked, 'masked');
+  assert.equal(
+    plain(
+      renderStatusline(model, {
+        env: missing.env,
+        now: NOW,
+        style,
+      }),
+    ),
+    `${SHIELD} ZeroH · 🟡 old session · restart Claude Code to protect this session`,
+  );
 });
 
 test('not protecting: each reason, and never a throw', () => {
@@ -761,6 +967,16 @@ test('the built-in copies match the modules they copy', () => {
     claudeSettings.restoreRecordPath('/tmp/x/settings.json'),
   );
   assert.equal(uninstallMarkerPath(env), marker.uninstallMarkerPath(env));
+  for (const pluginEnv of [
+    { HOME: '/tmp/h' },
+    { CLAUDE_CONFIG_DIR: '/tmp/cfg' },
+    { CLAUDE_CODE_PLUGIN_CACHE_DIR: '/tmp/plugins' },
+  ]) {
+    assert.equal(
+      pluginsRoot(pluginEnv),
+      pluginIntegrity.pluginsRoot(pluginEnv),
+    );
+  }
   assert.equal(STATUS_FILE, sessionStatus.STATUS_FILE);
   const f = fixture();
   const sub = path.join(f.root, 'src', 'deep');

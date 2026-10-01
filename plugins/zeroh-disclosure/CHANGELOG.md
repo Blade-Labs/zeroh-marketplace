@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.5
+
+Features: ~statusline, ~uninstall.clean (see [docs/features.md](docs/features.md))
+
+- **Long-running sessions now ask for a restart when they predate ZeroH.** A session started before ZeroH was installed or updated could say `🔴 hooks never ran` and send you to doctor even though nothing was broken. It now says `🟡 started before ZeroH` and asks you to restart Claude Code so the session can be protected.
+- **Uninstall keeps a marketplace entry it can't prove ZeroH created.** On installs upgraded from 1.0.2 or 1.0.3, the first-run record does not say whether ZeroH created the `zeroh` marketplace entry or added auto-update to yours. Uninstall now removes only `autoUpdate` from such an entry; 1.0.4 deleted the whole entry, including one you had added yourself.
+- **A cancelled or refused uninstall no longer says "local cleanup failed".** Nothing was attempted, so no cleanup outcome is printed.
+
 ## 1.0.4
 
 Features: ~doctor, ~uninstall.clean, ~proxy.lifecycle (see [docs/features.md](docs/features.md))

@@ -130,7 +130,9 @@ try {
     const { clearUninstalled } = await import('../lib/uninstall-marker.js');
     clearUninstalled();
   }
-  if (command === 'uninstall' && args.yes && !args['dry-run']) {
+  // A removal that started, or one that failed, has an outcome to report; a
+  // cancelled or refused uninstall has already said so and attempted nothing.
+  if (command === 'uninstall' && (removalLock || removalFailure)) {
     console.log(
       localCleanupDone
         ? 'ZeroH Disclosure: local cleanup finished.'
@@ -1145,7 +1147,7 @@ async function cmdUninstall(args) {
         ? ['Removed the marketplace auto-update entry ZeroH created.']
         : marketplaceAutoUpdate === 'autoUpdate'
           ? [
-              'Removed auto-update added by ZeroH; kept your marketplace entry and source.',
+              'Removed auto-update added by ZeroH; kept the marketplace entry and its source.',
             ]
           : []),
       proxy.restored.length

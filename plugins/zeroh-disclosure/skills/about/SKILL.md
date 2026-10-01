@@ -132,7 +132,7 @@ test guide, https://witty-river-07cbf8503.1.azurestaticapps.net/try/:
    `curl https://api.stripe.com/v1/balance` with it, ZeroH puts the real key back locally, and
    Stripe answers 200 with `"livemode": false`. No setup: `api.stripe.com` is a built-in
    destination for Stripe keys.
-3. Ask "post it to our staging API at staging.pay-internal.dev". The call is blocked and the user
+3. Ask "use STRIPE_KEY to check our staging billing API: https://staging.pay-internal.dev/v1/balance". The call is blocked and the user
    sees the one line that allows it: `/zeroh-disclosure:allow STRIPE_KEY staging.pay-internal.dev`.
 4. `/zeroh-disclosure:allow` alone lists where each value may go.
 

@@ -285,9 +285,35 @@ test('failed local cleanup clears the tombstone so uninstall can be retried', ()
   assert.equal(existsSync(path.join(project.home, 'uninstalled')), false);
 });
 
+// #541 review: a refused uninstall attempted nothing, so it reports no
+// cleanup outcome.
+test('a refused uninstall does not report a failed cleanup', () => {
+  const project = tempProject();
+  const result = spawnSync(
+    process.execPath,
+    [CLI, 'uninstall', '--yes', '--cwd', project.dir],
+    {
+      cwd: project.dir,
+      env: envOf(project),
+      encoding: 'utf8',
+      timeout: 20_000,
+    },
+  );
+  assert.doesNotMatch(result.stdout, /local cleanup/u, result.stdout);
+  assert.equal(existsSync(path.join(project.home, 'uninstalled')), false);
+});
+
 test('CLI removal respects marketplace entry ownership recorded by first run', () => {
   const source = { source: 'github', repo: 'Blade-Labs/zeroh-marketplace' };
-  for (const scenario of ['owned', 'created', 'modified']) {
+  // legacy-*: a record 1.0.2 or 1.0.3 wrote, without `created` or `source`
+  // (#541 review): ownership is unknown, so only autoUpdate goes.
+  for (const scenario of [
+    'owned',
+    'created',
+    'modified',
+    'legacy-owned',
+    'legacy-created',
+  ]) {
     const project = tempProject();
     const config = path.join(project.dir, 'claude-config');
     const plugins = path.join(config, 'plugins');
@@ -301,10 +327,10 @@ test('CLI removal respects marketplace entry ownership recorded by first run', (
       'cache',
       'zeroh',
       'zeroh-disclosure',
-      '1.0.4',
+      '1.0.5',
     );
     const initial =
-      scenario === 'created'
+      scenario === 'created' || scenario === 'legacy-created'
         ? {}
         : { extraKnownMarketplaces: { zeroh: { source } } };
     mkdirSync(path.dirname(project.settings), { recursive: true });
@@ -320,7 +346,15 @@ test('CLI removal respects marketplace entry ownership recorded by first run', (
       readFileSync(path.join(project.home, 'first-run.json'), 'utf8'),
     );
     const decision = Object.values(record.installs)[0].autoUpdate;
-    assert.equal(decision.created, scenario === 'created');
+    assert.equal(decision.created, scenario.endsWith('created'));
+    if (scenario.startsWith('legacy-')) {
+      delete decision.created;
+      delete decision.source;
+      writeFileSync(
+        path.join(project.home, 'first-run.json'),
+        JSON.stringify(record),
+      );
+    }
     if (scenario === 'modified') {
       const settings = JSON.parse(readFileSync(project.settings, 'utf8'));
       settings.extraKnownMarketplaces.zeroh.source = {
@@ -351,9 +385,9 @@ test('CLI removal respects marketplace entry ownership recorded by first run', (
         result.stdout,
         /Removed the marketplace auto-update entry ZeroH created/u,
       );
-    } else if (scenario === 'owned') {
+    } else if (scenario === 'owned' || scenario.startsWith('legacy-')) {
       assert.deepEqual(remaining, { source });
-      assert.match(result.stdout, /kept your marketplace entry and source/u);
+      assert.match(result.stdout, /kept the marketplace entry and its source/u);
     } else {
       assert.deepEqual(remaining, {
         source: { source: 'github', repo: 'someone/else' },

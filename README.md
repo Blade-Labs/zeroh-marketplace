@@ -81,7 +81,7 @@ More about the plugin is in its [README](plugins/zeroh-disclosure#readme).
 
 | Plugin                                              | Version | Status      | What it does                                                                                                                                                                             |
 | --------------------------------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.0.4 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
+| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.0.5 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
 
 Each plugin's folder has its own README, changelog and documentation. Releases are listed under
 [Releases](https://github.com/Blade-Labs/zeroh-marketplace/releases).

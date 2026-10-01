@@ -45,8 +45,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // (projectRootFromEnv, encodeProjectPath, sanitizeSid, envSessionId),
 // lib/vault.js projectKey, lib/claude-settings.js (resolveClaudeSettingsPath,
 // restoreRecordPath), lib/uninstall-marker.js uninstallMarkerPath and
-// lib/session-status.js STATUS_FILE; test/statusline.test.mjs checks each
-// against the original.
+// lib/session-status.js STATUS_FILE and lib/plugin-integrity.js pluginsRoot;
+// test/statusline.test.mjs checks each against the original.
 export const STATUS_FILE = 'status.json';
 
 export function zerohHome(env = process.env, platform = process.platform) {
@@ -167,6 +167,16 @@ export function uninstallMarkerPath(env = process.env) {
   return path.join(path.resolve(zerohHome(env)), 'uninstalled');
 }
 
+export function pluginsRoot(env = process.env) {
+  if (env.CLAUDE_CODE_PLUGIN_CACHE_DIR) {
+    return path.resolve(env.CLAUDE_CODE_PLUGIN_CACHE_DIR);
+  }
+  const config = env.CLAUDE_CONFIG_DIR
+    ? path.resolve(env.CLAUDE_CONFIG_DIR)
+    : path.join(env.HOME || os.homedir(), '.claude');
+  return path.join(config, 'plugins');
+}
+
 // Claude Code's managed settings file for this OS.
 export function managedSettingsPath(
   platform = process.platform,
@@ -230,6 +240,58 @@ function mtimeOf(file) {
   } catch {
     return null;
   }
+}
+
+// Claude Code's list of installed plugins, which is small; a larger file is
+// not read (the status line runs every few seconds).
+const INSTALLED_PLUGINS_MAX_BYTES = 1024 * 1024;
+
+function sameProject(left, right, platform = process.platform) {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+// A user-scope install, or a project or local one of this project.
+function appliesToProject(entry, root) {
+  if (entry?.scope === 'user') return true;
+  if (!['project', 'local'].includes(entry?.scope)) return false;
+  return (
+    typeof entry.projectPath === 'string' &&
+    sameProject(entry.projectPath, root)
+  );
+}
+
+// The latest time Claude Code installed or updated a ZeroH Disclosure copy
+// this session would load: an enabled plugin id (enabledIds) installed for
+// the user or this project. Null when that can't be told, so the line stays
+// red rather than explain away missing hooks with an unrelated copy.
+function installedAt(root, env) {
+  const enabled = enabledIds(root, env);
+  if (!enabled.size) return null;
+  const file = path.join(pluginsRoot(env), 'installed_plugins.json');
+  try {
+    const stat = statSync(file);
+    if (!stat.isFile() || stat.size > INSTALLED_PLUGINS_MAX_BYTES) return null;
+  } catch {
+    return null;
+  }
+  const listed = readJson(file).value;
+  if (!listed || typeof listed !== 'object') return null;
+  let latest = null;
+  for (const [id, entries] of Object.entries(listed?.plugins ?? {})) {
+    if (!enabled.has(id)) continue;
+    for (const entry of [].concat(entries)) {
+      if (!appliesToProject(entry, root)) continue;
+      for (const field of ['lastUpdated', 'installedAt']) {
+        const at = Date.parse(entry?.[field] ?? '');
+        if (Number.isFinite(at) && (latest === null || at > latest)) {
+          latest = at;
+        }
+      }
+    }
+  }
+  return latest;
 }
 
 // Hooks stopped: the transcript holds a prompt or a tool result the hooks
@@ -357,7 +419,9 @@ function projectRootOf(input, env) {
 // entry off: user, then project, then local, then managed settings, each
 // overriding the one before for the same id; the plugin counts as enabled
 // while any id is on or no file names one.
-export function pluginEnabled(
+// ZeroH Disclosure plugin ids and whether Claude Code's settings files
+// (user, project, local, managed; later ones win) enable them.
+function enabledById(
   root,
   env = process.env,
   managedPath = managedSettingsPath(process.platform, env),
@@ -375,6 +439,22 @@ export function pluginEnabled(
       if (PLUGIN_ID_RE.test(id)) byId.set(id, value !== false);
     }
   }
+  return byId;
+}
+
+// The ids settings explicitly enable.
+function enabledIds(root, env) {
+  return new Set(
+    [...enabledById(root, env)].filter(([, on]) => on).map(([id]) => id),
+  );
+}
+
+export function pluginEnabled(
+  root,
+  env = process.env,
+  managedPath = managedSettingsPath(process.platform, env),
+) {
+  const byId = enabledById(root, env, managedPath);
   return byId.size === 0 || [...byId.values()].some(Boolean);
 }
 
@@ -494,9 +574,19 @@ export function statuslineModel({
     }
     if (read.missing) {
       const ran = Number(input?.cost?.total_duration_ms);
-      return Number.isFinite(ran) && ran > NEVER_RAN_MS
-        ? set('off', 'hooks never ran', DOCTOR)
-        : set('warn', 'starting', null, false);
+      if (Number.isFinite(ran) && ran > NEVER_RAN_MS) {
+        const installed = installedAt(root, env);
+        if (installed !== null && now - ran < installed) {
+          return set(
+            'warn',
+            'started before ZeroH',
+            'restart Claude Code to protect this session',
+            false,
+          );
+        }
+        return set('off', 'hooks never ran', DOCTOR);
+      }
+      return set('warn', 'starting', null, false);
     }
     const status = read.value;
     if (!status || typeof status !== 'object' || status.v !== 1) {
@@ -626,7 +716,7 @@ export const DEFAULT_STYLE = Object.freeze({
 
 // Words and marks only the state may use.
 const STATE_MARKS_RE =
-  /[\u{1F7E0}-\u{1F7EB}\u{26AA}\u{26AB}\u{2705}\u{2714}\u{274C}\u{274E}\u{26A0}\u{2757}\u{203C}\u{1F534}\u{1F535}]|\b(?:protect\w*|safe|secure\w*|ok|okay|fine|green|files only|starting|proxy|hooks?|installed|uninstalled|disabled|vault|state|doctor)\b/iu;
+  /[\u{1F7E0}-\u{1F7EB}\u{26AA}\u{26AB}\u{2705}\u{2714}\u{274C}\u{274E}\u{26A0}\u{2757}\u{203C}\u{1F534}\u{1F535}]|\b(?:protect\w*|safe|secure\w*|ok|okay|fine|green|files only|start(?:ed|ing)|proxy|hooks?|installed|uninstalled|disabled|vault|state|doctor)\b/iu;
 // eslint-disable-next-line no-control-regex
 const CONTROL_RE =
   /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/u;
@@ -697,6 +787,7 @@ const COMPACT_WORDS = {
   'hooks failing': 'hooks failing',
   'hooks stopped': 'hooks stopped',
   'hooks never ran': 'no hooks',
+  'started before ZeroH': 'old session',
   "vault can't be opened": 'vault closed',
   "state can't be read": 'state unreadable',
   'plugin disabled': 'disabled',

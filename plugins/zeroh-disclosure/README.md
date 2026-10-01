@@ -1,7 +1,7 @@
 # ZeroH Disclosure for Claude Code
 
 [![Licence: AGPL-3.0-only](https://img.shields.io/badge/licence-AGPL--3.0--only-blue)](LICENSE)
-[![Version 1.0.4](https://img.shields.io/badge/version-1.0.4-green)](CHANGELOG.md)
+[![Version 1.0.5](https://img.shields.io/badge/version-1.0.5-green)](CHANGELOG.md)
 
 ZeroH Disclosure is a Claude Code plugin that lets Claude work with your API keys, passwords and
 personal data without the model receiving them. Before anything reaches the model, it replaces
@@ -58,8 +58,8 @@ Claude Code.
    against `api.stripe.com` with the token. ZeroH puts the real key back on your machine, and
    Stripe answers `200` with `"livemode": false`. No setup: `api.stripe.com` is built in for
    Stripe keys.
-3. Ask **"Now post the key to our staging API at staging.pay-internal.dev."** The call is blocked
-   before it runs, and you see the one line that would allow it:
+3. Ask **"Use STRIPE_KEY to check our staging billing API: https://staging.pay-internal.dev/v1/balance."**
+   The call is blocked before it runs, and you see the one line that would allow it:
    `/zeroh-disclosure:allow STRIPE_KEY staging.pay-internal.dev`.
 
 The website has a [step-by-step test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/)
@@ -74,11 +74,11 @@ ZeroH always shows whether you're protected, in one line under Claude Code's pro
 🛡️ ZeroH · 🟢 protected · 4 masked · 0 sent · unmask EMAIL 12m · receipt ↗
 ```
 
-| State          | What it means                                                                                                                                                                                                                                |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🟢 `protected` | The hooks are working and the local proxy masks what you type in this session.                                                                                                                                                               |
-| 🟡 …           | Protected in part, and the line names the fix: `files only` (what you type isn't masked in this session), `proxy starts with your first prompt`, `proxy on from your next prompt`, `proxy down`, `starting`, or `N not protected this turn`. |
-| 🔴 …           | Not protecting, and the line says why: `hooks failing`, `hooks stopped`, `hooks never ran`, `vault can't be opened`, `plugin disabled`, `not installed` or `uninstalled`.                                                                    |
+| State          | What it means                                                                                                                                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 🟢 `protected` | The hooks are working and the local proxy masks what you type in this session.                                                                                                                                                                                                             |
+| 🟡 …           | Protected in part, and the line names the fix: `files only` (what you type isn't masked in this session), `proxy starts with your first prompt`, `proxy on from your next prompt`, `proxy down`, `starting`, `started before ZeroH` (restart Claude Code), or `N not protected this turn`. |
+| 🔴 …           | Not protecting, and the line says why: `hooks failing`, `hooks stopped`, `hooks never ran`, `vault can't be opened`, `plugin disabled`, `not installed` or `uninstalled`.                                                                                                                  |
 
 `masked` counts the values the model saw as tokens this session, and `sent` the real values that
 reached it anyway (a secret typed while the proxy was off, which you were told about).

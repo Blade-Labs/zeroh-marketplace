@@ -373,7 +373,8 @@ then shows it under the prompt:
   to `/zeroh-disclosure:proxy on`, otherwise to `/zeroh-disclosure:doctor`),
   `proxy starts with your first prompt`, `proxy on from your next prompt` (the first prompt of
   the first session switched it to the proxy), `proxy down` (the proxy process is gone),
-  `starting`, or `N not protected this turn` (something passed unchecked).
+  `starting`, `started before ZeroH` (restart Claude Code to protect that session), or
+  `N not protected this turn` (something passed unchecked).
 - 🔴 not protecting, with the reason: `hooks failing` (a hook crashed; it clears when that hook
   works again), `hooks stopped` (the conversation moved on and no hook ran for 30 seconds),
   `hooks never ran`, `vault can't be opened`, `plugin disabled` (in user, project, local or

@@ -519,7 +519,7 @@ test('uninstall removes the plugin, the proxy entry, login item, a legacy projec
   writeFileSync(isolated.settings, `${JSON.stringify(withMarketplace)}\n`);
   writeFileSync(
     path.join(env.ZEROH_HOME, 'first-run.json'),
-    `${JSON.stringify({ installs: { [installId(isolated.settings)]: { autoUpdate: { decision: 'on', marketplace: 'zeroh', source } } } })}\n`,
+    `${JSON.stringify({ installs: { [installId(isolated.settings)]: { autoUpdate: { decision: 'on', marketplace: 'zeroh', source, created: true } } } })}\n`,
   );
   const installed = settingsDoc(isolated.settings).env.ANTHROPIC_BASE_URL;
   assert.match(installed, /\/z\//u);
