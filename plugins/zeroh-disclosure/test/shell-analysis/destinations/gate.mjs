@@ -107,6 +107,8 @@ export function validateOracleCoverage(
   return errors;
 }
 
+export const RELEASES_WITH_1_0_ANALYZER = new Set(['1.1.0', '1.1.1']);
+
 export const OWNER_RULING = 'owner ruling 2026-10-05, ruling 1';
 export const BASELINE_HASH =
   '17a40e1c5ec6ba95b600d434d33f58c75fe500b411660bc6a325131c04a25503';
@@ -377,7 +379,7 @@ export function validateDestinationSource(
   }
   for (const leg of evidence.differential?.legs ?? []) {
     if (
-      releaseVersion === '1.1.0' ||
+      RELEASES_WITH_1_0_ANALYZER.has(releaseVersion) ||
       leg.shell === 'cmd' ||
       leg.parserGatePassed === true ||
       leg.fallbackPassed !== true
@@ -406,7 +408,7 @@ function baselineMatcher(baseline, releaseVersion) {
     const accepted = rows.get(row.id);
     const command = commands.get(row.id);
     return (
-      releaseVersion === '1.1.0' &&
+      RELEASES_WITH_1_0_ANALYZER.has(releaseVersion) &&
       baseline?.rulingReference === OWNER_RULING &&
       typeof command === 'string' &&
       accepted?.commandHash ===
@@ -465,7 +467,7 @@ export function validateDestinationObservations({
     else if (entry.classification === 'false-stop' && !inBaseline(entry))
       errors.push(`false stop outside the accepted baseline: ${entry.id}`);
     else if (
-      releaseVersion === '1.1.0' &&
+      RELEASES_WITH_1_0_ANALYZER.has(releaseVersion) &&
       entry.classification !== 'correct' &&
       !inBaseline(entry)
     )
@@ -596,10 +598,10 @@ export function validateDestinationRelease(
         entry.rulingReference !== OWNER_RULING ||
         entry.noticePhase !== '55.4' ||
         entry.nextReleaseTask !== '44.9' ||
-        entry.nextRelease !== '1.1.1'
+        entry.nextRelease !== '1.1.2'
       )
         errors.push(
-          `baseline deferral ${entry.id} lacks the owner ruling, 55.4 notice or 1.1.1 task 44.9`,
+          `baseline deferral ${entry.id} lacks the owner ruling, 55.4 notice or 1.1.2 task 44.9`,
         );
     } else if (entry.classification !== 'missed-protection') {
       errors.push(
@@ -686,7 +688,8 @@ export function validateDestinationRelease(
         leg.corpusHash !== differential.corpusHash ||
         leg.analyzerHash !== differential.analyzerHash ||
         leg.runtimeHash !== differential.runtimeHash ||
-        (releaseVersion !== '1.1.0' && !validParserProof(leg, cases))
+        (!RELEASES_WITH_1_0_ANALYZER.has(releaseVersion) &&
+          !validParserProof(leg, cases))
       ) {
         errors.push(
           `required destination leg ${platform}/${node}/${shell} lacks passing evidence`,

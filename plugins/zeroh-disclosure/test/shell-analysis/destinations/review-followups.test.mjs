@@ -15,6 +15,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generateCorpus } from './corpus.mjs';
 import {
   destinationFingerprints,
+  evidenceHash,
   readDestinationEvidence,
   REQUIRED_LEGS,
   REQUIRED_NODES,
@@ -593,4 +594,58 @@ test('benchmark hooks run interleaved ABAB with twenty cold samples in each leg'
       }),
     /failed cold sample/,
   );
+});
+
+test('the URL-only patch keeps exactly the 1.0 baseline; 1.1.2 requires the new analyzer', () => {
+  const fixtureEvidence = () => {
+    const evidence = passingEvidence();
+    // Release validation uses synthetic evidence; a public staged tree has no Git history.
+    const sourceCommit = 'c'.repeat(40);
+    evidence.sourceCommit = sourceCommit;
+    evidence.differential.sourceCommit = sourceCommit;
+    for (const leg of evidence.differential.legs) leg.commitSha = sourceCommit;
+    return evidence;
+  };
+  for (const releaseVersion of ['1.1.0', '1.1.1']) {
+    const evidence = fixtureEvidence();
+    evidence.releaseVersion = releaseVersion;
+    assert.deepEqual(validateDestinationRelease(evidence), []);
+    evidence.differential.cases.push({
+      id: 'ZEROHFAKE-new-defect',
+      classification: 'missed-protection',
+      shell: 'bash',
+    });
+    assert.ok(
+      validateDestinationRelease(evidence).some((error) =>
+        error.includes('outside the 1.0 baseline'),
+      ),
+    );
+  }
+  const engine = fixtureEvidence();
+  engine.releaseVersion = '1.1.2';
+  const errors = validateDestinationRelease(engine);
+  assert.ok(errors.some((error) => error.includes('false stop outside')));
+  assert.ok(errors.some((error) => error.includes('lacks passing evidence')));
+});
+
+test('every current destination target is backed by the dated V111 owner amendment', () => {
+  const evidence = readDestinationEvidence(path.join(PLUGIN, DESTINATIONS));
+  for (const current of evidence.deferrals) {
+    assert.equal(current.nextRelease, '1.1.2');
+    const previous = evidence.previousDeferrals.find(
+      (entry) => entry.id === current.id,
+    );
+    assert.ok(
+      evidence.updates.some(
+        (update) =>
+          update.id === current.id &&
+          update.explicit === true &&
+          update.date === '2026-10-09' &&
+          update.rulingReference.startsWith('owner ruling 2026-10-09') &&
+          update.beforeHash === evidenceHash(previous) &&
+          update.afterHash === evidenceHash(current),
+      ),
+      current.id,
+    );
+  }
 });

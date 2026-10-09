@@ -63,7 +63,7 @@ Say this, in your own words and briefly:
 2. Restart Claude Code to load it: type `/exit`, then run `claude` again.
 3. After the restart they will see the ZeroH banner. With their first message a status line appears
    at the bottom; from the second message it reads `🛡️ ZeroH · 🟢 protected · 0 masked · 0 sent`.
-4. To try it step by step, open https://witty-river-07cbf8503.1.azurestaticapps.net/try/
+4. To try it step by step, open https://bladelabs.io/try/
 
 ### If something goes wrong
 
@@ -82,7 +82,7 @@ More about the plugin is in its [README](plugins/zeroh-disclosure#readme).
 
 | Plugin                                              | Version | Status      | What it does                                                                                                                                                                             |
 | --------------------------------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.1.0 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
+| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.1.1 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
 
 Each plugin's folder has its own README, changelog and documentation. Releases are listed under
 [Releases](https://github.com/Blade-Labs/zeroh-marketplace/releases).

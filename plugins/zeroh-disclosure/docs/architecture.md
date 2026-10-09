@@ -71,9 +71,9 @@ flowchart TB
   ancestor process, plus a one-time code shown and typed back on the controlling terminal.
 - **The local proxy.** Every request to the API passes through it, so what it masks never
   reaches the model, whatever a hook missed.
-- **Planned opt-in strict mode** (1.1.1; absent from 1.1.0) adds Claude Code's own sandbox as an
+- **Planned opt-in strict mode** (1.1.2; absent from 1.1.0 and 1.1.1) adds Claude Code's own sandbox as an
   operating-system boundary: its network allowlist generated from ZeroH's allow list and its
-  filesystem rules around ZeroH's state. See [Destination policy (planned for 1.1.1)](#destination-policy-planned-for-111).
+  filesystem rules around ZeroH's state. See [Destination policy (planned for 1.1.2)](#destination-policy-planned-for-112).
 
 **Best effort:**
 
@@ -497,9 +497,9 @@ a program (tar's `host:path` archive and `-I`, `rg --pre`, `sort --compress-prog
 `less +…`, a UNC path) make the command uncertain; in PowerShell a UNC path's host is checked as
 a destination.
 
-### Destination policy (planned for 1.1.1)
+### Destination policy (planned for 1.1.2)
 
-**This entire section is a design for 1.1.1, not shipped behavior.** Version 1.1.0 keeps the
+**This entire section is a design for 1.1.2, not shipped behavior.** Versions 1.1.0 and 1.1.1 keep the
 1.0.5 destination analyzer. Phase 43 adds test assets only; its parsers are not used by the
 runtime. Phase 44 will implement the design in `internal/destination-policy-2026-10-03.md`.
 The registry, `programEffects()`, parser selection, `ipaddr.js` evaluator, sandbox strict mode
@@ -521,7 +521,7 @@ The intended design is:
   pre-existing domain grants and managed overrides are reported, and the status line shows the
   effective host ceiling) rather than trusting what it wrote, and is unavailable on native
   Windows, where it says so. Claude Code's credential masks (sentinel injection with TLS
-  termination) are deferred beyond the initial 1.1.1 strict mode. The late-binding values files move out of
+  termination) are deferred beyond the initial 1.1.2 strict mode. The late-binding values files move out of
   `ZEROH_HOME` into a sibling run directory (`ZEROH_RUN_HOME`) so the sandbox can deny every
   write to ZeroH's state while the command still sources and deletes its own values file.
 - **One program registry.** A declarative table per program (option arity and spellings, config

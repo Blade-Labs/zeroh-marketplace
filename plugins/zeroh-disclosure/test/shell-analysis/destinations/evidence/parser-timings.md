@@ -63,3 +63,7 @@ installation or upstream fetch was performed. These are local measurements,
 not complete CI shell/oracle evidence. macOS, Windows and PowerShell remain
 CI-only. Other older parser JSON files are historical; use the four node22/node26
 files accompanying this table for this round.
+
+## Dated release-target amendment, 2026-10-09
+
+Owner ruling, 2026-10-09: 1.1.1 is the URL-only patch (test guide: https://bladelabs.io/try/). Phase 44 and task 44.9 (112 false stops, 8 missed protections and 16 notice gaps), strict mode and the destination dialog move to 1.1.2. Both 1.1.0 and 1.1.1 ship the unchanged 1.0 destination analyzer and its allow commands. This supersedes the earlier 1.1.1 destination release target; all other gates remain unchanged.

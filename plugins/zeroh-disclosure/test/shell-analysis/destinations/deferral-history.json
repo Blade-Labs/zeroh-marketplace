@@ -2993,6 +2993,1366 @@
       "reason": "55.4: replace aggregate internal release text with user-facing 112/8 disclosure and concrete workarounds; keep baseline and next-release task unchanged.",
       "beforeHash": "15245bca58d899b9005b0adb82d45c9e43bc68f3ebb2187fa7fda83534d52d66",
       "afterHash": "8d31a9bcb43287292248ace8743e0163dcf096691e657cb795a07ba626b06ed7"
+    },
+    {
+      "id": "43-bash-ssh-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "292960244c69680f268458f6ec4670fbc229f5631de6c2e82944ae9a8f450181",
+      "afterHash": "221259653e112fabd93f6c9e74fc526d8a3bf0986add27cca9dc0d969237d85c",
+      "supersedesAfterHash": "71152c4ec19ac890cf31a6c09b8b56e9d644108bcd4d3d2c03a1a14258dc7755"
+    },
+    {
+      "id": "43-bash-ssh-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "da104db0df891180e44f92a968dec71c505d2df8ab200b4cfdfba9f22d93b664",
+      "afterHash": "c805e6e4bfd897090e1eb8b4d7364cee050597ca6afbef2f26c92df92504322f",
+      "supersedesAfterHash": "378ba22c8a1e44248585d9e87e88d0022b7c1ecb3381fe03d22810536d88399f"
+    },
+    {
+      "id": "43-bash-ssh-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a70e78df789adeac9732bfff8e13180caa4f5b32704fd95273248b1fc6d32dd7",
+      "afterHash": "1f4c9a6607813fbd77e28966e3433cfd59715893a8a6a2844862105502f93e08",
+      "supersedesAfterHash": "7c187871757ed2678e814b0bf6124d50ed60371825e82f7b66fac95324370231"
+    },
+    {
+      "id": "43-bash-ssh-0-ansi-c",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3652cf6245358c01c66bb7bfc0e67aadd62171b06eb57f9ba4a1fc7962893b41",
+      "afterHash": "f5d8b25d294172a41575961a8520e3b804c39de08c3c72e4caeaa79ecd231983",
+      "supersedesAfterHash": "c8c5852aa4ddccb2dc58c1a7e93d9815d2abba9633e5712816034291d400e6cb"
+    },
+    {
+      "id": "43-bash-ssh-0-escape",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "ff9ba3b66ca8f52eeb80a22db7e36b1d289973928dfc7276ec6f73ed9b20a1c1",
+      "afterHash": "0ca90f466cf712abcc05fdfe12701e7df969970af19930228289ae330942d71f",
+      "supersedesAfterHash": "6ef3bc34925a05ee3a29ed557f064a9fbe3b0c49e29af79e943a2fd9f2cf3180"
+    },
+    {
+      "id": "43-bash-ssh-0-concatenation",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "dfb3c6a90461b2b148b072a04c328d322f7d2c19e6355f71214485aca38ef17d",
+      "afterHash": "12d3fa12a094623fcb073e246ef045ce1b1729b8455e76bf3a950b7f31dc5d5c",
+      "supersedesAfterHash": "28b1f27080fcd7a1fe14df4f6679a4862ec0c11fceb8e6c9851a1f83cf7ea42b"
+    },
+    {
+      "id": "43-bash-ssh-0-substitution",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3e138d0036641dd35053ef9cc1673f5b8ea64d4ca4c991a8d31a7d518ca41388",
+      "afterHash": "6ee80a8434da281a254a0ae0c7c17d83a0308fe9f73eb2984ba983dc66cd2bf2",
+      "supersedesAfterHash": "2b3e639425b6ff85644bda51bf028c72debe48785d362a290d428f8dc18f33e0"
+    },
+    {
+      "id": "43-bash-ssh-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a206a1a4b337d734f68cf1829247093dd6a5ae7e0c0ce71471e0d6a8fae28ac0",
+      "afterHash": "2568600a691a708c0ce62f4550ae1a63fcbadd41f3a0eefb8efa4c1c2bd17029",
+      "supersedesAfterHash": "e2363563593561995fa4827d08d688ce7ddbe38e2be7149c5244df217913ca6d"
+    },
+    {
+      "id": "43-bash-ssh-1-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c3e60a2c55c230683f5fcd3f4fecee9a759fbe6b1ffb1e51c6e1c7c1cc1b442c",
+      "afterHash": "65e40ee81232f7cf6e988fd6e02f78be6a4303391bb731c9058438e034a60424",
+      "supersedesAfterHash": "4d63dc0c3fa630d94a28fece4bb0bd79e35c1f8a9a38e270d915d362f5e6474d"
+    },
+    {
+      "id": "43-bash-ssh-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "91995bbc54853b176e85b78b5473f9e1326b99df79ace36ad0240b5f0e7a996e",
+      "afterHash": "bcbad476362cab6f2ca7accbb9099d019acc9722207b79b1fd1dbc83f3341d7f",
+      "supersedesAfterHash": "c4c18cc514a104feaab3895c1d4874ea5ccf43ffffaf707e57429a744df652dd"
+    },
+    {
+      "id": "43-bash-ssh-1-ansi-c",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "deb34676ed5e19fece1ab326bb59fdc8dab41062a7a3154f6ef9626fecc573b4",
+      "afterHash": "c25315562aef94177a7249e8eadbc00306ab6fbd4ee26fadf1c771f833512fb8",
+      "supersedesAfterHash": "4ca75e6ff88082c7d667e15acd0632239c1e2f7e2a87be4612461a7d72f63a80"
+    },
+    {
+      "id": "43-bash-ssh-1-escape",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c3a69a35a26afea1b2325ca51fcfad305dc27e5b3a6b62bac97376cab96ef11b",
+      "afterHash": "519462872eec4487a8441d766958bd2fa1f9c9252c3578773c1cbd799c51a10b",
+      "supersedesAfterHash": "0e24ac6475e1f045d221f03b616a1f4b5cc42527b3e2050f25cd19a25b2587d8"
+    },
+    {
+      "id": "43-bash-ssh-1-concatenation",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "62f4d087d16b236f4a2d0ad92d38f50742ea5bccf6a965d6648bc42db6696b6c",
+      "afterHash": "f9c46c0e33d3b21a3ba803b7767b6e7b667d4740bac6a04620955c836e61aad9",
+      "supersedesAfterHash": "c51a25af23944ce37284753ee01dafbcf3d57ab3ef27979e7cdf9fa6de7eb590"
+    },
+    {
+      "id": "43-bash-ssh-1-substitution",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "caa96553dc5f9aaeb0fef71ec0981013e2d402dd7d185e56044c8b67da629bf3",
+      "afterHash": "5b671826c960c96045cc2abb23c80f5dca69610cb38dee8bfde8d1e93e3ecba6",
+      "supersedesAfterHash": "e754c3703d935ab2cee0d72ef7129ea02275d9238b7a9ce788d74cc7b6afdb69"
+    },
+    {
+      "id": "43-bash-openssl-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c799a8f543a91bb031f1750fa6618714f8d5fd3dd28dd03995848c075fa29f9a",
+      "afterHash": "ccd26ce928ea65c1293d2295bf339b6f184428dffce18141588f1693befca7ff",
+      "supersedesAfterHash": "f66c505b17b8c89d61da71a935cfe4c2bc1fa9a68d8684d8ec47d720601daf9c"
+    },
+    {
+      "id": "43-bash-openssl-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e78e9574ba75d68fc67d8e112da0e6b7e52d56ac4f1647476543e16c666f39f2",
+      "afterHash": "ebdb90b027acdc3aac255b574086eb35f07104f6120d85a6f4d41b50f5f2fd5b",
+      "supersedesAfterHash": "64b94c6742f1916e7c8353bcd4f57fe0c2be94192ba58b2a8a271717284a8ac6"
+    },
+    {
+      "id": "43-bash-openssl-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f021f03efa027c2940aabaaf8daa71cb9a8e17697336cc27f34f3630cf40637a",
+      "afterHash": "eaf385aeb696f1e70222c43124572c9fe2e17eb56cb7d87b5b618777f2590245",
+      "supersedesAfterHash": "ee7581782f2f42a0f547a6db0d8092cebb84e376e1443721a426c90036f142e3"
+    },
+    {
+      "id": "43-bash-openssl-0-ansi-c",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e66a10c6cfe783441214d65cce06bc9cfac5c3970c9c4612eddd2ec1fa249fd1",
+      "afterHash": "f4af9ec3348daa550f714e07a990ad36f04f770e409119e8c9e520f4a88940a6",
+      "supersedesAfterHash": "380cfb92c788779a24321556fa50ebccf1e547cc2aac34d0839dfe879bc58053"
+    },
+    {
+      "id": "43-bash-openssl-0-escape",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6765519c2806d0577801871682f717bcf6a5986dca2c8aeb2e55b86ea4b28203",
+      "afterHash": "a28c5207ee0581da56a4fc28c6f27fae6db68969b9c845212ab4aaa994337b37",
+      "supersedesAfterHash": "bd98683a3c885da25890d47431835ea9d2d76290797f0a1a0b272e0edc97a916"
+    },
+    {
+      "id": "43-bash-openssl-0-concatenation",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d3642c652beb3784115ee90e75b32833e7e2d2a4b94d3e70acc316097f13dec5",
+      "afterHash": "3f42a34be550bdfba124fb9345ccf1b84a781c9d8118921db32cd1c8539e69cc",
+      "supersedesAfterHash": "3e9b1686516edea387d906f73003b455836267345405f765310f2bd46fa684d1"
+    },
+    {
+      "id": "43-bash-openssl-0-substitution",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a99ee2e95ae09b29bfc3e921436d0e0f6a74eaa3d5203dac271c8e3e468ca36c",
+      "afterHash": "2071b00c20a139322013aca07b238a5e982351976c9b6f887c3f5e6fc8064b14",
+      "supersedesAfterHash": "63aaf1bd47088bf1145a52f6770ade691b1dd88007122fc9146564449fe7c910"
+    },
+    {
+      "id": "43-bash-FINDINGS3",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "251cfb9a0d883609efb8226effad29d2e8ca2e31d0f5f90565114bf5347aa985",
+      "afterHash": "add3cc373ff29e3eeec62de9914394251478aac9720ca588f958637ef5fe8b61",
+      "supersedesAfterHash": "7a8c0707509c6b52f03798146b4ed0b5b2f4c89b1152f9462b646718b12f64df"
+    },
+    {
+      "id": "43-bash-live-tsig",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "85f067f6bfd3f2964300c08032a582eb2dc8ca1744cf7806b392671fff194241",
+      "afterHash": "96eda2c9c4eb5c4e63e155b972d8b46c5d12ec672305a2d330646df439ec12cc",
+      "supersedesAfterHash": "9060b419cbb6803092165e26fe40cac5d0cef3a0c8ee0b04ab9fd5b64d276bfa"
+    },
+    {
+      "id": "43-bash-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b6b86e1dac95674666095c4cea156a9f37ce2aab4b137e5be2936ac2fc96e578",
+      "afterHash": "2a9863d4465baa2e79f8ef1dd3a4bc476bc71ca9939d9adcf16984b7affafc51",
+      "supersedesAfterHash": "8160039536b35a788830ae97b94567ad80529b06482d4e689d5a25818cb62e1e"
+    },
+    {
+      "id": "43-bash-curl-default-config",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3128d9805855df41de39620abcaa67754b11008fd41ba8b6b366cdabed680bb6",
+      "afterHash": "63d1bb00610099929f5fd2612145f43d58ce927f576a1599eeae928b91fff719",
+      "supersedesAfterHash": "6d1b93a8a6a6c2a845d4a586aeaee63863a2d7d5c043dabe10fb4e18ad342aac"
+    },
+    {
+      "id": "43-bash-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "0cec2c07ba629c2f540bd5f75e90b1b04dd9c3e6d5cf2f807b3ed2d1a7b145ef",
+      "afterHash": "72613f4628461eaa71ebea57565e1e1db32687442c9a54c64c5f628b2ef62bdc",
+      "supersedesAfterHash": "9f7d8bbda455c47b1142321f12a34907738a5481b0cf012fc6e709a94e81ae17"
+    },
+    {
+      "id": "43-bash-resolvectl-search",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "64c73261aae6a9808636863b3756ec6e13c78f1e5c350501d2237ba7a5833c74",
+      "afterHash": "b28446a6356dbc6b4b10b5e1ab7fab65f78cbee861dd4548a4bd1a2757b254ce",
+      "supersedesAfterHash": "b4fad54b24448b62291dbc2543fe226af1eec5a8e4ec262b9448526dc46e9296"
+    },
+    {
+      "id": "43-zsh-ssh-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a89e99c435b8b9abf302eb08cebd1a76c4ded967483b22172d6b1bd9a86c4d0c",
+      "afterHash": "43d3bfc787e2102f59ac9eb552f5cffea04b2268f72e4076cf13068a8dfa1aac",
+      "supersedesAfterHash": "31e10cb83ec5b91d60bab36b223f59f2e5da27db80a5a9b2ebd6704da0954765"
+    },
+    {
+      "id": "43-zsh-ssh-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a1737b1a861f773f662b2c1feaa8b0288615358b206bd04d5e36d7062df0213c",
+      "afterHash": "97bc86eaede48b7753668e41f25fa8e8580d2b38e57f12c03e5a6e9047817e78",
+      "supersedesAfterHash": "ad447888caedd20401ba8f067abb1d54f986561d34ce8e4dce4d5b61393fd44c"
+    },
+    {
+      "id": "43-zsh-ssh-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "56a6c980673c303a7047cd5d45b9947d88da3add5780cd11010a129f0d089cf4",
+      "afterHash": "46ece61ca2206e10452516154d6ef9b63f0110d93e530cded75b7621378eca9d",
+      "supersedesAfterHash": "a55d2689a90fd8cf0d576cd28955ce3091940852d21f3e081fe9cfbcb3093e4f"
+    },
+    {
+      "id": "43-zsh-ssh-0-ansi-c",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a90e2874fe39203a6c8ed5b1d11db95950e70c4af48131b1389e67adcf2f2d6c",
+      "afterHash": "3ea474f737fe4759318f6706c69b9b00b5e5683c7a1a4234fb3bd72b6866cbc7",
+      "supersedesAfterHash": "f62b113396cc3a8c75b8325d3a5d064af315357d31b3cbc7a80683d68ce32218"
+    },
+    {
+      "id": "43-zsh-ssh-0-escape",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9a7f8c42af5fadad086754adfd4c55f5e2e1861d7e2598da8fc2de1d573fce78",
+      "afterHash": "c856ae2d6048e0a5bb0201da9ae100364b06bfc2cb6d76d19a685b235a028752",
+      "supersedesAfterHash": "292b5af4b39b2ddb3027c3fe18def4cecb46f1f0870b2650909ffaead3793d54"
+    },
+    {
+      "id": "43-zsh-ssh-0-concatenation",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "0068491d42afc39fdb3a11c141c0bbd0cf57e05a06a5cb08230c780550007e7c",
+      "afterHash": "126ce134e5fc63307b7e11e734092e445884e7f5a06d3837c6638a5ae5704d0f",
+      "supersedesAfterHash": "b89b339111163fb01c9805767d4ebf3f35e2b22243e8d9bd628bbb039c469b25"
+    },
+    {
+      "id": "43-zsh-ssh-0-substitution",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "878153f1f54430e79a7ebb0f4710d29730de721df0564e83e65785b4571d2bfc",
+      "afterHash": "7bbe749bc619f2b7f4e47893ab61b0c545b6b2f0845ed9b6a50d3ee335e84321",
+      "supersedesAfterHash": "2954dfec6612b1287930dbb8af42bb67e455797e3a6ea652a9595aa240179519"
+    },
+    {
+      "id": "43-zsh-ssh-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5bb0c7c25c2c91896451941ea2753c10c1b5dd02007707e637460b79ea783cd9",
+      "afterHash": "4ba671cadb819d7a5964b7b391d3833e332d6409b5c651e633f0780871680b6a",
+      "supersedesAfterHash": "b22a8c8eefec65f08769ccdd4b11fb071290cebc87ea470d91f14fc6a1ae4074"
+    },
+    {
+      "id": "43-zsh-ssh-1-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2372e4e601cce1b61160f24c7f5ccd306cb736cbd6bcb940378ed7a9dd4f4f90",
+      "afterHash": "6727cb492c53eae773bfeb2e573a2e98f8f2b5e8131f79eee44cd46a16297735",
+      "supersedesAfterHash": "cdea21e23bbdb53d6f0159df7bed48af88d1d14b62506ba7fadf49067c6ec3d7"
+    },
+    {
+      "id": "43-zsh-ssh-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "bc7bbb9571b413949db55a398e4c7d060966fd8a7fa7049b407f55291fa347c0",
+      "afterHash": "274b0d773b1a4dfd5a8f7bb7cb1e4e72bb3a5260ebfcc106bdbfc89cd2adda61",
+      "supersedesAfterHash": "dccd84fdea293409ab80165722640dc7c29f67e40300a6138743a00979726524"
+    },
+    {
+      "id": "43-zsh-ssh-1-ansi-c",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2c12b07787fd88891b8380f2f0228389a36399a14a79ce48d7111a76b905fda4",
+      "afterHash": "56b676172a774ffc542a8061e924dc8785bebb5a4dae2d090f04bfd2bc3ecb4b",
+      "supersedesAfterHash": "a2a4fd3ae217ba9843205cdff8d95858c46110478b3e0e8728d8d368360f57e4"
+    },
+    {
+      "id": "43-zsh-ssh-1-escape",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d947c31aa91f2d2591797e649ae42038f59ebe934d1cd7c33fc61c7626b424f8",
+      "afterHash": "fbfaf1c5bcca3bd915fc4e6a55e9157463ef5bd07e6a1f4ccffd62805bc856ba",
+      "supersedesAfterHash": "b565a58ed923dba1482780f4187df009dacff5b7980fe3377fee0e6c777391ec"
+    },
+    {
+      "id": "43-zsh-ssh-1-concatenation",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "be20b3acb85ece64cecd078a656716bb0ee798f484a4a9c1626359ee38f98cbd",
+      "afterHash": "1e6789006fb3aa44fdc2cb80b692cc9aa7db3fecb31546c548f55c99a6d4f5aa",
+      "supersedesAfterHash": "5dae57f1f334792bca60e42232ba7b4f2c2b52c26222d939ded5367d6123bcd3"
+    },
+    {
+      "id": "43-zsh-ssh-1-substitution",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "4cca2405207cc4bbfe868c6680d22f5e09ae371cd19f29ca2cad20649c2b9dfb",
+      "afterHash": "97017e9a47d31ed3480a385f1e9ed24f94018ba94b7a4978a1c9d36e564c9e63",
+      "supersedesAfterHash": "2a74cdef67dcebd7067d454a940411d84599e258e382033f92150a569d42d0d6"
+    },
+    {
+      "id": "43-zsh-openssl-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2bc9f3ad3ee5a8bad49a4dad93227e99d95d6d7723a2c83f7d0542b06686b4e2",
+      "afterHash": "8f000437d33862695dc8678bdf60d51c62baa518542958e49e8798506e17f6e6",
+      "supersedesAfterHash": "c5595fe053499ad1c4f42c32433aaec573ef8b1c24fba90e19aae4132f2597d6"
+    },
+    {
+      "id": "43-zsh-openssl-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "95c13cb1b0ab98244e5606b19c9b041053947ef94a54ab0981d8a6e46070b148",
+      "afterHash": "8d3d5a429e8751915eb177b1407bf5954b77b677100a2c47cd3e909b20210257",
+      "supersedesAfterHash": "faa3360fb8d5acb28a36898dc0a9c884db007cabc99c3e44c1c46537753676b9"
+    },
+    {
+      "id": "43-zsh-openssl-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "dc2df44e430cae94ca4583193cef60edf73c25ef12493cbc46d3ae2d0888f732",
+      "afterHash": "3c0e7caa142e2277e1e3ecd3c575252974b088a6c6faa63186dcc1a8efff081d",
+      "supersedesAfterHash": "1eb6ffae9b3adfa54b98fe0bde687d46e6639caa02ef70ed8c485ec480c91306"
+    },
+    {
+      "id": "43-zsh-openssl-0-ansi-c",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6eea40fb07c5388c05ae2c5d51f4abaa2bf08fcecb33d08f6e5c04b6852657dc",
+      "afterHash": "daa3ebee077e74f2a6757de7484d7e588c6ed88f03784bfbe71fa255269a8208",
+      "supersedesAfterHash": "c7d1c83382d08ab31ff86aab23925784c9941c0803a2edefc22e78849e85bd91"
+    },
+    {
+      "id": "43-zsh-openssl-0-escape",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3c8eb1026b28489b13739d21e01210575eeef619e184e70a205cdf2f821f4ea1",
+      "afterHash": "cd6e580248bd1009e8a802dcd3bca5ce8c685202ed955966f062ed3064f865e0",
+      "supersedesAfterHash": "1a2d989206863cef1898cfa7ed25f4d44b6058bf8293d81e4e5645d7956aafa1"
+    },
+    {
+      "id": "43-zsh-openssl-0-concatenation",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c44ac73354ac008750d4197bf837c3c1e5b9dbebbe9fc6a0b1c2c4e898fafabe",
+      "afterHash": "ea90c0b6dfbda7088e952877a5f8b9496141814d77deb430d1fa50f60d534b65",
+      "supersedesAfterHash": "184561a302d0018ade21409af78f55e812c16001b0a086887626609fffff387e"
+    },
+    {
+      "id": "43-zsh-openssl-0-substitution",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b1fa654af51b38a44c625faefc2ea29eace7ecd20ce73e64573019e0155a0b24",
+      "afterHash": "b41e23d1c09c796cb9f9fdf0d23787b4151586adfd458a77345b77fcca56e602",
+      "supersedesAfterHash": "f60c3a49d2e2df726424ab279763aafde21c6eb4141ba89c5c8639f67c452ca0"
+    },
+    {
+      "id": "43-zsh-FINDINGS3",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "716a7d1064afb72f0df8839213e5d57b68367ddc7d0d4a95a9c63bd8d806a264",
+      "afterHash": "f20777f3079266a8763fc85dff12f1f1ab30491f7e3a06e583e739d606ed0a97",
+      "supersedesAfterHash": "53f300853e0d6a264b108a6499334b535609ecf9cac0afca21339526c1a713c4"
+    },
+    {
+      "id": "43-zsh-live-tsig",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "4e123c7366b49cd0738acbba535e027429cd4b8fb77ae1e2e337030670071523",
+      "afterHash": "05dc3dcc426e831a46a9da84e54e3fbb7445153d7d1c48aab01b8aff5300e4f1",
+      "supersedesAfterHash": "ef6e5ffe7d2c0f2ce11e40e41e65042a58f09ef60f90c00fbb770fe54ff630d3"
+    },
+    {
+      "id": "43-zsh-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b44b9e2ea40511cb554b47667a6ef8554b8ce04e74ee833c196c4000189fe5e9",
+      "afterHash": "c5b6ad3b50cbf3b4d049233204aa2b57d201858651b4f5959574a76a0c65b0c3",
+      "supersedesAfterHash": "61c0f376630c29c9af1b56b72338dc9e052ce4b54c7f9fb5db582f6ed4d94ec3"
+    },
+    {
+      "id": "43-zsh-curl-default-config",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "ec9bf1e73ca787666d79dab9924ac20e308e00192c46ff696933656259d63614",
+      "afterHash": "b3455dfb6c39357170447668a02396654080faa60cc8d4ac191daf2f966c1bad",
+      "supersedesAfterHash": "0d17183ae8eea680624ebd01bcea3484bd8eb7f2c0873e6ff0d3fe216bd91f5a"
+    },
+    {
+      "id": "43-zsh-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3715cc9eb643877b1dd52da4f49fa5774e8c964b67997a231ee16114c52140d9",
+      "afterHash": "54f29c1c3c522f66629e65f0efdaaf06e3697b449b8f2e956a501c2b42ca5d7a",
+      "supersedesAfterHash": "a775db87b2100ecd5c18532c6eeb64ad18b2c3d614766227ea4e2f474a8ba102"
+    },
+    {
+      "id": "43-zsh-resolvectl-search",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c4976ea13aad20a27ed23a8edb0525ebae31f059a783762570a16c56ceeb5d4a",
+      "afterHash": "472c9ed16269f3bfbeb47c99346c7e2b6115966590ffbeb23c4b42aecc6588ad",
+      "supersedesAfterHash": "e30613b39f65d8428ae84998f0185272b853204050f08494d063e9993e861d50"
+    },
+    {
+      "id": "43-pwsh-ssh-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "82be4cf2bf9da23629dd73a233f2e4e1ccb83a976a954cd1bd347360dd9b8114",
+      "afterHash": "e078ec3b5794e1fb8085d6492ad8013a1bbc3d0fcbfd45eda5b9876ef351cf3a",
+      "supersedesAfterHash": "41e2895e27310f111408c1cb4e6b09695441d8fb6f1557d469ca1145c86787db"
+    },
+    {
+      "id": "43-pwsh-ssh-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e64aa8650cbe02c8ae4e28b29489a1308d4d978b9500f878f8f498549fd1a1de",
+      "afterHash": "85715c9a2994a2b0657322bc65a0fb034e697a1fd823a459b71d7583f6778212",
+      "supersedesAfterHash": "c620e204ccd91159ceaeeb7fc7805dc9085cb238277dcd19f3e8c5be8b6b5f6a"
+    },
+    {
+      "id": "43-pwsh-ssh-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "fc6d48675e82084bf032f4a26c54a595b7f919964016e77ec3cbe8ca920c2e11",
+      "afterHash": "491195c17479c13ab02c5c2f306611bce38208b5f299160976c3b3417334eff1",
+      "supersedesAfterHash": "e7899c250cbe7fedb6784b6242763f82e789398e8212a9df37a8004f7520d9a1"
+    },
+    {
+      "id": "43-pwsh-ssh-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a709ff50cbf861e12aceac32a6dc999516843b790db3c328cd2c98cfd89ebf19",
+      "afterHash": "5ddd4e6d1ad7296e60fd21c201afbcad6877cd4c52f0ff15ea28d84d7ec382a1",
+      "supersedesAfterHash": "f1339032a6934c15250762aa15b302022e2045915687a89f3d620370feff3bba"
+    },
+    {
+      "id": "43-pwsh-ssh-1-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "946433cf0ad9cd526a040726eaf069b1720033435c9e1d2b911b952c10d81886",
+      "afterHash": "92d4c206ed4074962c50c52068eda253b6878f96ebb78d419321ec6a9bd91494",
+      "supersedesAfterHash": "b1a276ed2723a355fb05f41560042b4df1bddd94fa1649151f4c4e23db6f762f"
+    },
+    {
+      "id": "43-pwsh-ssh-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "188f42b895d97783fbf2a12d181c19b941cd986d187bb3d0000108e1572ba0d8",
+      "afterHash": "b1586ef7e2e49f8c4ebcdc3abe8634fee71d6acc35f03d3a49b618e853a8a960",
+      "supersedesAfterHash": "8809423924e22be35e7d8fea0b60798e784e9a6dbcef6e27eed73082259420be"
+    },
+    {
+      "id": "43-pwsh-openssl-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b8e5a88b0bdb12ff830363118d0f5b4d73ca43015a7410bca6ef5f408b766861",
+      "afterHash": "4de650fb1189183f6786b2b10ebdc6f3d722bb6e63f6d9aa9490aabaad98cbb3",
+      "supersedesAfterHash": "ee8f960b0b680cd737b4fb24550a15f81cb8e70cea8fc36cadaeb483a9eb218f"
+    },
+    {
+      "id": "43-pwsh-openssl-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "18268434dae621dd2542f93338d203a8a3557a68f70c6c59658dc37e026699e6",
+      "afterHash": "3b503b0862bb84cb356d30eeea79385d4113e945da8935baaa7c95e08ad3d2f9",
+      "supersedesAfterHash": "38d35151b3a6e2860e8af0623226bf327708c938c60d974f3d2feaaa7026c936"
+    },
+    {
+      "id": "43-pwsh-openssl-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c5219dea48627dc28cbef73b0da5323680b1e3f5c4f876ed9b15c57b79d8fe36",
+      "afterHash": "c6357ee9ab9e8b9537e6e2b9566b0f17ccc6070204939b534acf5a023d58a6f9",
+      "supersedesAfterHash": "0c0eb88e960d6d47fa40c796f17e79db8911e32f8f7363190f79716056415249"
+    },
+    {
+      "id": "43-pwsh-git-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "fd0eec2b666ed1022a18fa1351fae83af6032c2befc20faa1fdf78fd99bbbe18",
+      "afterHash": "342450c4927eb6704cf1c103c592c5d32f448fcdd706612a363c046717c458f3",
+      "supersedesAfterHash": "05edf1968a24c75004bb847d8bf922f94545d845d4a78ac7ce45461c2be65064"
+    },
+    {
+      "id": "43-pwsh-git-1-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f5edc640e4a5766ca24c19b83371211320031c764731817481813abed0e6cd53",
+      "afterHash": "adaeda5b8ec6ab006cf19835eeb7b2682e1a0598f1ff4a1378db0dde2dd6279b",
+      "supersedesAfterHash": "b7f1c0726035e23584d052f8007e69eddd87559492c1c2ca1d9482ef4e30b805"
+    },
+    {
+      "id": "43-pwsh-git-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b73f93a8a326449de23b53bc8bd277e9a16f4f34ea9bb057288001d7fd4f8687",
+      "afterHash": "dbbef08e1b359b4a90d4728c468d93117ed1869fcda3158153fc82b1c6931a3a",
+      "supersedesAfterHash": "8314669c43c4c5a4e2efdad909acfecf7a0fcaf307c5ff5a4d3c8581dd25d15a"
+    },
+    {
+      "id": "43-pwsh-FINDINGS3",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "971262e7c96e345f8bb538c653cd3c6bf472049524889e17db65996c6ec0ade8",
+      "afterHash": "d28b302e251582d9501084872fe24894bf72837364d3db68e543f5a214e9c7d0",
+      "supersedesAfterHash": "fb85abb409906453c8e8721daca659b297eebd2f78c2765b62216db0da8e7111"
+    },
+    {
+      "id": "43-pwsh-live-tsig",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7a6cc2d4ee5d032fd08d3c830fde66d1aa1b164e98cdcafed3cb249abbbc14ab",
+      "afterHash": "602d1334d60d08ed43eb38efa154635929fcef2f1354b4e409567c5af4992722",
+      "supersedesAfterHash": "310ff66fd2ffff8f37678c7267bbac829ee38c8e23a8060d4c916fec9f976941"
+    },
+    {
+      "id": "43-pwsh-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b82fdb82fe71b7951279256aadb5cb328f96fc944f8c97c23170fc344c28ca4c",
+      "afterHash": "bc5b8227d86b5a8a3ffa9627571f9897f6d02e1ed92537b56de05c865d2743dc",
+      "supersedesAfterHash": "5e82603df98dcea51afec2b8887a3906483834aed62c2c845d704c4982c7b1e9"
+    },
+    {
+      "id": "43-pwsh-curl-default-config",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7eb4093935e02d763ac5705a799ddf0f2f844aaf5792621c1421cc62f98bac6c",
+      "afterHash": "c53c8babd8d8118d4c035f41bf5cf7395ae6da5eb3f9b05066891c39a4d792c1",
+      "supersedesAfterHash": "fd2d5f9c97fdd933321762ca93dfa836f1d455eb4d4eeef7d1c74b631a683225"
+    },
+    {
+      "id": "43-pwsh-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "adb89542d3bce51db79dadeb1d7ad1ece2e4b1ad48aa9d8b44bc5fa61a5ec46c",
+      "afterHash": "442f0a7435326479c1cd45b8f891c07367c91ab6440d0af2e607632c7a39349c",
+      "supersedesAfterHash": "1b6e17787ed6e33122dac82568d4e19f3c45ea4092bef5f7457bd2d1ea612a45"
+    },
+    {
+      "id": "43-pwsh-resolvectl-search",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "56897cff15546b1f54cf1169f23682bcdeca40c48929a4cb1e7a3fba67212bc6",
+      "afterHash": "024462ca1cd4b1e75f441fa590dd7c921091a38becaa332ce53da2d6e2f76dd5",
+      "supersedesAfterHash": "0c9fb18e2d288a4c13d5434305c21274d7125f89a125a8316f1cbfd357beffd8"
+    },
+    {
+      "id": "43-powershell-ssh-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c2fcf1c3b7a9d96ee7f8694ac077d196f5a9a7b012d169f7d2250d584825e62a",
+      "afterHash": "d8487f58a22d4986014c353f82cd9931051ea42ab37722b29cb4c7598b11c815",
+      "supersedesAfterHash": "47e3cc1a84df485dc225f877c4bf021cef9ae6aec009c8f8b8e601b22d28aa79"
+    },
+    {
+      "id": "43-powershell-ssh-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a142f40f600312c4f8ed43f0191fb468e1dd4ca9ea5273df354c08b9333a4d41",
+      "afterHash": "a9f3182eade37fa35c9826a38d6f42dc674cb75149465b3c6e089e3788932f42",
+      "supersedesAfterHash": "8365e09e8295f79710e3b851b50b0daaed320bd5a81ac166343d7d3f35a08d47"
+    },
+    {
+      "id": "43-powershell-ssh-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9a20cb95ae76aa1c9120aa2aac8015509ef5d6f0149328e5c962423b0fdda67b",
+      "afterHash": "2f890750109066e8c7096acc53f4c179507dd168fa7af2a57e9449a08118bd27",
+      "supersedesAfterHash": "4e394156a96f4667ed170cb1bddd304a8b6a76e496cb72951538fbee552b19c2"
+    },
+    {
+      "id": "43-powershell-ssh-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5247d4855eeae64505f0f1b1f13c0a926baffd9148b7437b7f231933438a425d",
+      "afterHash": "22bad287a6224b1b71ed5f9a402272164a4ef9e68d81eb8f826c31c68a453adc",
+      "supersedesAfterHash": "292de46f7456c8b52e06b98f2260f0d3455b3cffdad6c5539441c5d4b7c2628c"
+    },
+    {
+      "id": "43-powershell-ssh-1-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "728ea67e69f64a44f4d9e71159c967a76bfa5a909d9130ae984500107908c792",
+      "afterHash": "96109bbb8b82d0e4f4e41fe75a3cccd452e1aa375c2410b388a7190656b3fa05",
+      "supersedesAfterHash": "fe2da9462532b69579ddfbd057d5fcaed1fdf4ef7019b3720100220980f564fd"
+    },
+    {
+      "id": "43-powershell-ssh-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e99b0fd7079b39021c26273631f300c3d22fa4b7d1d6d0d1466de13b3f976b2b",
+      "afterHash": "83580a2c3ffb0a1caee07b45ad53561cd9e3f913ccb0d5935f7477632d30f459",
+      "supersedesAfterHash": "4a5fa86bae911c70b518b9edbbc7dd6afab970dd989f1a9ee2be1fcc138ceba7"
+    },
+    {
+      "id": "43-powershell-openssl-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b224c2d08db8ce0418a5fa4e9597eebefa7eb97509c5115a6b3c973120e1e117",
+      "afterHash": "6df2efa0d7e080f45b29bf1f1fe7605f90f043b9d359af3b1cc01508e610ddaf",
+      "supersedesAfterHash": "d42a796341b08497849c7403ab5e8d5f26fa84fdc5de03cf80c9d835be048b72"
+    },
+    {
+      "id": "43-powershell-openssl-0-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "81a2c0adbf162fae87183603564a633cb26366d8b174398227ca5a34b30c0032",
+      "afterHash": "d99db074d421595f4e0c45113542ce209bb99ce9e17c1f270ece8d1b6d79f851",
+      "supersedesAfterHash": "156791edfcfd7182fe5030a6f6833c49c8d4425069a3f5859e3298226f565f47"
+    },
+    {
+      "id": "43-powershell-openssl-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "febcf0cdd9e369b9f073e4c33dac110fe68de9501831618cc90cd96b764f4586",
+      "afterHash": "24a6fc84caaeb3202bc1ccc8c08094b8a5ed5c3ed5359e441eedfc927fee049f",
+      "supersedesAfterHash": "481e0631f867b9fdffc387e265b2bfb2a6a18bc48b5d1cec109a6e157b46cc9a"
+    },
+    {
+      "id": "43-powershell-git-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "89fcdc841f45c0a1400dc63a1d50024382cc64c437d90e690d6d9be226cbf4e1",
+      "afterHash": "53a870d7ce9d46cc589479bbfba0535d09531d4bde79cb9ea6c7cdc27eba71ea",
+      "supersedesAfterHash": "b2c6b45ce5247e22ebbea3549d591c6af30f5b2be6439ffed79a2fb516d05133"
+    },
+    {
+      "id": "43-powershell-git-1-single",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "0906720e2ef3176cd1304ac173bf851fb8286c80b758b68e41385aac65eb8ca2",
+      "afterHash": "e595050a5c3f48bc46a799070d5eccdfa01ade35b88d5f9f0e5f50ab15d90ac5",
+      "supersedesAfterHash": "1d497ef8775a3c5bef9f53f6aebba27242fe8da51572cf5648d04559268f1103"
+    },
+    {
+      "id": "43-powershell-git-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "662edf3c7c4c46537bfe24dcab1e4ce305ea3aae0dfaf43fe4f9f37972876108",
+      "afterHash": "5363fb1264e5ac3b6c1c30c83015eb846699168b06d2e37db23eea560e3f92ba",
+      "supersedesAfterHash": "10a5c0f4bfad3f47fc838aeac3e7226252968f900fe75f3ae2c37c9663a64a51"
+    },
+    {
+      "id": "43-powershell-FINDINGS3",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "247698785176e93ba0beca50a6aab07438d25f2ff07c0b751f6a48aba3a508fc",
+      "afterHash": "ddb961196cab5eac542e549a028db197f583978f97e8d1a2248a6502feadd725",
+      "supersedesAfterHash": "479569a72608b72ff8055a99f118419eeb3b5c51249714ff0c4bc2e00f29b85e"
+    },
+    {
+      "id": "43-powershell-live-tsig",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "38e26c8fe91a44594e0718e297501468b7e1de0c3da2bacd54c17a7fa735fe08",
+      "afterHash": "33a3e0b0e1a46243a2e92772887d42491788df1c4929cc6a46d6d4e262399994",
+      "supersedesAfterHash": "40338ed3b7aef295c629852e95dfad6abdba657c7a5ce06e49b6cf881a9f5c44"
+    },
+    {
+      "id": "43-powershell-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "934a05c7dda8a0ced076b04d6ee67988a48984fa1c02852c243d0560357138fb",
+      "afterHash": "8c883515df1c73ab3623b3a2bd8b7822fc1483e46d9f3f486691a35164ef789a",
+      "supersedesAfterHash": "c6301930554c7ba3a559551e69d80364505c07cf873f800da928ed2a1f139912"
+    },
+    {
+      "id": "43-powershell-curl-default-config",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e890f47cc54b649b216afdbd3f07dc23b1a1c4513c3345e0bc6af69667500e02",
+      "afterHash": "896d9ce16997b5c9e9e81e5188641947c08f0d6c0cfb682a7fd8b2c612d1c55e",
+      "supersedesAfterHash": "936355122d49f61eb654a5e6a88b501fae883324d2c70471a15483cfe242b9e2"
+    },
+    {
+      "id": "43-powershell-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9da9c5b9fe671bc790ca7becd364aa8e63cffdef9ccaf5cd79289c3c945a769d",
+      "afterHash": "aa728c4312adbed97efd090626a81ced5c9431476d78b99cb0d29066f64030f0",
+      "supersedesAfterHash": "0ce06327f7f684596fe4d80e329b94b1a8f27cc511c3d70df2f4fd50d814cbbb"
+    },
+    {
+      "id": "43-powershell-resolvectl-search",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f71d58c875009be1450d59e69d088e1581afb5a90ddbd67857e6217312c58742",
+      "afterHash": "40c5864110763aa3364a788b9bb2f7bc162c5f22b7e59d3106193431c35d45a3",
+      "supersedesAfterHash": "75ea8f7e6851e8e9db19c0aa833046e3b591d549b05d2ce759aaeac878a3cab4"
+    },
+    {
+      "id": "43-cmd-ssh-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9473db8d49096d1f6766e8a04c14f817a9f82537771fa7b37ad3c92b32727282",
+      "afterHash": "e3b817e0d4801136a01cf743146bc9b0f91df251e98d818ab65bcc8314209255",
+      "supersedesAfterHash": "02e0240507a09a3e11189748dc3f2d470baad1a62de1bb03c10fc07b7d5c5dc0"
+    },
+    {
+      "id": "43-cmd-ssh-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "23a5211b432a237325662562c483be034637f50a60f34e12c314ff9b2261efb2",
+      "afterHash": "6806bddaf7b93863689aa9f57ec26a675255f15bb10d3ca4a64bd54ff448bf40",
+      "supersedesAfterHash": "62b0726b83af6a4978b652c7635bfad557953fbd33da071ffb378bface9b105f"
+    },
+    {
+      "id": "43-cmd-ssh-1-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "8d5d3899576e5c0da3e7f07c1eb95dfaf1e4fce7af253bf543656825dfa6b113",
+      "afterHash": "d0a4b93990d868b2a05790cefa03211c70993bb460f75ad4168de12498d48b4e",
+      "supersedesAfterHash": "112bfd77a6f87bef5cb008461890d37b7bb7e3f89e6e39e23129862e9f5df513"
+    },
+    {
+      "id": "43-cmd-ssh-1-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "da9ca505c7a9f0d27ea72f4c762a93285781fbb85620fb0b994cf71486010cf0",
+      "afterHash": "a6f8f1a137e3c2b6fb39b9d03a1eaa9f4745d733d8db9ece654aa56818ee5eb8",
+      "supersedesAfterHash": "cb46ac9ebdf91a39a21dcfa19cc77c5f29d7e26c9cf97019f9bac333fd8c1aee"
+    },
+    {
+      "id": "43-cmd-openssl-0-none",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a03829adbda3a5fdecbefd125acf91ea7b4aef771e459e1bcdb33eababe90b62",
+      "afterHash": "211501f25529f8ff8cf56d9cdbfc969349ce64d74fca305d479a4f3bbf5b8fd0",
+      "supersedesAfterHash": "c3c370209c621160ee1113dc52198eaa1e8a2c843af53970ecf090ef1a8a1b7e"
+    },
+    {
+      "id": "43-cmd-openssl-0-double",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a0f509a3923cbaa881ab95eedce787f5a0b63ddf0418edbc2f0dbc3b2032abca",
+      "afterHash": "22ccccbd5dd9cc6d1cf67ad65437d4b2866eb640d130ab52994c757cca04a38c",
+      "supersedesAfterHash": "c4b8abe23cc3620e9d1cfe5778510982a322770c5ff80c3381112d01069358ce"
+    },
+    {
+      "id": "43-cmd-FINDINGS3",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b78a9c4fa28d52f0c9b3fb6f7f23ee7be8eb4431c035e63f62d67163b14510e9",
+      "afterHash": "ebe42a9df8ad45729fa7ef1f1015790779f3533a5ea53906ad91ab59de48c295",
+      "supersedesAfterHash": "250c2d71a58b43aabdc7e6216605893d6bb11890b01f4ff0277864dae97864b4"
+    },
+    {
+      "id": "43-cmd-live-tsig",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5e00ab4884863610378f69e903ab23a9d17df77b0afb9015a0f6f2d1c03d2366",
+      "afterHash": "297e28dbb1c3d3b2fb1e4451dd379a26d75f55347de601a5a003258ec7a618a8",
+      "supersedesAfterHash": "e9623b9cfbfe1517e782bda78bf8fbae7dc13988fca3e8dce304dfb78d2c5f47"
+    },
+    {
+      "id": "43-cmd-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "53ad562d009ddf3cdefcf0949ae1fda67e019369888486f82bd8b507dfaf7423",
+      "afterHash": "052171ed86d675d861e558fda61606fa6858674db98e9085413053167c85b2f0",
+      "supersedesAfterHash": "8260920f8c371277405f57aa5841cafd861e657d28331971d9b2f1bfab1bf1f5"
+    },
+    {
+      "id": "43-cmd-curl-default-config",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c1e38e65163d43a44090ead01b95f26383a27e45ed003d3f707792a63a2cfba0",
+      "afterHash": "a37f13fc3970a90cd5423ca024e736ef42dfb6f0b2446bb1975ea0ec62620e4b",
+      "supersedesAfterHash": "bd01f94018940fd6476bffba0fc79094d378f193203eb50d63ba6538fdd1ffe1"
+    },
+    {
+      "id": "43-cmd-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "61cc5239a77e30f4a865c7646fdf8ddcb51da6cb84e7414edcbc02bad2033b25",
+      "afterHash": "07649b7a83d610fcebb4f8485f8731ae47d5c7a3a4272f064172feebe4194590",
+      "supersedesAfterHash": "4cebfc494f8fe363c7c63ed1902fd592649f9955df5bb0a02fb561305232c2e0"
+    },
+    {
+      "id": "43-cmd-resolvectl-search",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "bc8d9476e1aff3e5f1a068d7b503ca5c96cb03889e906659e3a6358ca0bc6e8d",
+      "afterHash": "93efff8e26456b1576a8d434dfcc28b08cef4610a8ebe240ba17c64f52dd987d",
+      "supersedesAfterHash": "f5649cfe5160b62b98c678c07810ba623b9cf7f1399709d72404e3742d61ad3c"
+    },
+    {
+      "id": "43-bash-comment",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9da36f195b0a60ff6bb527e45f8f114217024ff50d2e057324cbe47bee2ab528",
+      "afterHash": "8e6af769e73daf2e8de69fa7c5845d375d503d2523bb8c52c7d7704e6b2a3032",
+      "supersedesAfterHash": "063df7a7c9365f4df81fe7dbf0aa8470fda11090d625e660375e504a1e6c4bda"
+    },
+    {
+      "id": "43-zsh-comment",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f6c36d009ffd8f10301b6a2831ab77cd2395f4121cf2c8677eba727721163ebe",
+      "afterHash": "652f06917cef1801c8b95816ca5dc0046ce45ad8fdb54a3df89385b1b310352d",
+      "supersedesAfterHash": "14be04656a1be410fb8f76ae760158835285fb45b85db4a7d6be127c279a6d47"
+    },
+    {
+      "id": "43-pwsh-reference-suffix",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "67ceafd0947850320db4bfbdfe27bf314b429863d3f5cf96e440f452be2a9143",
+      "afterHash": "c9190aa1f2aa2dcb617fc9c05533af91ebf3f09322537687bd94191ff353a13a",
+      "supersedesAfterHash": "381485ef9f395e8e22ec39a7f42345bc81996d811d81fbb99ff2b8d249da4443"
+    },
+    {
+      "id": "43-pwsh-reference-boundary",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "02f768069b3f66b3b065a3afa4cbcafd764c44b5cd0915b7b281420b53c4b33d",
+      "afterHash": "e5c29c09d0efae95b20da7a5ac13a27a666413b5570646fe337cb715e0a505cf",
+      "supersedesAfterHash": "fb09efcf427518c1c23869f22d6576beefe6fbe24ca33dd935e3301095881e80"
+    },
+    {
+      "id": "43-powershell-reference-suffix",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d3fe54e45f72937df4f4c351509efc5ff0b563e90951e6518b6dd23c25487a8d",
+      "afterHash": "8bcd487bd2eb344f1e65d97c6e0605637fc862ff51e8a80087e587a1c367f37e",
+      "supersedesAfterHash": "81e928c6f4f8cd2795a74fc004c4b4ecfcb7accd3f2cdab7065f693909525e26"
+    },
+    {
+      "id": "43-powershell-reference-boundary",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5347e950764009d073dbb7e913d6cba7a2fb573ad6a30a9c443b1a4682db353e",
+      "afterHash": "59c5f612d9b51badf01333c55e6ab07234e3c679424bc285f522f0956073e3ec",
+      "supersedesAfterHash": "6ebe7274e14da7202d7756e6cde0439a2ee23162c8482ff8a59e7348a2a87015"
+    },
+    {
+      "id": "43-spike-03",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "aa2416ef94d5a98276e060ba4e09f09478f41bb70af059f6b473e258fca7bbc7",
+      "afterHash": "93ff36ef89eff8efe6e471cf34e71f48396a69d6a81c44313cab8b9b71fd5233",
+      "supersedesAfterHash": "75d907c044ea35ac455ad9cf52e7f8f9b5b391f57b7ed228d92b8952f5982b90"
+    },
+    {
+      "id": "43-spike-09",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e775a7bfe7a4a5a5d1daf3c85d4a163838c8bfdf0d01303ff82941fec380d6b9",
+      "afterHash": "297b16f2d224201aa690efbfbf4949773f2991ab1599118a53706cdef345fa7d",
+      "supersedesAfterHash": "d42f43cb5e09433a20e45205fd785166f4962c8baf2c663670f5cce8cb56d1e9"
+    },
+    {
+      "id": "43-spike-20",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b1f51f8c8b7fbd1b8cf51474b86510fe005890e6c4b4dab2add3754fafce297d",
+      "afterHash": "b4f99c82fa0a8e004296dfe8d6d89f6a44411c698eaca0badb077ea24bca8e1e",
+      "supersedesAfterHash": "bcf4d843278080cbaadb92bdd0e33ef9c51b76d14104a40aa459712a9457c744"
+    },
+    {
+      "id": "43-spike-32",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "43a4bf038fbe0a2ac64cfab53e087bb9d3dd9727b2bc586d89474ab354266dea",
+      "afterHash": "1228b3444e4000d6253670e6b00b9d9cf3f3f03cea70ab77afec5b2a20782cd3",
+      "supersedesAfterHash": "b122eb0e362e63fa4c3bc38220a650e491648bd5ff23925c813104a9bdad4e95"
+    },
+    {
+      "id": "43-spike-33",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a910f74dc4d18fc45113bf0a90c9de9126ba00cea9137a06e5e0e25048da5278",
+      "afterHash": "830e3c1b4fc96e9539054191bc7faff00da2a10fb0fd3ca5240592314f4422c2",
+      "supersedesAfterHash": "848c3ea9b22fda2fd9bec52165ddb805e2e303d67ba01923f3b12e9550ab6585"
+    },
+    {
+      "id": "43-spike-44",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "46edfa0b8dd9e5dad30559e1eca5ed192cd14974aa083f44b541f5f37ea7c4e1",
+      "afterHash": "cdc3fef593e211b7fe1467db85653a2bd1250d5cc47c6cbfeb5f621610ffca09",
+      "supersedesAfterHash": "2c91070d80f3a42debdb24240c09b71f0352223d98a400c3b83078c355f225ef"
+    },
+    {
+      "id": "43-bash-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "74b7d8fde0b8d8e9932d11f326379978bf3330f8fa6b71ccfe8a9e839b87f581",
+      "afterHash": "b2af5bdb70dbf7b42d9b59007d3b8e6c3ca62052267d12a7e0479f22b98f3c47",
+      "supersedesAfterHash": "3c5fa12e2978811ece498dd3087f7a1a6af909816f04733bc6fe3ff26128ac43"
+    },
+    {
+      "id": "43-bash-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9089c6d9ed5d5f416a5043f689bdcc3c8fdf66dc3004959de2563cbfda83c3c8",
+      "afterHash": "d2dc31a37c0fb5fb1beef1bdb04c6f81591d868608bdcf07899319c28ce35660",
+      "supersedesAfterHash": "eef6cf875f95fe1b3f0cb849f480377017941a4e499fff13d0e2aa501b5f0d9b"
+    },
+    {
+      "id": "43-bash-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a02c892f8378733aaca44ec3d1d04b1737f4324850b05a5380db6804a07dfaec",
+      "afterHash": "a7de7978ccde0a14a714f58730154f49c20831e0e9dd27b1012c7cd6d202d24a",
+      "supersedesAfterHash": "0400fd5e8fc9a402a4853b09f7f3d94335e4bdc0b14b77a53d289fe566b521d8"
+    },
+    {
+      "id": "43-bash-curl-5-ansi-c-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "ae29983aa41f657280b832b534e7e435d38e046240bcce660bedf681e4d3d359",
+      "afterHash": "2b7ad6f8ae71229bf97fadd0322d74b98f151bf84f89fa1ec632458dbb17c83b",
+      "supersedesAfterHash": "d26f74d92f2fa9cb735b71fa8e026df19bf35b8b57408d0469ba7536517a3777"
+    },
+    {
+      "id": "43-bash-curl-5-escape-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7355b6d9f6011995d483217586ff7a55e96c510ee75bedc86c6fab1d2d744ec5",
+      "afterHash": "a4d9c5f2e7e2953cdfbbeaeaaefcab7bcec488a8e1caebbdaedc7a9ebd4f571c",
+      "supersedesAfterHash": "34e4734a9ad30f130c4e8f0ef79c5f199111cb1d7b95c99347b4445818c902d5"
+    },
+    {
+      "id": "43-bash-curl-5-concatenation-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "82546e0360eb0a67fabcbb9732e276d93329ea27469e149fb32f8640ff525415",
+      "afterHash": "8fbf597b3caf0d53ebb0313af8f5be3b507669b26d15b1473d0cf0ac188b9c57",
+      "supersedesAfterHash": "e3f8238c8b0f61f9c995397a056f8df2f214c6c375d49a1d19735a5bc8dc20c5"
+    },
+    {
+      "id": "43-zsh-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e4cb74d5752f2d87b6e2ebd494c50aab1e032c2e04a018404ecbed7486f575ae",
+      "afterHash": "dd99a27cb365a37dcdd38845a808b0b2a839f4fcc53d727c21a6ff9bd49fe888",
+      "supersedesAfterHash": "820fd5524bfedf00faf3c95c9f11685927d32f564b9f2cd78e5eead64f313672"
+    },
+    {
+      "id": "43-zsh-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "074f2df7f3cee76894cf8d7b162d22365dd469c97acebb8416b267e6f233eb9e",
+      "afterHash": "ed482a27ec0d7d43c98feca4827d77bf7b84bb0154f3c27996d604364cbc1634",
+      "supersedesAfterHash": "92baddfda3387dba8ccd2189031bde2ec9695f313e4739096a67d6732fe0264d"
+    },
+    {
+      "id": "43-zsh-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6e0270c5bc84868f6cbafcb2cb21f6b4b8189a11215e971751b30c89bacb1c98",
+      "afterHash": "ebf82be2370a8458f682cc9817cb998ea43340adaa0941704754410ef25c08e6",
+      "supersedesAfterHash": "ea8c12c1fbb11d0068ae066c40683d33777224deb7dfbe292d58c368aa801f9d"
+    },
+    {
+      "id": "43-zsh-curl-5-ansi-c-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e80420cfe82376ed53299361485c473ce88130b4b8e90f0bbaa283b0e236373f",
+      "afterHash": "2fd53be7c63df117317c7c77817fc45586770e0f906c7f066fe73c19978dd527",
+      "supersedesAfterHash": "2c55ade0954c2cc56b75a5f9c8747d7cafbdec3cfd43044a6984ba457e0b8077"
+    },
+    {
+      "id": "43-zsh-curl-5-escape-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7ff1c69af6d289dd7c622980b847c388ea2dcc8e877c286792324fe3e47e278b",
+      "afterHash": "4c53f8a697b4fb7c95891442cb9db9995de164a8738d9aa4e58319350dbbca8f",
+      "supersedesAfterHash": "ce44d35c9a674eba4ef7f1d9abb11ce849d6ab31393adde2aecda51221a1a288"
+    },
+    {
+      "id": "43-zsh-curl-5-concatenation-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "41f7ba036896c2148af10a5c0a7403cc5445cb7c737c6cd0fb4702134ce26b31",
+      "afterHash": "1a23a8055f9e8f98e4c1ecf94ea2e2b46f4d1949adf5acff005eb717062574b1",
+      "supersedesAfterHash": "9322167162e841146310a46e241284de6986d73a186198636db9e6e066f7143c"
+    },
+    {
+      "id": "43-pwsh-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6ab772e65a6a6e0e54b71d1674b2588386d7751a2dc046b5d12c941837db4116",
+      "afterHash": "41c8ac8acfb28c970c7bb282d4423b834ec3eec5a971238d71543983de614eeb",
+      "supersedesAfterHash": "03875c9df7bee7c79a21312e5bfa39f76c54ebea01535236d6ccdbc2f39134ed"
+    },
+    {
+      "id": "43-pwsh-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d3ea3474913c46cf6dcf7512c5597d6ed66f8e6217777e3aab94487ae116d92b",
+      "afterHash": "c451997a0d82485b032a4bbbb22526f885db50036c9cca87433d4fda7bd19276",
+      "supersedesAfterHash": "2afe07d57e8ca59a1282dba3f8c46ab4f20f6b8674436b225631c44b138d5d24"
+    },
+    {
+      "id": "43-pwsh-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3217d92c815380253d1172ab3c7ce565a6a30499c2bce69a087c6fa4b2cda327",
+      "afterHash": "20138d014da875d481cb579d9e0c5607603ae225943f0ee3c7ff7449c26a215a",
+      "supersedesAfterHash": "6ae48a59cc7f4c123202c8989b34df28e204df5b499bfd84f1872b7e74f06664"
+    },
+    {
+      "id": "43-powershell-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a699cbfc30d3cb2cc9db5c37ceb310bf6f6fea592c0e2b2dea3f6ee2c03dee3a",
+      "afterHash": "76327ad76a0540328a8991ad63778e289d21e62b1c84a716886444cf7d213b16",
+      "supersedesAfterHash": "8b1e08a3fa565f101b1b4d0a92c1300cadbf4f4755e9204d05ea0777314e7803"
+    },
+    {
+      "id": "43-powershell-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5c735b1ef8b20a035fbe067ee6c9313d0b9f8e06d32f50d688b65613fe732303",
+      "afterHash": "7a398a0af506cd7c89aa6753c9f61f26332e3f16ce9868174a650768747c7873",
+      "supersedesAfterHash": "4a04515965ac6db0f621aa90a7927b0b2df2bd5043eee650cc00f8071c2bb39c"
+    },
+    {
+      "id": "43-powershell-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "837d7575c895a745e9fb2347054a69eb99e151906cfa49bad13f8847f93e4607",
+      "afterHash": "23331370380494313b3a8ef0c0e4cd53aae3eb45b63fbd3a87b654e1689dae87",
+      "supersedesAfterHash": "4627f3d154067d44ae1130795d36591af79c52cea77970ea1623fdc8e2969dbd"
+    },
+    {
+      "id": "43-cmd-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2e78b1e23e09a81c3cd0d7d2d917bd0e4dd7a7f21d7cf4a6feccd948b700ee7a",
+      "afterHash": "808e381fcbe457c986620a3de66f53f1773fe70f6658004b91f4726e7493bced",
+      "supersedesAfterHash": "94c92e9d6c2e406fe54e3e198534d3bbeb1090249a23a6952e56f89c938b6656"
+    },
+    {
+      "id": "43-cmd-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "1afed3b75e20c6590519aa80908f8b63e47e983386f34e8d2b0f0117af211961",
+      "afterHash": "5d5c2f1fde0d38ea5c1472036a95a9673fed3ca89224cd497dd0736086796eb9",
+      "supersedesAfterHash": "f7f27d5c6c38b03207454964e4c8115fc40698f427a8dad8271989035b0f24d0"
+    },
+    {
+      "id": "43-bash-historical-tar-protected-extraction",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "4423d93b24ae644cea7c47dc39a24477ba65cdde48ed443d0dbdd6f7e7310f74",
+      "afterHash": "4d218a338455e23327875b189efe7d60a66443450cb71944dedad46844656ee5",
+      "supersedesAfterHash": "581208ce5ec4ba512d7a2b042160328eb36d35015a576b42c1c3bda1c64741f0"
+    },
+    {
+      "id": "43-zsh-historical-tar-protected-extraction",
+      "explicit": true,
+      "date": "2026-10-09",
+      "rulingReference": "owner ruling 2026-10-09 (V111 URL-only patch; destination engine moves to 1.1.2)",
+      "reason": "V111: move destination fixes to 1.1.2; 1.1.1 is the URL-only patch and retains the 1.0 analyzer. Supersedes the earlier target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "15245bca58d899b9005b0adb82d45c9e43bc68f3ebb2187fa7fda83534d52d66",
+      "afterHash": "e86443a58056c795de9111940e9b443eb017226f452449e755b81ad58845d71b",
+      "supersedesAfterHash": "8d31a9bcb43287292248ace8743e0163dcf096691e657cb795a07ba626b06ed7"
     }
   ],
   "historyUpdates": [

@@ -140,3 +140,7 @@ Actual isolated hooks against the split 1.0 analyzer: 1,555 rows, 1,419 correct,
 | 43-cmd-curl-5-double-allowed                | curl       | --data-b                 | cmd        | false-stop        | 1.0 stops an independently allowed or local command                 |
 | 43-bash-historical-tar-protected-extraction | tar        | tar-protected-extraction | bash       | missed-protection | 1.0 does not stop a mandatory protection mutation                   |
 | 43-zsh-historical-tar-protected-extraction  | tar        | tar-protected-extraction | zsh        | missed-protection | 1.0 does not stop a mandatory protection mutation                   |
+
+## Dated release-target amendment, 2026-10-09
+
+Owner ruling, 2026-10-09: 1.1.1 is the URL-only patch (test guide: https://bladelabs.io/try/). Phase 44 and task 44.9 (112 false stops, 8 missed protections and 16 notice gaps), strict mode and the destination dialog move to 1.1.2. Both 1.1.0 and 1.1.1 ship the unchanged 1.0 destination analyzer and its allow commands. This supersedes the earlier 1.1.1 destination release target; all other gates remain unchanged.

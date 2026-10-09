@@ -63,7 +63,7 @@ promise an immediate refresh; see the [FAQ](docs/faq.md#when-does-zeroh-update).
    The call is blocked before it runs, and you see the one line that would allow it:
    `/zeroh-disclosure:allow STRIPE_KEY staging.pay-internal.dev`.
 
-The website has a [step-by-step test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/)
+The website has a [step-by-step test guide](https://bladelabs.io/try/)
 that also covers personal data, unmasking and receipts. No Stripe account? See
 [Try it without a Stripe account](docs/how-to.md#try-it-without-a-stripe-account).
 

@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { cmdDoctor, doctorFixedLines } from '../../lib/cli/doctor.js';
 import {
   checkPublishedVersion,
@@ -9,6 +10,11 @@ import {
   PUBLISHED_PLUGIN_MANIFEST,
 } from '../../lib/cli/published-version.js';
 import { tempProject } from '../helpers.mjs';
+
+const installedVersion = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+).version;
+const newerVersion = `${Number(installedVersion.split('.')[0]) + 1}.0.0`;
 
 function fixtureFetch(version) {
   return async () => ({
@@ -33,10 +39,11 @@ async function renderedDoctor(fetchImpl, { json = false } = {}) {
 }
 
 test('doctor reports a newer fixture marketplace version and the update commands', async () => {
-  const output = await renderedDoctor(fixtureFetch('1.2.0'));
-  assert.match(
-    output,
-    /Updates: newer version available \(1\.2\.0; installed 1\.1\.0\)/u,
+  const output = await renderedDoctor(fixtureFetch(newerVersion));
+  assert.ok(
+    output.includes(
+      `Updates: newer version available (${newerVersion}; installed ${installedVersion})`,
+    ),
   );
   assert.match(
     output,
@@ -45,7 +52,7 @@ test('doctor reports a newer fixture marketplace version and the update commands
 });
 
 test('doctor reports an equal published fixture without suggesting an update', async () => {
-  const output = await renderedDoctor(fixtureFetch('1.1.0'));
+  const output = await renderedDoctor(fixtureFetch(installedVersion));
   assert.match(output, /Updates: no newer published version/u);
   assert.doesNotMatch(output, /Updates: newer version available/u);
 });
@@ -61,11 +68,13 @@ test('offline doctor says the published version could not be checked', async () 
 });
 
 test('doctor JSON records the published-version result', async () => {
-  const output = await renderedDoctor(fixtureFetch('1.2.0'), { json: true });
+  const output = await renderedDoctor(fixtureFetch(newerVersion), {
+    json: true,
+  });
   assert.deepEqual(output.publishedVersion, {
     state: 'newer',
-    installed: '1.1.0',
-    published: '1.2.0',
+    installed: installedVersion,
+    published: newerVersion,
   });
 });
 
@@ -91,7 +100,7 @@ test('marketplace check sends only a fixed anonymous public GET', async () => {
       assert.ok(options.signal instanceof AbortSignal);
       return {
         ok: true,
-        json: async () => ({ name: 'zeroh-disclosure', version: '1.2.0' }),
+        json: async () => ({ name: 'zeroh-disclosure', version: newerVersion }),
       };
     },
   });

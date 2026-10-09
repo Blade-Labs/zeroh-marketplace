@@ -1,7 +1,7 @@
 [
   {
     "id": "44.9",
-    "release": "1.1.1",
+    "release": "1.1.2",
     "reason": "Fix the owner-ruled 1.0 baseline: 112 false stops, 8 misses and 16 notice gaps; 55.4 triages notices in 1.1.0.",
     "caseIds": [
       "43-bash-ssh-0-none",

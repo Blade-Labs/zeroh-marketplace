@@ -30,7 +30,7 @@ notices, work with the local proxy, run PowerShell, and remove the plugin.
 
 The [README](../README.md#try-it) walks through a Stripe test key against the real Stripe API.
 Without a Stripe account, a made-up key works too, as in step 6 of the website's
-[test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/):
+[test guide](https://bladelabs.io/try/):
 
 1. Put `STRIPE_KEY=sk_test_ZEROHFAKE00000000000000000000` in a test project's `.env` and start
    `claude` there.
@@ -63,7 +63,7 @@ them`). Accept Claude Code's dialog for 15 minutes and Claude sees the addresses
 `+` tag, non-ASCII letters, a quoted local part and an IP literal, all valid addresses that a
 simple pattern rejects. Tell Claude to stop, and email addresses are masked again at once.
 
-The website's [step-by-step test guide](https://witty-river-07cbf8503.1.azurestaticapps.net/try/)
+The website's [step-by-step test guide](https://bladelabs.io/try/)
 goes further: naming tokens, a value ZeroH misses, and receipts.
 
 ## Run the CLI
@@ -890,7 +890,7 @@ already saw as tokens (held in memory, never written) and nothing new.
 
 ## Known destination-check limits in 1.1.0
 
-ZeroH 1.1.0 keeps the destination checks from 1.0.5: 112 safe-command stops and 8 missed protections. Fixes are planned for 1.1.1 (task 44.9).
+ZeroH 1.1.0 keeps the destination checks from 1.0.5: 112 safe-command stops and 8 missed protections. Fixes are planned for 1.1.2 (task 44.9).
 
 | Safe-command kind (112 measured cases, including quoting variants) | Why it can stop                                                                                           | Allow command for the example; replace `NAME` and the host with the ones shown by your stop                                                                                                                                                                                                     |
 | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -903,6 +903,6 @@ ZeroH 1.1.0 keeps the destination checks from 1.0.5: 112 safe-command stops and 
 | Curl with a token only in a shell comment (3)                      | Comment text is treated as data sent to the URL.                                                          | `/zeroh-disclosure:allow NAME api.example.com` (or `a.example.com` in the joined-option example)                                                                                                                                                                                                |
 | Curl abbreviated `--data-b` (20)                                   | The allowed target is combined with an invented target from the value.                                    | **No valid allow command** for the invented target (it is the secret itself). Write the option in full, `--data-binary`, which ZeroH reads correctly.                                                                                                                                           |
 
-The 8 missed protections are curl redirects to another host (5 shell cases: the second host is not checked or warned about), extraction by `tar -xf … -C .claude/` into protected settings (2 Bash/zsh cases), and the recorded MySQL `-pPASSWORD` command (1 case: its database host is missed). These can run without the expected protection or notice. Check redirects and database targets yourself, and do not let archive extraction replace Claude Code or ZeroH settings. Task 44.9 in 1.1.1 covers all three kinds.
+The 8 missed protections are curl redirects to another host (5 shell cases: the second host is not checked or warned about), extraction by `tar -xf … -C .claude/` into protected settings (2 Bash/zsh cases), and the recorded MySQL `-pPASSWORD` command (1 case: its database host is missed). These can run without the expected protection or notice. Check redirects and database targets yourself, and do not let archive extraction replace Claude Code or ZeroH settings. Task 44.9 in 1.1.2 covers all three kinds.
 
 The 16 missing warnings for curl configuration, PowerShell variable boundaries and a Bash heredoc are individually disclosed in [the 1.1.0 release notes](../CHANGELOG.md#not-checked-in-this-release). Review those destinations yourself; the command does not reliably print a warning.
