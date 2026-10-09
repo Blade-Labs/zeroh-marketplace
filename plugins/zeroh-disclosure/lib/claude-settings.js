@@ -17,13 +17,16 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { isLoopbackHost, loopbackPort } from './loopback.js';
+import {
+  isLoopbackHost,
+  loopbackPort,
+} from '../packages/local-proxy/loopback.js';
 import {
   readJsonOr,
   removeQuietly,
   writePrivateFile,
   writePrivateJson,
-} from './private-fs.js';
+} from '../packages/zeroh-disclosure-core/private-fs.js';
 
 export const DEFAULT_ANTHROPIC_UPSTREAM = 'https://api.anthropic.com';
 // Settings written by ZeroH address the proxy as http://127.0.0.1:<port>/z/<key>.
@@ -52,6 +55,31 @@ export function resolveClaudeSettingsPath({
   const home =
     platform === 'win32' ? env.USERPROFILE || homedir() : env.HOME || homedir();
   return pathImpl.join(pathImpl.resolve(home), '.claude', 'settings.json');
+}
+
+// TODO(phase 56): replace this compatibility seam with repository/platform
+// identity's canonical Claude settings path helpers.
+export function higherPrecedenceSettingsPaths({
+  cwd = process.cwd(),
+  env = process.env,
+  platform = process.platform,
+} = {}) {
+  const pathImpl = pathImplementation(platform);
+  const managed =
+    platform === 'darwin'
+      ? '/Library/Application Support/ClaudeCode/managed-settings.json'
+      : platform === 'win32'
+        ? path.win32.join(
+            env.ProgramData || env.PROGRAMDATA || 'C:\\ProgramData',
+            'ClaudeCode',
+            'managed-settings.json',
+          )
+        : '/etc/claude-code/managed-settings.json';
+  return [
+    managed,
+    pathImpl.join(cwd, '.claude', 'settings.local.json'),
+    pathImpl.join(cwd, '.claude', 'settings.json'),
+  ];
 }
 
 export function installId(settingsPath) {
@@ -107,8 +135,9 @@ export function usableUpstream(value, ports = new Set()) {
     return null;
   }
   if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  if (parsed.username || parsed.password) return null;
   if (isOurProxyUrl(parsed.href, { ports })) return null;
-  return parsed.href.replace(/\/$/u, '');
+  return parsed.href.replace(/\/+$/u, '');
 }
 
 export function newProxyKey() {
@@ -160,26 +189,88 @@ export function settingsBaseUrl(settingsPath) {
   }
 }
 
-// Settings files may be symlinks into a dotfiles repository. Write the link's
-// target so the link survives, and keep the file's own mode.
-export function writeSettingsFile(settingsPath, data) {
+function settingsTarget(settingsPath) {
   let target = settingsPath;
   try {
     target = realpathSync(settingsPath);
   } catch {
     // A new settings file is created where it was named.
   }
+  return target;
+}
+
+function rawSettings(target) {
+  try {
+    return { exists: true, raw: readFileSync(target, 'utf8') };
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { exists: false, raw: '' };
+    throw error;
+  }
+}
+
+function validatedDocument(raw, settingsPath) {
+  const document = parseSettings(raw, settingsPath);
+  if (
+    Object.hasOwn(document, 'env') &&
+    (!document.env ||
+      Array.isArray(document.env) ||
+      typeof document.env !== 'object')
+  ) {
+    throw new Error(
+      `Claude Code settings at ${settingsPath} have a non-object env entry`,
+    );
+  }
+  return document;
+}
+
+// Compare-and-swap one focused edit into Claude Code settings. The edit is
+// re-applied to the newest document when Claude Code saves between our read
+// and rename. Only the final compare-to-rename instruction pair is unguarded.
+// Symlinked settings keep their link and the target's existing mode.
+export function writeSettingsFile(
+  settingsPath,
+  edit,
+  { attempts = 5, beforeCompare = null, writeFile = writePrivateFile } = {},
+) {
+  if (typeof edit !== 'function') {
+    throw new TypeError('writeSettingsFile requires an edit function');
+  }
+  const target = settingsTarget(settingsPath);
   let mode = 0o600;
   try {
     mode = statSync(target).mode & 0o777;
   } catch {
     // New file: private by default.
   }
-  writePrivateFile(target, data, { mode, durable: true });
-}
-
-function writeSettingsDocument(settingsPath, document) {
-  writeSettingsFile(settingsPath, `${JSON.stringify(document, null, 2)}\n`);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const before = rawSettings(target);
+    const document = validatedDocument(before.raw, settingsPath);
+    const changed = edit(document, {
+      exists: before.exists,
+      attempt,
+      raw: before.raw,
+    });
+    if (changed === false) return { written: false, document };
+    const data = `${JSON.stringify(document, null, 2)}\n`;
+    if (before.exists && data === before.raw) {
+      return { written: false, document };
+    }
+    beforeCompare?.({ attempt, target });
+    const written = writeFile(target, data, {
+      mode,
+      durable: true,
+      beforeRename: () => {
+        const current = rawSettings(target);
+        return current.exists === before.exists && current.raw === before.raw;
+      },
+    });
+    if (written) return { written: true, document };
+  }
+  const error = new Error(
+    `Claude Code settings at ${settingsPath} kept changing; ZeroH did not overwrite them`,
+  );
+  error.code = 'ZEROH_SETTINGS_CHANGED';
+  throw error;
 }
 
 // What the user had before ZeroH wrote its entry.
@@ -198,17 +289,16 @@ export function originalOf(document) {
 // who removed or replaced the entry after ZeroH wrote it keeps their choice;
 // an entry for a ZeroH proxy (another port or key) is replaced.
 export function writeProxySetting(install, proxyUrl) {
-  const { document } = readSettings(install.settingsPath);
-  const current = document.env?.ANTHROPIC_BASE_URL;
-  if (current === proxyUrl) {
-    install.proxyUrl = proxyUrl;
-    return false;
-  }
-  if (install.proxyUrl && !isZeroHProxyUrl(current)) return false;
-  document.env = { ...(document.env || {}), ANTHROPIC_BASE_URL: proxyUrl };
-  writeSettingsDocument(install.settingsPath, document);
-  install.proxyUrl = proxyUrl;
-  return true;
+  const result = writeSettingsFile(install.settingsPath, (document) => {
+    const current = document.env?.ANTHROPIC_BASE_URL;
+    if (current === proxyUrl) return false;
+    if (install.proxyUrl && !isZeroHProxyUrl(current)) return false;
+    document.env = { ...(document.env || {}), ANTHROPIC_BASE_URL: proxyUrl };
+    return true;
+  });
+  const current = result.document.env?.ANTHROPIC_BASE_URL;
+  if (current === proxyUrl) install.proxyUrl = proxyUrl;
+  return result.written;
 }
 
 // The one rule for taking ZeroH's entry out of a settings file: a daemon
@@ -236,26 +326,28 @@ export function takeEntryOut(
       : match === 'ours'
         ? (value) => isOurProxyUrl(value, { record, ports })
         : (value) => value === match;
-  const { exists, document } = readSettings(settingsPath);
-  const value = document.env?.ANTHROPIC_BASE_URL;
-  if (!exists || value === undefined || !isOurs(value)) {
-    return { removed: false };
-  }
-  const original = record?.originalBaseUrlPresent
-    ? usableUpstream(record.originalBaseUrlValue, ports) &&
-      record.originalBaseUrlValue
-    : null;
-  if (original && original !== value) {
-    document.env.ANTHROPIC_BASE_URL = original;
-  } else {
-    delete document.env.ANTHROPIC_BASE_URL;
-    if (record?.createdEnv && Object.keys(document.env).length === 0) {
-      delete document.env;
+  let removedUrl = null;
+  const result = writeSettingsFile(settingsPath, (document, { exists }) => {
+    const value = document.env?.ANTHROPIC_BASE_URL;
+    if (!exists || value === undefined || !isOurs(value)) return false;
+    const original = record?.originalBaseUrlPresent
+      ? usableUpstream(record.originalBaseUrlValue, ports) &&
+        record.originalBaseUrlValue
+      : null;
+    removedUrl = value;
+    if (original && original !== value) {
+      document.env.ANTHROPIC_BASE_URL = original;
+    } else {
+      delete document.env.ANTHROPIC_BASE_URL;
+      if (record?.createdEnv && Object.keys(document.env).length === 0) {
+        delete document.env;
+      }
     }
-  }
-  writeSettingsDocument(settingsPath, document);
+    return true;
+  });
+  if (!result.written) return { removed: false };
   if (record && Object.hasOwn(record, 'proxyUrl')) record.proxyUrl = null;
-  return { removed: true, removedUrl: value };
+  return { removed: true, removedUrl };
 }
 
 // --- the restore record -----------------------------------------------------

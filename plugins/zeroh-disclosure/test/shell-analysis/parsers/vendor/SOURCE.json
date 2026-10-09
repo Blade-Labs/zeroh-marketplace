@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "package": "web-tree-sitter",
+      "version": "0.27.0",
+      "url": "https://registry.npmjs.org/web-tree-sitter/-/web-tree-sitter-0.27.0.tgz",
+      "integrity": "sha512-XK08gj6RwTMQatAG7uVRP8MunqotL/XC19vHgkSPKmELgbGPBj4ECvB8haHOUnyj6ls2B8t42UTro14zxGgAHg==",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "runtime/web-tree-sitter.js",
+          "sha256": "7c49e3c1d87e24e0bb4c2def909d17154dfde281f5f8280225450090bb4b8110"
+        },
+        {
+          "path": "runtime/web-tree-sitter.wasm",
+          "sha256": "c03bccdc3b448a32848f5ae327e209c982bbb0840d43eec8bc2d5759544a1ed3"
+        },
+        {
+          "path": "runtime/LICENSE",
+          "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+        }
+      ]
+    },
+    {
+      "package": "tree-sitter-bash",
+      "version": "0.25.1",
+      "url": "https://registry.npmjs.org/tree-sitter-bash/-/tree-sitter-bash-0.25.1.tgz",
+      "integrity": "sha512-7hMytuYIMoXOq24yRulgIxthE9YmggZIOHCyPTTuJcu6EU54tYD+4G39cUb28kxC6jMf/AbPfWGLQtgPTdh3xw==",
+      "license": "MIT",
+      "files": [
+        {
+          "path": "bash/tree-sitter-bash.wasm",
+          "sha256": "8292919c88a0f7d3fb31d0cd0253ca5a9531bc1ede82b0537f2c63dd8abe6a7a"
+        },
+        {
+          "path": "bash/LICENSE",
+          "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        }
+      ]
+    }
+  ]
+}

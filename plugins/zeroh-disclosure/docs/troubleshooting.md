@@ -11,6 +11,7 @@ that changes protection shows a code to type back); see [Run the CLI](how-to.md#
 - ["Nothing changed: … only you can do it"](#nothing-changed--only-you-can-do-it)
 - [`@zeroh` is not found](#zeroh-is-not-found)
 - [A hook does not fire](#a-hook-does-not-fire)
+- [ZeroH has not picked up a newer release](#zeroh-has-not-picked-up-a-newer-release)
 - [An update left an old plugin folder in use](#an-update-left-an-old-plugin-folder-in-use)
 - [The session banner is missing or has the wrong mode](#the-session-banner-is-missing-or-has-the-wrong-mode)
 - [A token appears in command output](#a-token-appears-in-command-output)
@@ -23,7 +24,7 @@ that changes protection shows a code to type back); see [Run the CLI](how-to.md#
 - [pdftotext is missing](#pdftotext-is-missing)
 - [A destination stays blocked after editing allow.json](#a-destination-stays-blocked-after-editing-allowjson)
 - [A bare host is denied](#a-bare-host-is-denied)
-- [A command shows "[ZeroH: the command failed …]"](#a-command-shows-zeroh-the-command-failed-)
+- [A command shows "[ZeroH: exit status N]"](#a-command-shows-zeroh-exit-status-n)
 - [A background command or Monitor is not protected](#a-background-command-or-monitor-is-not-protected)
 - [ZeroH could not open its vault](#zeroh-could-not-open-its-vault)
 - [An old token no longer restores](#an-old-token-no-longer-restores)
@@ -79,6 +80,27 @@ repository is a different marketplace.
 Confirm activation by starting a new session. `SessionStart` should show the ZeroH banner on
 screen (the block art on the first session, one `ZeroH Disclosure ✓ …` line after it). If it does not, test the checkout with `--plugin-dir` to separate installation problems
 from hook behaviour.
+
+## ZeroH has not picked up a newer release
+
+Auto-update enables Claude Code's automatic marketplace refresh; it does not promise an
+immediate download or replace hooks in an already running session. On the owner's Mac
+(29 September 2026), auto-update was enabled but 1.0.0 arrived only after a manual marketplace
+refresh and plugin update. That observation did not record the Claude Code version. The
+separate cached-folder behavior below was observed with Claude Code 2.1.283.
+
+Refresh the marketplace's published plugin catalog, then update the installed plugin:
+
+```bash
+claude plugin marketplace update zeroh
+claude plugin update zeroh-disclosure@zeroh
+```
+
+Restart Claude Code to load the updated hooks. The first command refreshes the marketplace;
+the second updates the installed plugin from that catalog. Automatic refresh timing depends
+on Claude Code; ZeroH does not impose a polling interval. Doctor checks the fixed public
+marketplace manifest for a newer published version, sends no user data, and says it could not
+check when offline. See the [update FAQ](faq.md#when-does-zeroh-update).
 
 ## An update left an old plugin folder in use
 
@@ -312,11 +334,11 @@ denial. An IP address ZeroH put back is not checked against its own host: the ad
 (`https://<IP>:8443/`) or its `sslip.io`/`nip.io` name (`pm.<IP>.sslip.io`). Any other name that
 contains it (`<IP>.example.com`) is checked. A local command with no host remains allowed.
 
-## A command shows "[ZeroH: the command failed …]"
+## A command shows "[ZeroH: exit status N]"
 
 ZeroH makes every Bash and PowerShell command end with status 0 so that its output always passes
-through masking, and prints this line when the real command failed. Read it as the command's
-failure. Commands that call `exit` or `set -e` use a form Claude Code asks you to approve.
+through masking, and prints the real command's exit status when it failed. Commands that call
+`exit` or `set -e` use a form Claude Code asks you to approve.
 
 ## A background command or Monitor is not protected
 
@@ -391,11 +413,20 @@ and passes through unchanged. If you resume sessions often, use `ZEROH_VAULT_RET
 This means the current session is not using the default local proxy. It is expected when
 `ZEROH_PROXY=off` is set for this session, after `proxy off`, on Bedrock, Vertex or Foundry, whose
 traffic does not pass the proxy, and when your shell or a higher-precedence settings file sets
-`ANTHROPIC_BASE_URL` (Claude Code then ignores ZeroH's entry). In a first session, the first prompt
-puts the session behind the proxy by itself; if Claude Code does not pick up the changed settings
-file, ZeroH says so once and a restart fixes it.
+`ANTHROPIC_BASE_URL` to a gateway. Only an environment value that normalises to
+`https://api.anthropic.com`, with or without a trailing slash, is routed. Any other environment URL
+stays `ANTHROPIC_BASE_URL overridden`: typed prompts are not masked in this session; files and
+command output still are. Put the gateway in Claude Code's `settings.json` `env`; ZeroH records it
+as the original upstream and routes through it. The install upstream comes only from that settings
+original or the default Anthropic upstream, never from the environment. `upstream mismatch` remains
+for an otherwise routable URL that differs from the install upstream; URLs with credentials keep
+the separate `credentials in ANTHROPIC_BASE_URL` state. Doctor names the sources without printing
+URLs or credentials. Project, local and managed settings, and a provider-managed host, remain
+overridden. In a first session,
+the first prompt puts the session behind the proxy by itself; if Claude Code does not pick up the
+changed settings file, ZeroH says so once and a restart fixes it.
 
-By default the prompt is sent as typed, and a line says it was not protected (proxy not running)
+By default the prompt is sent as typed, and a line says it was not protected with its protection-state reason
 and how to fix it. `UserPromptSubmit` cannot replace the prompt: with
 `/zeroh-disclosure:settings uncertain block` it blocks the submission instead, with a short
 message (what it found, by kind or provider, and why it could not be masked; never the prompt or a
@@ -407,7 +438,7 @@ opt-out, and start Claude Code again.
 
 ```bash
 zeroh-disclosure doctor         # the proxy's state and what looks wrong
-zeroh-disclosure doctor --fix   # reset: removes ZeroH's settings entry, stops every ZeroH proxy it finds
+zeroh-disclosure doctor --fix   # reset: removes this settings entry, retires its proxy, preserves unowned daemons
 zeroh-disclosure proxy off      # or remove the proxy altogether
 ```
 
@@ -433,10 +464,10 @@ forward a request depends on whether retrying can help:
   paste-safe summary and `zeroh-disclosure reports list` shows it with kind `proxy`.
 
 `doctor --fix` is the one recovery for everything else: it takes ZeroH's entry out of your Claude
-Code settings (putting back the `ANTHROPIC_BASE_URL` you had before), stops this home's proxy and
-any other ZeroH proxy it finds on a port ZeroH recorded or your settings name (for example one left
-running after `~/.zeroh` was deleted by an older build), and removes the proxy's files and login
-item. The next Claude Code session sets the proxy up again. When another Claude settings file
+Code settings (putting back the `ANTHROPIC_BASE_URL` you had before), retires this install's proxy
+so routed sessions keep working until idle, and removes its proxy files and login item. A daemon
+whose control this home cannot prove is preserved; doctor reports when it could not safely drain
+it. The next Claude Code session sets the proxy up again. When another Claude settings file
 (another profile, `CLAUDE_CONFIG_DIR`) still uses this proxy, `doctor --fix` only takes this
 settings file's entry out and leaves the proxy and its login item running for the other one.
 
@@ -530,7 +561,7 @@ private form instead of chat. In headless mode an empty call is refused immediat
 supplies `{value, type_guess, where, why}` itself there is never a dialog: ZeroH masks the value,
 keeps the shape-only note locally and shows one line.
 
-Reports stay on this computer; there is no network sender. Use `/zeroh-disclosure:report-miss
+Reports stay on this computer; there is no network sender. Sending miss reports to Blade Labs is planned for later. Release 1.1 has no intake service. Use `/zeroh-disclosure:report-miss
 list` to see the local notes, or `/zeroh-disclosure:report-miss delete <id>` to discard one. Deleting the report does not remove the encrypted vault
 mapping, so later occurrences remain masked. If the tool says the session reached 20 reports,
 start a new session. Rotate any credential that may already have reached a model.

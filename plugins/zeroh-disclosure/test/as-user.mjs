@@ -2,12 +2,12 @@
 
 // Tests run a state-changing CLI subcommand as the user would: with the
 // one-time ticket the UserPromptSubmit hook mints for the user's own typed
-// slash command (lib/user-authority.js). A read-only subcommand gets nothing.
+// slash command (packages/zeroh-disclosure-core/user-authority.js). A read-only subcommand gets nothing.
 import {
   managementAction,
   mintTicket,
   TICKET_ENV,
-} from '../lib/user-authority.js';
+} from '../packages/zeroh-disclosure-core/user-authority.js';
 
 // The environment `args` needs, added to `env` (which must name the same
 // ZEROH_HOME as the child's).

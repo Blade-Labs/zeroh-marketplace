@@ -7,7 +7,7 @@ detect?") to print the rule set that is installed.
 The patterns come from Blade Labs' MIT-licensed detection engine, shipped in
 [`vendor/sensitive-data-detectors`](../vendor/sensitive-data-detectors) (its
 [README](../vendor/sensitive-data-detectors/README.md) says which version). The exact-value
-matching of your own values is the plugin's (`lib/secrets.js`).
+matching of your own values is the plugin's (`packages/shell-analysis/secrets.js`).
 
 ## Contents
 
@@ -90,8 +90,7 @@ text. There are 33 kinds:
 | Dates of birth                      | `DOB`                       | a real calendar date from 1900 to five years ago                                                                    | yes: DOB, born, date of birth, birthday    |
 | Bitcoin and Ethereum addresses      | `CRYPTO`                    | validator.js `isBtcAddress`, `isEthereumAddress`                                                                    | Ethereum in tool output only: wallet, …    |
 
-The national IDs cover 21 countries. `ZEROH_MASK_PII=off` turns personal-data masking off in tool
-output and leaves only secrets.
+The national IDs cover 21 countries. `ZEROH_MASK_PII=off` disables personal-data detection in the PostToolUse output hook; secrets and values already in the vault still match. The local proxy still masks personal data in prompts and tool results, so this setting does not turn off personal-data masking on the way to the model.
 
 ## Notes on the personal-data rules
 

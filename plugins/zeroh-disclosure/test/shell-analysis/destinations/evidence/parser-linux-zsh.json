@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux",
+  "shell": "zsh",
+  "executable": "zsh",
+  "node": "24.20.0",
+  "corpusSha256": "ad0f8ceaa5d31a86e093308bd5256a6d44a746309c4483fc58468c4fcaa2bb28",
+  "corpusCount": 60,
+  "sampleCount": 20,
+  "measurementMethods": {
+    "parser": "Fresh Node process wall time, including runtime initialization, sixty ParseInput/CST parses, and transport/serialization; no destination policy.",
+    "runtimeLoad": "Dynamic runtime import plus Parser.init and Language.load inside each fresh process.",
+    "perCommand": "Sixty-command pass divided by sixty; warm commands inside each cold process.",
+    "sixtyCommandPass": "Sixty parse/token calls inside each fresh process; no command executes.",
+    "wholeHook": "Fresh Node process running hooks/run.js pre-tool-use; --import loads the adapter in the actual hook worker before PreToolUse."
+  },
+  "measures": {
+    "runtimeLoad": {
+      "count": 20,
+      "p50Ms": 29.649639,
+      "p95Ms": 39.707888999999994
+    },
+    "perCommand": {
+      "count": 20,
+      "p50Ms": 0.4016119833333335,
+      "p95Ms": 0.6166219500000002
+    },
+    "sixtyCommandPass": {
+      "count": 20,
+      "p50Ms": 24.096719000000007,
+      "p95Ms": 36.99731700000001
+    },
+    "parser": {
+      "count": 20,
+      "p50Ms": 656.0158610000008,
+      "p95Ms": 773.7954969999992
+    },
+    "wholeHook": {
+      "count": 20,
+      "p50Ms": 430.4476849999992,
+      "p95Ms": 509.5929020000003
+    }
+  },
+  "gatesMs": {
+    "parser": 150,
+    "wholeHook": 300,
+    "hookDeadline": 8000
+  },
+  "verdict": {
+    "parserPassed": false,
+    "wholeHookPassed": false,
+    "adapterPassed": false,
+    "fallbackPassed": false,
+    "releasePassed": false,
+    "decision": "blocked-unverified-1.0-fallback"
+  },
+  "rawSamples": {
+    "parser": [
+      658.168559, 658.5170509999999, 691.4200769999998, 607.527313,
+      543.9351540000002, 569.0122719999999, 619.9775030000001,
+      637.3019530000001, 643.1861399999998, 656.0158610000008,
+      668.5587880000003, 654.5446760000004, 567.6873589999996, 723.902274,
+      607.3424660000001, 686.2071629999991, 773.7954969999992,
+      767.7879420000008, 660.9326530000017, 864.5061490000007
+    ],
+    "runtimeLoad": [
+      30.514987000000005, 31.696942999999997, 26.013351999999998, 34.031341,
+      29.470794999999995, 25.767788999999997, 27.496820000000003,
+      22.270069999999997, 35.21402100000001, 29.649639, 39.707888999999994,
+      32.953253999999994, 24.351391, 23.586187, 30.351541000000005,
+      24.195249999999998, 29.260009000000004, 44.970068000000005, 31.520282,
+      33.39225100000001
+    ],
+    "perCommand": [
+      0.4016119833333335, 0.3893634000000001, 0.40790428333333323,
+      0.46683431666666664, 0.5470316833333334, 0.4579310166666666,
+      0.3522617333333334, 0.3442556333333335, 0.3996102999999998,
+      0.3688503666666667, 0.40378620000000015, 0.37665524999999983,
+      0.5569421000000001, 0.6375881666666667, 0.3919755833333332,
+      0.3845110333333333, 0.4782110666666666, 0.6166219500000002,
+      0.5429327833333332, 0.36188574999999995
+    ],
+    "sixtyCommandPass": [
+      24.096719000000007, 23.361804000000006, 24.474256999999994, 28.010059,
+      32.821901000000004, 27.475860999999995, 21.135704000000004,
+      20.655338000000008, 23.976617999999988, 22.131022, 24.22717200000001,
+      22.59931499999999, 33.416526000000005, 38.25529, 23.518534999999993,
+      23.070662, 28.692663999999994, 36.99731700000001, 32.57596699999999,
+      21.713144999999997
+    ],
+    "wholeHook": [
+      551.2233660000002, 439.6544950000007, 418.14360900000065,
+      442.88644300000124, 509.5929020000003, 440.7661470000003,
+      507.09772500000145, 431.5648680000013, 430.4476849999992,
+      425.1832119999999, 397.5334070000026, 459.2830549999999,
+      426.1947309999996, 379.3795379999974, 394.68811300000016,
+      416.2301299999999, 418.606660999998, 447.644479999999, 449.4840149999982,
+      420.45872900000177
+    ]
+  },
+  "passed": false,
+  "fallbackPassed": false,
+  "provenance": {
+    "status": "historical-unreviewed-WIP",
+    "commit": "72e0b1279",
+    "usedByCurrentGate": false,
+    "reason": "Prior-machine results preserved for traceability; not verified or claimed by this continuation."
+  }
+}

@@ -3,8 +3,12 @@
 // /zeroh-disclosure:mask-config: session directory, signing key, policy and
 // protection engine.
 import { header, latestSession } from './_helpers.js';
-import { POLICY, POLICY_ALIAS } from '../../lib/policy.js';
-import { regexLocalProtectionEngine } from '../../lib/protection-engines/regex-local.js';
+import { zerohHome } from '../../packages/zeroh-disclosure-core/vault.js';
+import {
+  POLICY,
+  POLICY_ALIAS,
+} from '../../packages/zeroh-disclosure-core/policy.js';
+import { regexLocalProtectionEngine } from '../../packages/zeroh-disclosure-core/protection-engines/regex-local.js';
 
 const s = await latestSession();
 console.log(header('ZeroH Disclosure config'));
@@ -17,7 +21,10 @@ console.log(
   `engine:        ${regexLocalProtectionEngine.id} (local patterns; no network)`,
 );
 
-console.log('\nSettings (environment or ~/.zeroh/config.env):');
+console.log(`\nSettings (environment or ${zerohHome()}/config.env):`);
 console.log(
-  '  ZEROH_MASK_PII=on|off   (mask emails, cards, IBANs, phones in tool output; default on)',
+  '  ZEROH_MASK_PII=on|off   (output hook only; proxy still masks personal data; default on)',
+);
+console.log(
+  '  Other settings: see README.md, Settings (uncertain mode, retention, routing and display).',
 );

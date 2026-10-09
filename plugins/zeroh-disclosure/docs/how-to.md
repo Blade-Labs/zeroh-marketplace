@@ -21,6 +21,7 @@ notices, work with the local proxy, run PowerShell, and remove the plugin.
 - [Respond to notices](#respond-to-notices)
 - [Find settings, keys, and session data](#find-settings-keys-and-session-data)
 - [Understand the settings guard](#understand-the-settings-guard)
+- [Know what Claude may change](#know-what-claude-may-change)
 - [Work with the local proxy](#work-with-the-local-proxy)
 - [Run with PowerShell](#run-with-powershell)
 - [Uninstall and clean up](#uninstall-and-clean-up)
@@ -82,7 +83,7 @@ Where this guide writes `zeroh-disclosure <command>`, run
 `node "<plugin-root>/bin/zeroh-disclosure.mjs" <command>`.
 
 Commands that change what ZeroH protects (`allow`, `allow --remove`, `unmask caps`, `vault clear`,
-`doctor --fix`, `banner`, `proxy off|on`, `receipts keep`, `uncertain`, `uninstall`) run only
+`doctor --fix`, `proxy off|on`, `receipts keep`, `uncertain`, `uninstall`) run only
 on your own authority:
 
 - **In Claude Code**, type the slash command. Its `!` block records the request, ZeroH applies it
@@ -97,6 +98,12 @@ on your own authority:
   and the terminal command to use instead. The proxy keeps its own copy at
   `<ZEROH_HOME>/bin/zeroh-disclosure-proxy/bin/zeroh-disclosure.mjs`, which works after the plugin is
   removed.
+
+Presentation changes need no confirmation. Claude or the user can run `zeroh-disclosure style
+<key> <value>` and `zeroh-disclosure style banner <mode>`; the legacy `banner <mode>` command also
+runs directly. `statusline on|off` remains user-only because it writes Claude Code settings, but a
+user running it in a terminal is not asked for a code and is never told it changes protection.
+The canonical three-class table is in [architecture.md](architecture.md#model-versus-user-settings).
 
 Project commands (`allow`, `vault`, `receipt`, `tokens`, `report` and others) act on the same
 project root the hooks use: `CLAUDE_PROJECT_DIR` when Claude Code sets it, else the current
@@ -121,10 +128,10 @@ Choose a persistent mode with `/zeroh-disclosure:settings banner big|compact|min
 your terminal:
 
 ```bash
-zeroh-disclosure banner big      # the five-line ZEROH banner every session
-zeroh-disclosure banner mini     # one line (the default)
-zeroh-disclosure banner compact  # one line with the secret count
-zeroh-disclosure banner off
+zeroh-disclosure style banner big      # the five-line ZEROH banner every session
+zeroh-disclosure style banner mini     # one line (the default)
+zeroh-disclosure style banner compact  # one line with the secret count
+zeroh-disclosure style banner off
 ```
 
 This writes `<ZEROH_HOME>/banner.json`. Set `ZEROH_BANNER=big|compact|mini|off` before starting
@@ -359,8 +366,8 @@ can only end grants, never create or extend one.
 ## Show ZeroH in the status line
 
 With your first message after the install, ZeroH adds its status line to your Claude Code user
-settings, unless you have one of your own, and says so in one line above that message. Claude Code
-then shows it under the prompt:
+settings and says so above that message. If you have your own status line, its output stays first
+and ZeroH appears on the next line. Claude Code then shows:
 
 ```text
 🛡️ ZeroH · 🟢 protected · 4 masked · 0 sent · unmask EMAIL 12m · receipt ↗
@@ -373,7 +380,8 @@ then shows it under the prompt:
   to `/zeroh-disclosure:proxy on`, otherwise to `/zeroh-disclosure:doctor`),
   `proxy starts with your first prompt`, `proxy on from your next prompt` (the first prompt of
   the first session switched it to the proxy), `proxy down` (the proxy process is gone),
-  `starting`, `started before ZeroH` (restart Claude Code to protect that session), or
+  `starting`, `compacting`, `started before ZeroH` (the session began before the latest install;
+  restart Claude Code to protect it), or
   `N not protected this turn` (something passed unchecked).
 - 🔴 not protecting, with the reason: `hooks failing` (a hook crashed; it clears when that hook
   works again), `hooks stopped` (the conversation moved on and no hook ran for 30 seconds),
@@ -386,9 +394,10 @@ the real values that reached it anyway (a secret typed while the proxy was not i
 `receipt ↗` is a terminal link (OSC 8) to this session's `receipt.html`; macOS Terminal gets no
 link. `NO_COLOR` and `TERM=dumb` turn the colour off.
 
-**Change how it looks.** Ask Claude ("make ZeroH's status line compact, no emoji"): it edits
-`statusline-style.json` in ZeroH's folder. [The status line](statusline.md) has every key, examples
-and the `--json` data schema for a status line of your own.
+**Change how it looks.** Ask Claude ("make ZeroH's status line compact, no emoji"): it runs the
+validated `zeroh-disclosure style` command. Direct editing of `presentation.json` remains a
+compatible fallback. [The status line](statusline.md) has every key, examples and the `--json`
+data schema for a status line of your own.
 
 **How it works.** The entry (in the [README](../README.md#status-line)) is one `node -e "…"`
 command. It runs `lib/statusline.js` from the plugin copy Claude Code lists as installed
@@ -399,13 +408,14 @@ Claude Code runs it after each answer and every 10 seconds (`refreshInterval`). 
 small `status.json` and `hooks.alive` the hooks keep in each session folder, the proxy's pid file,
 the unmask grants and your settings: no network, no proxy call, no values.
 
-**Your own status line.** ZeroH never replaces it. The same command with `segment` at the end
-prints only ZeroH's part, without a line end; pipe it the JSON your script gets on stdin (the
-README has the exact command):
+**Your own status line.** ZeroH never replaces it. It wraps the command on macOS, Linux and
+Windows, keeps its output above ZeroH, and restores the original entry exactly when turned off.
+Slow, failed and empty runs use the last good per-session output; non-zero current output is kept.
+For a script you compose yourself, the stable launcher prints only ZeroH's part:
 
 ```bash
 input=$(cat)
-zeroh=$(printf '%s' "$input" | node -e "…" segment)
+zeroh=$(printf '%s' "$input" | ~/.zeroh/bin/zeroh-statusline)
 echo "$(your-line) · $zeroh"
 ```
 
@@ -414,6 +424,16 @@ echo "$(your-line) · $zeroh"
 on` turns it on again. `/zeroh-disclosure:uninstall` removes it from every settings file
 ZeroH wrote it to. Claude cannot add, change or remove any status line: the settings guard stops
 the edit.
+
+## Know what Claude may change
+
+- **Claude or the user:** presentation only—status-line style and position, banner mode, receipt
+  and report format, wording and verbosity—through `zeroh-disclosure style`.
+- **Only the user, no code:** `statusline on|off` because it changes Claude Code settings.
+- **Only the user, confirmed:** anything that changes protection, evidence retention, disclosure
+  authority, hooks, plugin state, the proxy, vault or other Claude settings.
+
+See the exhaustive [model-versus-user settings table](architecture.md#model-versus-user-settings).
 
 ## Report a value that was not masked
 
@@ -433,7 +453,7 @@ ZeroH Disclosure: Claude spotted a value ZeroH missed in config/internal.env; it
 The note holds the value's shape only (type, length, provider prefix if any, where it was found;
 never the value) in `<ZEROH_HOME>/reports/<id>.json`. Later tool output and proxy-inspected
 request text use the returned token. Content already sent to the model cannot be recalled; rotate
-reported credentials promptly. Reports stay on this computer: there is no upload path.
+reported credentials promptly. Reports stay on this computer: there is no upload path. Sending miss reports to Blade Labs is planned for later. Release 1.1 has no intake service.
 
 List or delete the notes; deleting one is yours to do, and the value stays masked:
 
@@ -545,6 +565,7 @@ Summarize the current project for a supported period:
 
 ```bash
 zeroh-disclosure report --since 7d
+zeroh-disclosure report --since 7d --format json
 zeroh-disclosure report --since 30d --html disclosure-report.html --json disclosure-report.json
 zeroh-disclosure report --since all --all-projects
 ```
@@ -553,7 +574,14 @@ Inside Claude Code, use `/zeroh-disclosure:report 7d`. Read-only slash commands 
 output before the model sees the command, so they work in auto permission mode without asking the
 model to read ZeroH's folder through Bash.
 
-The terminal prints the same slip for the period: for `7d` the dates it covers, such as
+The style keys `reportFormat` and `receiptFormat` choose whether those commands print terminal
+text, structured JSON or self-contained HTML; `--format text|json|html` overrides the saved
+default. Existing `report --html <path>` and `--json <path>` exports keep the terminal text
+summary. `verbosity` changes text output only: `concise` prints the slip plus every not-protected
+or passed-unchecked detail it refers to, `normal` adds the standard guidance and paths, and
+`detailed` adds receipt/report metadata.
+
+The terminal text prints the same slip for the period: for `7d` the dates it covers, such as
 `RECEIPT · SEP 18–25` (or `LAST 7 DAYS` when the dates are unknown), then `LAST 30 DAYS`,
 `LAST 90 DAYS`, or `ALL TIME`, with the number of sessions and turns. The
 HTML form opens with the slip and adds withheld values by channel, activity per day, top file
@@ -611,7 +639,7 @@ there is mode 0600 in 0700 folders; on Windows the folder is limited to your acc
 | `<ZEROH_HOME>/unmask.json`                                  | HMAC-signed per-kind personal-data caps.                                                                                                                                                                                                                                                                                      |
 | `<ZEROH_HOME>/grants/<project-hash>.json`                   | HMAC-signed active grants and grant/revoke receipt entries.                                                                                                                                                                                                                                                                   |
 | `<ZEROH_HOME>/run/<session-id>/<tool-use-id>.sh`            | Short-lived Bash late-binding values (real values, removed after the command).                                                                                                                                                                                                                                                |
-| `<ZEROH_HOME>/run/<session-id>/<tool-use-id>.b64`           | Short-lived PowerShell late-binding values (base64 lines).                                                                                                                                                                                                                                                                    |
+| `<ZEROH_HOME>/run/<session-id>/<tool-use-id>.csv`           | Short-lived PowerShell late-binding values (CSV, read with `Import-Csv`).                                                                                                                                                                                                                                                     |
 | `<ZEROH_HOME>/run/unmask-mcp/`                              | Short-lived claims that pair an unmask request with its session.                                                                                                                                                                                                                                                              |
 | `<ZEROH_HOME>/session-keys/<project-hash>/<session-id>.key` | The keys behind the receipts' value commitments; `vault clear` and retention remove them.                                                                                                                                                                                                                                     |
 | `<ZEROH_HOME>/projects/<project>/sessions/<session-id>/`    | State, local signing keys, turn ledgers, `receipt.html`, evidence and receipt bundles; kept for `ZEROH_RECEIPT_RETENTION` (90 days by default).                                                                                                                                                                               |
@@ -692,17 +720,23 @@ Code settings.
 ZeroH treats typed text as masked when the session's own environment names this install's proxy
 and the proxy answers, or once the proxy has seen a request of the session.
 
-If `ANTHROPIC_BASE_URL` is set anywhere other than ZeroH's entry (your shell, a Windows
-environment variable, or a settings file such as a project's `.claude/settings.json`), ZeroH leaves
-your address alone and does not put the session behind its proxy, so what you type cannot be masked
-in that setup: the session start says so, a prompt with a secret is sent with a "not protected"
-line (`uncertain block` stops it), and `/zeroh-disclosure:doctor` says where the variable is set.
-Remove it and start Claude Code again to have typed text masked. Files and command output are still
-masked.
+A shell or Windows-environment `ANTHROPIC_BASE_URL` is routed only when it normalises to
+`https://api.anthropic.com`, with or without a trailing slash. Any other environment URL is
+`ANTHROPIC_BASE_URL overridden`: typed prompts are not masked in this session; files and command
+output still are. To use a gateway, put `ANTHROPIC_BASE_URL` in Claude Code's `settings.json` `env`;
+ZeroH records it as the original upstream and routes through it. The install upstream comes only
+from that settings original or the default Anthropic upstream, never from a session's environment.
+Project, local and managed settings, and a provider-managed host, remain overridden.
+`upstream mismatch` still applies when an otherwise routable URL differs from the install's
+upstream. A URL containing `user:password@` keeps the separate `credentials in ANTHROPIC_BASE_URL`
+state because forwarding by origin would drop those credentials. A prompt with a secret is sent
+with a "not protected" line (`uncertain block` stops it), and `/zeroh-disclosure:doctor` names the
+sources without showing their URLs or credentials.
 
 ### Where it forwards
 
-The proxy forwards to the `ANTHROPIC_BASE_URL` you had before, or to `api.anthropic.com`, and to
+The proxy forwards to the original `ANTHROPIC_BASE_URL` in your Claude Code settings `env`, or to
+`api.anthropic.com`, and to
 no other host. Each settings file gets its own access key in that URL. A request with a key the
 proxy does not know (an entry left by a deleted ZeroH folder or an earlier build) is not refused
 but forwarded to the one upstream all your settings files agree on (else to `api.anthropic.com`),
@@ -770,8 +804,8 @@ $env:CLAUDE_CODE_USE_POWERSHELL_TOOL = '1'
 claude
 ```
 
-The hook masks PowerShell output and restores known tokens through a short-lived `.b64` values
-file, read through .NET rather than dot-sourced, so no execution policy applies. Values files are requested as `0600`, removed by the command after import, removed again by
+The hook masks PowerShell output and restores known tokens through a short-lived `.csv` values
+file, read with `Import-Csv` rather than dot-sourced; no .NET call or execution policy is needed. Values files are requested as `0600`, removed by the command after import, removed again by
 `PostToolUse`, and pruned after ten minutes if left stale.
 
 ## Uninstall and clean up
@@ -853,3 +887,22 @@ To turn the proxy off without uninstalling, run `/zeroh-disclosure:proxy off`; i
 the session you typed it in keeps working until you exit it. After `proxy off` and `doctor --fix`
 the vault and the hooks are still there, so the retired proxy keeps masking the values Claude
 already saw as tokens (held in memory, never written) and nothing new.
+
+## Known destination-check limits in 1.1.0
+
+ZeroH 1.1.0 keeps the destination checks from 1.0.5: 112 safe-command stops and 8 missed protections. Fixes are planned for 1.1.1 (task 44.9).
+
+| Safe-command kind (112 measured cases, including quoting variants) | Why it can stop                                                                                           | Allow command for the example; replace `NAME` and the host with the ones shown by your stop                                                                                                                                                                                                     |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SSH `-o SendEnv=…` and `-oSendEnv=…` (44)                          | A variable name is treated as data sent to the SSH host.                                                  | `/zeroh-disclosure:allow NAME host.example.com`                                                                                                                                                                                                                                                 |
+| OpenSSL `s_client -pass pass:… -connect …` (23)                    | A password used to unlock a local key is treated as sent to the TLS host.                                 | `/zeroh-disclosure:allow NAME smtp.example.com`                                                                                                                                                                                                                                                 |
+| `dig -y` TSIG signing keys (6)                                     | A local signing key is mistaken for a destination; the DNS server and query name can also be stopped.     | `/zeroh-disclosure:allow NAME 203.0.113.1` and `/zeroh-disclosure:allow NAME example.com` allow the real destinations, but **cannot clear the invented key-shaped host**: `/allow` rejects it. Use `dig -k <local-key-file>` instead; there is no valid allow command for that last false stop. |
+| `nslookup -srchlist=…` (5)                                         | The search-list value is checked even where the installed client rejects that option.                     | **No valid allow command:** the stopped host contains the secret itself, which `/allow` rejects (and must not store). Leave the secret out of DNS names; most `nslookup` builds reject `-srchlist` anyway.                                                                                      |
+| `resolvectl query --search=yes …` (5)                              | The supplied query name is treated as a destination before search behavior is understood.                 | **No valid allow command:** the stopped host contains the secret itself, which `/allow` rejects. Do not put a secret in a DNS query name.                                                                                                                                                       |
+| PowerShell Git `-chttp.extraheader=…` (6)                          | PowerShell splits a dotted attached option; ZeroH stops it before Git can reject the malformed arguments. | `/zeroh-disclosure:allow NAME git.example.com` gets past ZeroH; Git can still reject the command.                                                                                                                                                                                               |
+| Curl with a token only in a shell comment (3)                      | Comment text is treated as data sent to the URL.                                                          | `/zeroh-disclosure:allow NAME api.example.com` (or `a.example.com` in the joined-option example)                                                                                                                                                                                                |
+| Curl abbreviated `--data-b` (20)                                   | The allowed target is combined with an invented target from the value.                                    | **No valid allow command** for the invented target (it is the secret itself). Write the option in full, `--data-binary`, which ZeroH reads correctly.                                                                                                                                           |
+
+The 8 missed protections are curl redirects to another host (5 shell cases: the second host is not checked or warned about), extraction by `tar -xf … -C .claude/` into protected settings (2 Bash/zsh cases), and the recorded MySQL `-pPASSWORD` command (1 case: its database host is missed). These can run without the expected protection or notice. Check redirects and database targets yourself, and do not let archive extraction replace Claude Code or ZeroH settings. Task 44.9 in 1.1.1 covers all three kinds.
+
+The 16 missing warnings for curl configuration, PowerShell variable boundaries and a Bash heredoc are individually disclosed in [the 1.1.0 release notes](../CHANGELOG.md#not-checked-in-this-release). Review those destinations yourself; the command does not reliably print a warning.

@@ -22,7 +22,8 @@ Everything you need is in this section; there is no other page to open.
 
 Run `node --version`. ZeroH Disclosure needs Node.js 20 or later. If Node is missing or older, stop
 and tell the user to install Node.js 20+ from https://nodejs.org, then ask them to paste the install
-prompt again.
+prompt again. On Windows, recommend Node.js 22 LTS: on Windows, Node 26 can rarely crash inside V8,
+and that hook call is then not checked.
 
 ### 2. Run the two commands
 
@@ -81,7 +82,7 @@ More about the plugin is in its [README](plugins/zeroh-disclosure#readme).
 
 | Plugin                                              | Version | Status      | What it does                                                                                                                                                                             |
 | --------------------------------------------------- | ------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.0.5 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
+| [ZeroH Disclosure](plugins/zeroh-disclosure#readme) | 1.1.0 | Released | Keeps API keys, passwords and personal data away from the model: masks them as tokens, puts real values back only on your machine for allowed hosts, and signs a local receipt per turn. |
 
 Each plugin's folder has its own README, changelog and documentation. Releases are listed under
 [Releases](https://github.com/Blade-Labs/zeroh-marketplace/releases).

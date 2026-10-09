@@ -1,5 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  readRecord,
+  writeRecord,
+  recordChoice,
+  recordStatuslineWrite,
+  pruneStatuslineRestore,
+  restoreExactBytes,
+} from './statusline-record.js';
+export {
+  readRecord,
+  writeRecord,
+  recordChoice,
+  recordStatuslineWrite,
+  choiceFor,
+} from './statusline-record.js';
 // ZeroH's entry in Claude Code's `statusLine` setting (rc.2): the command,
 // recognising it, turning it on and off, and the records that let every
 // copy be found and removed again.
@@ -32,44 +47,82 @@ import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readSettings, writeSettingsFile } from './claude-settings.js';
-import { readJsonOr, writePrivateJson } from './private-fs.js';
+import {
+  readJsonOr,
+  writePrivateJson,
+} from '../packages/zeroh-disclosure-core/private-fs.js';
 
 export const PLUGIN_ROOT_FILE = 'plugin-root.json';
-export const RECORD_FILE = 'statusline.json';
+export { RECORD_FILE } from './statusline-record.js';
 export const DEV_ENV = 'ZEROH_STATUSLINE_DEV';
 // Claude Code re-runs the status line when an assistant message arrives;
 // the timer also catches what changes between messages (a `proxy off`, a
 // crashed hook, an unmask countdown).
 export const REFRESH_SECONDS = 10;
-export const SHIELD = '\u{1F6E1}\u{FE0F}';
-export const NOT_INSTALLED = `${SHIELD} ZeroH · 🔴 not installed · remove it with /statusline`;
+export {
+  SHIELD,
+  NOT_INSTALLED,
+  LAUNCHER_DIR,
+  LAUNCHER_NAME,
+} from './statusline-launcher.js';
+import {
+  ROOT_RESOLVER_SOURCE,
+  LAUNCHER_DIR,
+  LAUNCHER_NAME,
+  writeLaunchers,
+} from './statusline-launcher.js';
 
 const SCRIPT = [
   "const f=require('fs'),p=require('path'),e=process.env,h=require('os').homedir();",
   "const j=(x)=>{try{return JSON.parse(f.readFileSync(x,'utf8'))}catch{return null}};",
-  "const c=p.resolve(e.CLAUDE_CONFIG_DIR||p.join(h,'.claude'));",
-  "const k=p.resolve(e.CLAUDE_CODE_PLUGIN_CACHE_DIR||p.join(c,'plugins','cache'));",
   "const z=e.ZEROH_HOME||(process.platform==='win32'?p.join(e.LOCALAPPDATA||p.join(h,'AppData','Local'),'ZeroH'):p.join(h,'.zeroh'));",
-  'const l=[];',
-  "for(const[n,v]of Object.entries(j(p.join(c,'plugins','installed_plugins.json'))?.plugins||{}))if(n.startsWith('zeroh-disclosure@'))for(const i of[].concat(v))if(typeof i?.installPath==='string')l.push(p.resolve(i.installPath));",
-  "const u=(x)=>{const s=p.relative(k,x);return !s.startsWith('..')&&!p.isAbsolute(s)&&s.split(p.sep)[1]==='zeroh-disclosure'};",
-  "const t=(x)=>typeof x==='string'&&(l.includes(p.resolve(x))||u(p.resolve(x))||e.ZEROH_STATUSLINE_DEV==='1');",
-  "const d=[j(p.join(z,'plugin-root.json'))?.roots?.[c],...l].find((x)=>t(x)&&f.existsSync(p.join(x,'lib','statusline.js')));",
+  `const d=(${ROOT_RESOLVER_SOURCE})({fs:f,path:p,env:e,home:h});`,
   'const a=process.argv.slice(1);',
   // `wrap <base64url command>` with no plugin to run: the user's own line
   // still shows, then why ZeroH's part is missing.
   // A hard deadline (Astra 1.0.1 A2, as lib/statusline.js runWrapped): the
   // command runs as its own process group and is killed with everything it
-  // started after 2 s, and ZeroH's part prints regardless.
-  "const o=()=>new Promise((r)=>{if(a[0]!=='wrap')return r('');const q=require('child_process'),W=process.platform==='win32';let c,s='',n=0,g,i='';try{i=f.readFileSync(0)}catch{}const x=(v)=>{if(n)return;n=1;clearTimeout(g);try{c.stdout.destroy();c.stdin.destroy();c.unref()}catch{}r(v)};try{c=q.spawn(Buffer.from(a[1]||'','base64url').toString(),{shell:true,detached:!W,stdio:['pipe','pipe','ignore'],windowsHide:true})}catch{return r('')}g=setTimeout(()=>{try{W?q.spawn('taskkill',['/pid',String(c.pid),'/T','/F'],{stdio:'ignore',windowsHide:true}).unref():process.kill(-c.pid,'SIGKILL')}catch{}x('')},2000);c.stdout.setEncoding('utf8');c.stdout.on('data',(d)=>{s+=d});c.stdout.on('error',()=>{});c.stdin.on('error',()=>{});c.on('error',()=>x(''));c.on('close',(z)=>x(z===0?s.trimEnd():''));c.stdin.end(i)});",
-  "const w=(m)=>o().then((t)=>process.stdout.write(a.includes('segment')?'':(t?t+(j(p.join(z,'statusline-style.json'))?.position==='end'?' \\u00b7 ':'\\u000a'):'')+'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m));",
+  // started after 4 s, and ZeroH's part prints regardless.
+  "const o=()=>new Promise((r)=>{if(a[0]!=='wrap')return r('');const q=require('child_process'),W=process.platform==='win32';let c,s='',n=0,g,i='';try{i=f.readFileSync(0)}catch{}const x=(v)=>{if(n)return;n=1;clearTimeout(g);try{c.stdout.destroy();c.stdin.destroy();c.unref()}catch{}r(v)};try{c=q.spawn(Buffer.from(a[1]||'','base64url').toString(),{shell:true,detached:!W,stdio:['pipe','pipe','ignore'],windowsHide:true})}catch{return r('')}g=setTimeout(()=>{try{W?q.spawn('taskkill',['/pid',String(c.pid),'/T','/F'],{stdio:'ignore',windowsHide:true}).unref():process.kill(-c.pid,'SIGKILL')}catch{}x(s.trimEnd())},4000);c.stdout.setEncoding('utf8');c.stdout.on('data',(d)=>{s+=d});c.stdout.on('error',()=>{});c.stdin.on('error',()=>{});c.on('error',()=>x(''));c.on('close',()=>x(s.trimEnd()));c.stdin.end(i)});",
+  "const w=(m)=>o().then((t)=>process.stdout.write(a.includes('segment')?'':(t?t+((j(p.join(z,'presentation.json'))||j(p.join(z,'statusline-style.json')))?.position==='end'?' \\u00b7 ':'\\u000a'):'')+'\\u{1F6E1}\\u{FE0F} ZeroH \\u00b7 \\u{1F534} '+m));",
   "d?import(require('url').pathToFileURL(p.join(d,'lib','statusline.js'))).then((m)=>m.statuslineMain(a)).catch(()=>w('status line failed')):w('not installed \\u00b7 remove it with /statusline')",
 ].join('');
 
 // The statusLine command ZeroH writes (and the README shows).
 export const STATUSLINE_COMMAND = `node -e "${SCRIPT}"`;
-// ZeroH's part only, for a status line script of the user's own.
-export const SEGMENT_COMMAND = `${STATUSLINE_COMMAND} segment`;
+
+function zerohHomeForSettings(env, platform) {
+  if (env.ZEROH_HOME) return env.ZEROH_HOME;
+  if (platform === 'win32') {
+    return path.win32.join(
+      env.LOCALAPPDATA ||
+        path.win32.join(env.USERPROFILE || os.homedir(), 'AppData', 'Local'),
+      'ZeroH',
+    );
+  }
+  return path.join(env.HOME || os.homedir(), '.zeroh');
+}
+
+export function segmentCommand(
+  home,
+  platform = process.platform,
+  env = process.env,
+) {
+  if (platform === 'win32') {
+    const base = env.ZEROH_HOME || home;
+    const file = path.win32
+      .join(base, LAUNCHER_DIR, `${LAUNCHER_NAME}.mjs`)
+      .replaceAll('\\', '/');
+    // Claude Code uses Git Bash, or PowerShell when Bash is absent.
+    return `node "${file}"`;
+  }
+  const base = path.posix.resolve(home);
+  const userHome = path.posix.resolve(env.HOME || os.homedir());
+  const shown =
+    base === path.posix.join(userHome, '.zeroh') ? '~/.zeroh' : base;
+  const file = path.posix.join(shown, LAUNCHER_DIR, LAUNCHER_NAME);
+  return /\s/u.test(file) ? `"${file}"` : file;
+}
 
 // The user's own status line with ZeroH's part after it (1.0.1): `statusline
 // on`, typed by the user who already has a status line, sets statusLine to
@@ -105,11 +158,11 @@ export function wrappedCommand(entry) {
 // A statusLine entry of the user's that shows ZeroH already: it runs ZeroH's
 // resolver, an older build's script or the CLI's `statusline` somewhere in
 // a command of its own (F7).
-function showsZeroH(entry) {
+export function showsZeroH(entry) {
   const command = typeof entry?.command === 'string' ? entry.command : '';
   return (
     /startsWith\('zeroh-disclosure@'\)[^"]*statuslineMain/u.test(command) ||
-    /zeroh-statusline\.mjs/u.test(command) ||
+    /zeroh-statusline(?:\.mjs)?\b/u.test(command) ||
     /zeroh-disclosure(?:\.mjs"?)? statusline\b/u.test(command)
   );
 }
@@ -161,6 +214,11 @@ export function isOurStatusLine(entry) {
   if (!entry || typeof entry !== 'object') return false;
   const command = typeof entry.command === 'string' ? entry.command.trim() : '';
   if (!command) return false;
+  // The current segment launcher belongs to the user's script on every OS. Its
+  // basename also matches the older full-line launcher, which lived directly
+  // in ZEROH_HOME. Never migrate or remove the current bin/ segment entry.
+  if (/^node "[^"$`]*[\\/]bin[\\/]zeroh-statusline\.mjs"$/u.test(command))
+    return false;
   return (
     OUR_COMMANDS.some((form) => form.test(command)) ||
     wrappedCommand(entry) !== null
@@ -212,9 +270,27 @@ export function recordPluginRoot(home, pluginRoot, env = process.env) {
       current?.v === 2 && current.roots && typeof current.roots === 'object'
         ? current.roots
         : {};
-    if (roots[config] !== root) {
-      writePrivateJson(pointer, { v: 2, roots: { ...roots, [config]: root } });
+    const recordedAt =
+      current?.v === 2 &&
+      current.recordedAt &&
+      typeof current.recordedAt === 'object'
+        ? current.recordedAt
+        : {};
+    if (roots[config] !== root || !recordedAt[config]) {
+      writePrivateJson(pointer, {
+        v: 2,
+        roots: { ...roots, [config]: root },
+        recordedAt: {
+          ...recordedAt,
+          [config]:
+            roots[config] === root && recordedAt[config]
+              ? recordedAt[config]
+              : new Date().toISOString(),
+        },
+      });
     }
+    pruneStatuslineRestore(home);
+    writeLaunchers(home);
     return true;
   } catch {
     return false;
@@ -231,75 +307,48 @@ export function recordedPluginRoot(home, env = process.env) {
 
 // --- records ---------------------------------------------------------------
 // <ZEROH_HOME>/statusline.json: { v: 1, choices: { <settings path>: {
-// choice: 'on' | 'off' | 'theirs', at } }, paths: [<every settings path
+// choice: 'on' | 'off' | 'theirs' | 'replaced', at } }, paths: [<every settings path
 // ZeroH's entry was written to>] }.
 
 // `wrapped: { <settings path>: <the user's statusLine entry> }` keeps each
 // status line ZeroH wrapped, to put back exactly (1.0.1).
-export function readRecord(home) {
-  const record = readJsonOr(path.join(path.resolve(home), RECORD_FILE));
-  return {
-    v: 1,
-    choices:
-      record?.choices && typeof record.choices === 'object'
-        ? record.choices
-        : {},
-    paths: Array.isArray(record?.paths)
-      ? record.paths.filter((entry) => typeof entry === 'string')
-      : [],
-    wrapped:
-      record?.wrapped &&
-      typeof record.wrapped === 'object' &&
-      !Array.isArray(record.wrapped)
-        ? record.wrapped
-        : {},
-  };
-}
-
-export function writeRecord(home, record) {
-  writePrivateJson(path.join(path.resolve(home), RECORD_FILE), record);
-}
-
-export function recordChoice(home, settingsPath, choice, now = new Date()) {
-  const record = readRecord(home);
-  const key = path.resolve(settingsPath);
-  record.choices[key] = { choice, at: now.toISOString() };
-  if (choice === 'on' && !record.paths.includes(key)) record.paths.push(key);
-  writeRecord(home, record);
-  return record;
-}
-
-export function choiceFor(home, settingsPath) {
-  return readRecord(home).choices[path.resolve(settingsPath)]?.choice ?? null;
-}
-
-// What the settings file says: 'ours', 'theirs' or 'none'.
-export function statuslineState(settingsPath) {
-  const { document } = readSettings(settingsPath);
-  if (!Object.hasOwn(document, 'statusLine')) return 'none';
-  return isOurStatusLine(document.statusLine) ? 'ours' : 'theirs';
-}
-
-function writeDocument(settingsPath, document) {
-  writeSettingsFile(settingsPath, `${JSON.stringify(document, null, 2)}\n`);
+function writeDocument(settingsPath, document, home = null) {
+  const has = Object.hasOwn(document, 'statusLine');
+  const entry = document.statusLine;
+  let before = null;
+  let eligible = false;
+  const result = writeSettingsFile(settingsPath, (current, context) => {
+    before = { exists: context.exists, raw: context.raw };
+    eligible =
+      !Object.hasOwn(current, 'statusLine') ||
+      !isOurStatusLine(current.statusLine);
+    if (has) current.statusLine = entry;
+    else delete current.statusLine;
+    return true;
+  });
+  if (home && eligible && result.written) {
+    recordStatuslineWrite(home, settingsPath, before, {
+      exists: true,
+      raw: `${JSON.stringify(result.document, null, 2)}\n`,
+    });
+  }
 }
 
 // Writes ZeroH's entry into `document` of `settingsPath` (on) and records
 // it. Returns true when it wrote.
 function putEntry(settingsPath, document, home) {
   document.statusLine = statuslineEntry();
-  writeDocument(settingsPath, document);
+  writeDocument(settingsPath, document, home);
   if (home) recordChoice(home, settingsPath, 'on');
   return true;
 }
 
 // `on`: returns { result: 'on' | 'wrapped' | 'already' | 'theirs' |
-// 'windows', command, segment }. The user who already has a status line
+// command, segment }. The user who already has a status line
 // typed it, so ZeroH adds its part to theirs ('wrapped'); a line of theirs
 // that shows ZeroH already, or one that isn't a command, is left as it is
-// ('theirs'). On Windows 1.0.1 doesn't wrap ('windows'): which shell Claude
-// Code runs the user's line with there is not verified, and the wrong one
-// would hide it. The user's line is left as it is (wrapping on Windows: 1.1).
+// ('theirs'). The wrapper uses the same platform shell Claude Code uses for
+// statusLine.command on macOS, Linux and Windows.
 export function turnStatuslineOn({
   settingsPath,
   home = null,
@@ -309,7 +358,11 @@ export function turnStatuslineOn({
 }) {
   const { document } = readSettings(settingsPath);
   const command = STATUSLINE_COMMAND;
-  const segment = SEGMENT_COMMAND;
+  const segment = segmentCommand(
+    home ?? zerohHomeForSettings(env, platform),
+    platform,
+    env,
+  );
   if (home && pluginRoot) recordPluginRoot(home, pluginRoot, env);
   if (Object.hasOwn(document, 'statusLine')) {
     const entry = document.statusLine;
@@ -322,16 +375,16 @@ export function turnStatuslineOn({
         typeof entry.command === 'string' &&
         entry.command.trim() !== '' &&
         !showsZeroH(entry);
-      if (!wrappable || platform === 'win32') {
+      if (!wrappable) {
         if (home) recordChoice(home, settingsPath, 'theirs');
         return {
-          result: wrappable ? 'windows' : 'theirs',
+          result: 'theirs',
           command,
           segment,
         };
       }
       document.statusLine = wrapEntry(entry);
-      writeDocument(settingsPath, document);
+      writeDocument(settingsPath, document, home);
       if (home) {
         const record = recordChoice(home, settingsPath, 'on');
         record.wrapped[path.resolve(settingsPath)] = entry;
@@ -354,7 +407,7 @@ export function turnStatuslineOn({
     }
     if (wrappedCommand(entry) !== null) {
       document.statusLine = currentEntry(entry);
-      writeDocument(settingsPath, document);
+      writeDocument(settingsPath, document, home);
       if (home) recordChoice(home, settingsPath, 'on');
       return {
         result: 'wrapped',
@@ -385,24 +438,37 @@ function unwrapped(entry, recorded) {
 // status line back where ZeroH wrapped it. { result: 'off' | 'unwrapped' |
 // 'theirs' | 'none' }.
 function removeEntry(settingsPath, home = null) {
+  if (home) pruneStatuslineRestore(home, settingsPath);
   const { exists, document } = readSettings(settingsPath);
   if (!exists || !Object.hasOwn(document, 'statusLine')) {
     return { result: 'none' };
   }
   if (!isOurStatusLine(document.statusLine)) return { result: 'theirs' };
   const key = path.resolve(settingsPath);
-  if (wrappedCommand(document.statusLine) !== null) {
+  const wrapped = wrappedCommand(document.statusLine) !== null;
+  if (restoreExactBytes(settingsPath, home, wrapped)) {
+    return { result: wrapped ? 'unwrapped' : 'off' };
+  }
+  if (wrapped) {
     const record = home ? readRecord(home) : null;
     document.statusLine = unwrapped(document.statusLine, record?.wrapped[key]);
     writeDocument(settingsPath, document);
     if (record && Object.hasOwn(record.wrapped, key)) {
       delete record.wrapped[key];
+      delete record.restore[key];
       writeRecord(home, record);
     }
     return { result: 'unwrapped' };
   }
   delete document.statusLine;
   writeDocument(settingsPath, document);
+  if (home) {
+    const record = readRecord(home);
+    if (Object.hasOwn(record.restore, key)) {
+      delete record.restore[key];
+      writeRecord(home, record);
+    }
+  }
   return { result: 'off' };
 }
 
@@ -410,7 +476,7 @@ function removeEntry(settingsPath, home = null) {
 // records the choice, so nothing puts it back.
 export function turnStatuslineOff({ settingsPath, home = null }) {
   const outcome = removeEntry(settingsPath, home);
-  if (home && outcome.result !== 'theirs') {
+  if (home) {
     recordChoice(home, settingsPath, 'off');
   }
   return outcome;
@@ -427,6 +493,7 @@ export function removeEverywhere({ home, settingsPaths = [] }) {
   } catch {
     // No record: the settings files named are still cleaned.
   }
+  pruneStatuslineRestore(home);
   const paths = new Set(
     [...record.paths, ...Object.keys(record.wrapped), ...settingsPaths].map(
       (file) => path.resolve(file),
@@ -454,8 +521,18 @@ export function migrateEntry(settingsPath, home = null) {
       writeDocument(settingsPath, document);
       return true;
     }
-    return putEntry(settingsPath, document, home);
+    document.statusLine = statuslineEntry();
+    writeDocument(settingsPath, document);
+    if (home) recordChoice(home, settingsPath, 'on');
+    return true;
   } catch {
     return false;
   }
+}
+
+// What the settings file says: 'ours', 'theirs' or 'none'.
+export function statuslineState(settingsPath) {
+  const { document } = readSettings(settingsPath);
+  if (!Object.hasOwn(document, 'statusLine')) return 'none';
+  return isOurStatusLine(document.statusLine) ? 'ours' : 'theirs';
 }

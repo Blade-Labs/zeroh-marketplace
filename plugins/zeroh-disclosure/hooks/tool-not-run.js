@@ -6,10 +6,10 @@
 // classifier refuses a call). Its values file goes now rather than at the
 // turn's end. A refusal no hook hears about (a headless run that cannot ask,
 // a person saying no) is covered at Stop, UserPromptSubmit and SessionEnd
-// (lib/late-bind.js cleanupSessionRunFiles). Says nothing: the tool result
+// (packages/shell-analysis/late-bind.js cleanupSessionRunFiles). Says nothing: the tool result
 // already tells the model what happened.
 import { readStdinJson } from '../lib/hook-io.js';
-import { deleteValuesFile } from '../lib/late-bind.js';
+import { deleteValuesFile } from '../packages/shell-analysis/late-bind.js';
 
 const event = await readStdinJson();
 if (event?.session_id && event?.tool_use_id) {

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux",
+  "shell": "pwsh",
+  "executable": "pwsh",
+  "node": "24.20.0",
+  "corpusSha256": "ad0f8ceaa5d31a86e093308bd5256a6d44a746309c4483fc58468c4fcaa2bb28",
+  "corpusCount": 60,
+  "sampleCount": 20,
+  "measurementMethods": {
+    "parser": "Fresh Node process wall time, including runtime initialization, sixty ParseInput/CST parses, and transport/serialization; no destination policy.",
+    "runtimeLoad": "PowerShell process wall time minus reported parse/token pass time; includes startup, transport, and JSON serialization.",
+    "perCommand": "Sixty-command pass divided by sixty; warm commands inside each cold process.",
+    "sixtyCommandPass": "Sixty parse/token calls inside each fresh process; no command executes.",
+    "wholeHook": "Fresh Node process running hooks/run.js pre-tool-use; --import loads the adapter in the actual hook worker before PreToolUse."
+  },
+  "measures": {
+    "runtimeLoad": {
+      "count": 20,
+      "p50Ms": 707.1347149999999,
+      "p95Ms": 811.340731
+    },
+    "perCommand": {
+      "count": 20,
+      "p50Ms": 2.712591666666668,
+      "p95Ms": 3.3643583333333353
+    },
+    "sixtyCommandPass": {
+      "count": 20,
+      "p50Ms": 166.377,
+      "p95Ms": 205.8205
+    },
+    "parser": {
+      "count": 20,
+      "p50Ms": 935.8594410000003,
+      "p95Ms": 1081.602429
+    },
+    "wholeHook": {
+      "count": 20,
+      "p50Ms": 1149.8185939999967,
+      "p95Ms": 1259.1103650000005
+    }
+  },
+  "gatesMs": {
+    "parser": 2500,
+    "wholeHook": 3000,
+    "hookDeadline": 8000
+  },
+  "verdict": {
+    "parserPassed": true,
+    "wholeHookPassed": true,
+    "adapterPassed": true,
+    "fallbackPassed": false,
+    "releasePassed": true,
+    "decision": "adapter-eligible"
+  },
+  "rawSamples": {
+    "parser": [
+      891.628806, 935.8594410000003, 1081.602429, 919.5347860000002,
+      942.2689810000002, 903.4036149999993, 919.8956310000003,
+      936.7200090000006, 1243.0842709999997, 970.1228879999999,
+      1017.6885479999983, 923.6990490000007, 948.4867809999996,
+      908.9899179999993, 893.4746529999993, 890.2867909999986,
+      922.1462469999988, 939.4743259999996, 979.2998610000031,
+      1015.4208379999982
+    ],
+    "runtimeLoad": [
+      674.701828, 705.3279, 751.839307, 679.049943, 738.9232119999999,
+      699.571837, 705.060572, 679.058448, 990.1485049999999, 723.048689,
+      804.648188, 724.4767360000001, 707.1347149999999, 702.786715, 680.727124,
+      680.526625, 709.799396, 713.531869, 711.082774, 811.340731
+    ],
+    "perCommand": [
+      2.712591666666668, 2.873213333333334, 4.485665000000001,
+      2.9812216666666678, 2.5575566666666663, 2.6351066666666654,
+      2.7539433333333325, 3.1103833333333357, 3.1835433333333336,
+      3.1909550000000007, 2.6587816666666666, 2.511681666666668, 3.158465,
+      2.5060933333333324, 2.5575066666666677, 2.4610049999999983,
+      2.5534466666666664, 2.916945000000001, 3.3643583333333353,
+      2.430656666666666
+    ],
+    "sixtyCommandPass": [
+      166.377, 175.8708, 274.3548, 182.2723, 156.5019, 161.4568, 168.1982,
+      190.6016, 194.8107, 195.9993, 162.6662, 153.9798, 193.1189, 153.3367,
+      158.4453, 150.706, 156.7822, 178.4928, 205.8205, 149.3641
+    ],
+    "wholeHook": [
+      1163.9625469999992, 1206.3014949999997, 1189.162852999998,
+      1135.2868539999981, 1254.804962000002, 1075.4098940000003, 1161.801743,
+      1128.6058109999976, 1104.1331869999995, 1096.2440869999991,
+      1429.4062319999975, 1192.6613119999965, 1147.152525999998,
+      1125.8228569999992, 1050.5941070000044, 1149.8185939999967,
+      1182.6781859999974, 1180.153993, 1259.1103650000005, 1148.0921050000034
+    ]
+  },
+  "passed": true,
+  "fallbackPassed": false,
+  "provenance": {
+    "status": "historical-unreviewed-WIP",
+    "commit": "72e0b1279",
+    "usedByCurrentGate": false,
+    "reason": "Prior-machine results preserved for traceability; not verified or claimed by this continuation."
+  }
+}

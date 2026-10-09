@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
 // /zeroh-disclosure:mask-receipt: the session's receipt slip.
-import { formatReceiptSummary, receiptSummary } from '../../lib/report.js';
+import {
+  formatReceiptSummary,
+  receiptSummary,
+} from '../../packages/zeroh-disclosure-core/report.js';
 import { commandRoot } from './_helpers.js';
 
 try {

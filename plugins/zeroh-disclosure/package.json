@@ -1,6 +1,6 @@
 {
   "name": "zeroh-disclosure",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -18,7 +18,7 @@
     "zeroh-disclosure": "./bin/zeroh-disclosure.mjs"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node scripts/run-tests.mjs"
   },
   "engines": {
     "node": ">=20"

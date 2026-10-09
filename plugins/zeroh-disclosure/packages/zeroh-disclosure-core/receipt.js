@@ -1,0 +1,383 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import { TOKEN_SPEC_VERSION } from './token-pattern.js';
+// Builds one signed receipt: the public claims (policy, engine, boundary and
+// value commitments) and the selective disclosures that back them.
+import { boundaryHash, normalizeBoundary } from './boundary.js';
+import {
+  evaluateDisclosurePolicy,
+  POLICY,
+  POLICY_ALIAS,
+  policyHash,
+} from './policy.js';
+import {
+  canonicalJson,
+  hmacSha256B64u,
+  jwkThumbprint,
+  randomBytes,
+  sha256B64u,
+} from './crypto.js';
+import { createSignedReceipt } from './selective-disclosure.js';
+import { regexLocalProtectionEngine } from './protection-engines/regex-local.js';
+import { TURN_SUMMARY_SCHEMA } from './turn-summary.js';
+
+export async function prepareDisclosure({
+  text,
+  boundary: boundaryInput = {},
+  signer,
+  policy = POLICY,
+  policyAlias = POLICY_ALIAS,
+  previousReceiptHash = null,
+  previousTokenHash = null,
+  hmacKeyBytes = null,
+  proofStage = 'pre_boundary',
+  protectionEngine = regexLocalProtectionEngine,
+  protectionEngineManifest = null,
+  protectionEngineResolution = null,
+  subjectType = 'prompt',
+  decisionOverride = null,
+  enforce = null,
+  findingsOverride = null,
+  sanitizedTextOverride = undefined,
+  sanitizeResidual = null,
+  publicClaimExtras = {},
+  selectiveClaimExtras = {},
+}) {
+  if (!signer) throw new Error('signing key required');
+  if (typeof text !== 'string') throw new Error('text must be a string');
+  const analyzed = await analyzeDisclosure({
+    text,
+    boundaryInput,
+    hmacKeyBytes,
+    protectionEngine,
+    protectionEngineManifest,
+    policy,
+    findingsOverride,
+    decisionOverride,
+    enforce,
+  });
+  const {
+    localHmacKey,
+    boundary,
+    engineManifest,
+    protection_engine_hash,
+    findings,
+    decision,
+    detector_hash,
+    policy_hash,
+    boundary_hash,
+    original_content_commitment,
+  } = analyzed;
+  let sanitized_text = text,
+    replacements = [],
+    masked_categories = [];
+  if (sanitizedTextOverride !== undefined) {
+    sanitized_text = sanitizedTextOverride;
+  } else if (
+    decision.action === 'mask_and_allow' ||
+    (['stopped', 'sent_unmasked'].includes(decision.enforced) &&
+      decision.mask_categories?.length)
+  ) {
+    // A stopped prompt keeps the masked copy the user is offered to send
+    // instead, and a prompt sent unmasked (no proxy, uncertain: pass) keeps
+    // a masked copy for the ledger; neither masked what was sent, so no
+    // category counts as masked.
+    const masked = await protectionEngine.transform({
+      text,
+      findings,
+      hmacKeyBytes: localHmacKey,
+      categoriesToMask: decision.mask_categories,
+      policy,
+      boundary,
+    });
+    sanitized_text = masked.sanitized_text;
+    replacements = masked.replacements;
+    masked_categories =
+      decision.action === 'mask_and_allow' ? masked.masked_categories : [];
+  }
+  if (decision.action === 'block' && decision.enforced !== 'stopped')
+    sanitized_text = '';
+  // The masked text is stored in the local ledger and inside the signed
+  // receipt. Values the engine left in place (a project's known secrets, or
+  // categories the policy does not mask) are tokenized here so neither holds
+  // them in plain text.
+  if (sanitizeResidual && sanitized_text)
+    sanitized_text = await sanitizeResidual(sanitized_text);
+  const sanitized_content_hash = await sha256B64u(sanitized_text);
+  const now = new Date().toISOString();
+  const receipt_id = `zrh_${Date.now().toString(36)}_${(await sha256B64u(now + sanitized_content_hash)).slice(0, 12)}`;
+  const issuerPublic = await signer.getPublicKey();
+  if (!issuerPublic?.jwk) throw new Error('signing key public JWK required');
+  const iss = `did:jwk:${await jwkThumbprint(issuerPublic.jwk)}`;
+  return signDisclosure({
+    subjectType,
+    iss,
+    receipt_id,
+    now,
+    policy,
+    policyAlias,
+    policy_hash,
+    proofStage,
+    detector_hash,
+    engineManifest,
+    protectionEngine,
+    protection_engine_hash,
+    protectionEngineResolution,
+    boundary_hash,
+    decision,
+    findings,
+    masked_categories,
+    sanitized_content_hash,
+    original_content_commitment,
+    previousReceiptHash,
+    previousTokenHash,
+    signer,
+    issuerPublic,
+    publicClaimExtras,
+    boundary,
+    replacements,
+    sanitized_text,
+    selectiveClaimExtras,
+    localHmacKey,
+  });
+}
+
+async function signDisclosure(options) {
+  const publicClaims = buildPublicClaims(options);
+  const selectiveClaims = buildSelectiveClaims(options);
+  const signed = await createSignedReceipt({
+    signer: options.signer,
+    publicClaims,
+    selectiveClaims,
+  });
+  const receipt_hash = await sha256B64u(signed.compact);
+  const token = await buildDisclosureToken({
+    signer: options.signer,
+    receipt_hash,
+    receipt_id: options.receipt_id,
+    boundary_hash: options.boundary_hash,
+    policy_hash: options.policy_hash,
+    previousTokenHash: options.previousTokenHash,
+  });
+  return {
+    decision: options.decision,
+    findings: options.findings.map(
+      ({ type, source_entity_type, risk, start, end, length, confidence }) => ({
+        type,
+        source_entity_type,
+        risk,
+        start,
+        end,
+        length,
+        confidence,
+      }),
+    ),
+    sanitized_text: options.sanitized_text,
+    replacements: options.replacements,
+    masked_categories: options.masked_categories,
+    receipt: {
+      receipt_id: options.receipt_id,
+      receipt_hash,
+      signed,
+      public_claims: publicClaims,
+      disclosure_manifest: signed.disclosure_manifest,
+    },
+    token,
+    local_private: {
+      hmacKeyBytes: options.localHmacKey,
+      note: 'Local-only. Do not upload. Contains key needed to recompute value commitments.',
+    },
+  };
+}
+
+async function analyzeDisclosure({
+  text,
+  boundaryInput,
+  hmacKeyBytes,
+  protectionEngine,
+  protectionEngineManifest,
+  policy,
+  findingsOverride,
+  decisionOverride,
+  enforce,
+}) {
+  const localHmacKey = hmacKeyBytes ?? randomBytes(32);
+  const boundary = normalizeBoundary(boundaryInput);
+  const engineManifest =
+    protectionEngineManifest ??
+    (await protectionEngine.manifest({ policy, boundary }));
+  const protection_engine_hash = await sha256B64u(
+    canonicalJson(engineManifest),
+  );
+  const findings =
+    findingsOverride ??
+    (await protectionEngine.analyze({ text, policy, boundary }));
+  // `enforce` lets the caller record what it actually does with the text
+  // (stop it, or let the proxy mask it) instead of the policy's suggestion,
+  // so the signed decision matches the hook.
+  const policyDecision =
+    decisionOverride ?? evaluateDisclosurePolicy({ findings, policy });
+  const decision = enforce ? enforce(policyDecision, findings) : policyDecision;
+  const detector_hash = protection_engine_hash;
+  const policy_hash = await policyHash(policy);
+  const boundary_hash = await boundaryHash(boundary);
+  const original_content_commitment = await hmacSha256B64u(localHmacKey, {
+    purpose: 'original_content',
+    text,
+  });
+  return {
+    localHmacKey,
+    boundary,
+    engineManifest,
+    protection_engine_hash,
+    findings,
+    decision,
+    detector_hash,
+    policy_hash,
+    boundary_hash,
+    original_content_commitment,
+  };
+}
+
+function buildPublicClaims({
+  subjectType,
+  iss,
+  receipt_id,
+  now,
+  policy,
+  policyAlias,
+  policy_hash,
+  proofStage,
+  detector_hash,
+  engineManifest,
+  protectionEngine,
+  protection_engine_hash,
+  protectionEngineResolution,
+  boundary_hash,
+  decision,
+  findings,
+  masked_categories,
+  sanitized_content_hash,
+  original_content_commitment,
+  previousReceiptHash,
+  previousTokenHash,
+  signer,
+  issuerPublic,
+  publicClaimExtras,
+}) {
+  return {
+    schema: 'zeroh-disclosure-receipt/v2',
+    ['schema_id']: 'zeroh-disclosure-receipt',
+    ['schema_version']: 2,
+    ['token_spec_version']: TOKEN_SPEC_VERSION,
+    subject_type: subjectType,
+    iss,
+    sub: iss,
+    vct: 'https://zeroh.io/vct/disclosure-receipt/v2',
+    receipt_id,
+    iat: now,
+    policy_id: policy.policy_id,
+    policy_alias: policyAlias,
+    policy_hash,
+    proof_stage: proofStage,
+    detector_hash,
+    protection_engine_id: engineManifest.id ?? protectionEngine.id,
+    protection_engine_hash,
+    protection_engine_manifest: engineManifest,
+    protection_engine_resolution: protectionEngineResolution ?? {
+      requested_engine_id: protectionEngine.id,
+      selected_engine_id: protectionEngine.id,
+      status: 'selected',
+      fallback: false,
+      fallback_mode: 'n/a',
+      reason: null,
+    },
+    boundary_hash,
+    decision_action: decision.action,
+    detected_categories: [
+      ...new Set([
+        ...findings.map((f) => f.type),
+        ...(decision.extra_categories ?? []),
+      ]),
+    ],
+    masked_categories,
+    sanitized_content_hash,
+    original_content_commitment,
+    previous_receipt_hash: previousReceiptHash,
+    previous_token_hash: previousTokenHash,
+    raw_content_seen_by_zeroh_saas: false,
+    // True when the typed prompt went to the model as typed with values
+    // ZeroH found in it (no proxy in the route, uncertain: pass). The turn
+    // summary signed at Stop says the same for the whole turn (values shown
+    // under an unmask grant included).
+    raw_content_sent_to_ai_provider: decision.enforced === 'sent_unmasked',
+    sanitized_content_may_be_sent_to_ai_provider: decision.action !== 'block',
+    signing_key_id: signer.keyId,
+    issuer_public_jwk: issuerPublic.jwk,
+    // This receipt covers the typed prompt; the rest of the turn (tool
+    // output and file reads masked, values sent, what passed unchecked) is
+    // signed at Stop as a turn summary, and verify requires it (1.0.0).
+    turn_summary_extension: TURN_SUMMARY_SCHEMA,
+    ...publicClaimExtras,
+  };
+}
+
+function buildSelectiveClaims({
+  boundary,
+  engineManifest,
+  decision,
+  replacements,
+  sanitized_text,
+  selectiveClaimExtras,
+}) {
+  return {
+    boundary_details: boundary,
+    detector_manifest: engineManifest,
+    protection_engine_manifest: engineManifest,
+    decision_details: decision,
+    transformation_manifest: replacements.map((r) => ({
+      entity_type: r.entity_type,
+      source_entity_type: r.source_entity_type ?? null,
+      risk: r.risk,
+      start: r.start,
+      end: r.end,
+      original_length: r.original_length,
+      replacement: r.replacement,
+      value_commitment: r.value_commitment,
+    })),
+    masked_prompt: sanitized_text,
+    ...selectiveClaimExtras,
+  };
+}
+
+async function buildDisclosureToken({
+  signer,
+  receipt_hash,
+  receipt_id,
+  boundary_hash,
+  policy_hash,
+  previousTokenHash,
+}) {
+  const payload = {
+    typ: 'zeroh-disclosure-token/v1',
+    receipt_id,
+    receipt_hash,
+    boundary_hash,
+    policy_hash,
+    previous_token_hash: previousTokenHash,
+    signing_key_id: signer.keyId,
+    iat: new Date().toISOString(),
+  };
+  const payload_hash = await sha256B64u(canonicalJson(payload));
+  const signature = await signer.sign(new TextEncoder().encode(payload_hash));
+  const token_hash = await sha256B64u({
+    payload_hash,
+    signature: Array.from(signature),
+  });
+  return {
+    payload,
+    payload_hash,
+    signature_b64u: await sha256B64u(signature),
+    token_hash,
+  };
+}

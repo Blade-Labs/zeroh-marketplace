@@ -23,7 +23,12 @@ for (const key of Object.keys(values)) {
     },
   });
 }
-globalThis.zerohHook = { input: workerData.input, state, worker: true };
+globalThis.zerohHook = {
+  input: workerData.input,
+  state,
+  worker: true,
+  hookStart: workerData.hookStartEpoch - performance.timeOrigin,
+};
 
 function forward(type) {
   return (chunk, encoding, callback) => {

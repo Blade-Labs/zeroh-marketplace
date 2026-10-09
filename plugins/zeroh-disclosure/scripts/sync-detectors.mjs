@@ -12,6 +12,7 @@
 //
 //   node scripts/sync-detectors.mjs           write the copy
 //   node scripts/sync-detectors.mjs --check   fail when the copy differs
+//   --check --allow-uncommitted               validate a local dirty snapshot
 //
 // Outside the monorepo (the public marketplace tree, an installed plugin)
 // the package is not there; both modes then say so and exit 0.
@@ -173,8 +174,14 @@ function recordedCommit(target = TARGET) {
   }
 }
 
-export function run(argv = process.argv.slice(2), { plugin = PLUGIN } = {}) {
+export function run(
+  argv = process.argv.slice(2),
+  { plugin = PLUGIN, env = process.env } = {},
+) {
   const check = argv.includes('--check');
+  const allowUncommitted =
+    argv.includes('--allow-uncommitted') ||
+    env.ZEROH_DETECTOR_SYNC_ALLOW_UNCOMMITTED === '1';
   const target = path.join(plugin, 'vendor', 'sensitive-data-detectors');
   const pkg = monorepoPackage(plugin);
   if (!pkg) {
@@ -187,10 +194,15 @@ export function run(argv = process.argv.slice(2), { plugin = PLUGIN } = {}) {
     // The files must match the package; the commit is the one recorded at
     // the last sync (a later commit that leaves the package alone keeps it).
     // A copy synced from uncommitted package changes is not final: commit
-    // the package, then sync again.
+    // the package, then sync again. Local review can explicitly allow a dirty
+    // provenance marker; compareCopy still checks every file byte for byte.
     const commit = recordedCommit(target) ?? null;
     const problems = compareCopy(buildCopy(pkg, { commit }), target);
-    if (typeof commit === 'string' && commit.endsWith(DIRTY))
+    if (
+      !allowUncommitted &&
+      typeof commit === 'string' &&
+      commit.endsWith(DIRTY)
+    )
       problems.push(
         'synced from uncommitted package changes; commit the package, then sync again',
       );

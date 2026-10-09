@@ -1,0 +1,1095 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "0845013fd15ea444f8e6f69e27168f19db8a9026",
+  "rulingReference": "owner ruling 2026-10-05, ruling 1",
+  "entries": [
+    {
+      "id": "43-bash-ssh-0-none",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "f05f63f00bbcc8b076263a20b45d9e2badec9ab125923ca0f6617de05936251e"
+    },
+    {
+      "id": "43-bash-ssh-0-single",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "84a228c52e25cf838ad4a73f62b086e340d14b18c0a33e6d42b125f562ff02a5"
+    },
+    {
+      "id": "43-bash-ssh-0-double",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "c95bf501538dade5d4f454ca09a1714cf16f4437ec5fae5d1dc11461518589b7"
+    },
+    {
+      "id": "43-bash-ssh-0-ansi-c",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "64e5b87bd76e22bd558053e0752aa0c33f12c4abf1b449b0f273e7048c6dfb4d"
+    },
+    {
+      "id": "43-bash-ssh-0-escape",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "a5d103a35e6905245cdb752f090984b0c5eb0276de0022c7eb20068c5ae1d707"
+    },
+    {
+      "id": "43-bash-ssh-0-concatenation",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "23f13692bb509b18177cfb774d55d3b1336dcb946a7407ff5cdc75f8e0773025"
+    },
+    {
+      "id": "43-bash-ssh-0-substitution",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "f2dfd6efbccbb73ad36f8d0b854701def79de81c558b36670a52cb6339ff4c8a"
+    },
+    {
+      "id": "43-bash-ssh-1-none",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "6dd6dc00e6ef2e555cd9b701b9cb0d32f280a8fdcd0eef2c22e884ef5cf81643"
+    },
+    {
+      "id": "43-bash-ssh-1-single",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "ca546f5ee05972c9af29b7ce4e67743b4a21d76d7c45f49f3ea9ac152ccefd39"
+    },
+    {
+      "id": "43-bash-ssh-1-double",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "e53e30185e98aefd8f37d291aea01339241abbd6b1468ab3f730ef1ddb41aaa1"
+    },
+    {
+      "id": "43-bash-ssh-1-ansi-c",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "1c24c51901202a4a7059b9d8f0980bc9f1ce2c8f09ad573304d8cfdba5dbde33"
+    },
+    {
+      "id": "43-bash-ssh-1-escape",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "178bf68f81f7cb7645cec3523e189d5161334ca03a36f8c129fec95c2a96fb7b"
+    },
+    {
+      "id": "43-bash-ssh-1-concatenation",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "d4c9db5451f1e1de27dbc33dc5c83e514eb6854abbd081c3d7a29ef9cfb41179"
+    },
+    {
+      "id": "43-bash-ssh-1-substitution",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "083dfae4cec2b0b2d50500430b2b1aface0f370f3f06bfafa31aa3d9c798f9e6"
+    },
+    {
+      "id": "43-bash-openssl-0-none",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "f5476db46c1cc58792f035238a258b2653e7a52e56ef19b6cba1f49e968f4c93"
+    },
+    {
+      "id": "43-bash-openssl-0-single",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "7c1b7ba45869797a8cc67979f58941f33967ba4e80752d7f1fefade7c9797699"
+    },
+    {
+      "id": "43-bash-openssl-0-double",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "c7a3579cc89ffca9731300465117f34d0be3964705c679c3da3b68aad483fe6a"
+    },
+    {
+      "id": "43-bash-openssl-0-ansi-c",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "b28fc1943707777abb30a3ee8c12cd63b78e00f04873a7df5d34e1eded7e68ec"
+    },
+    {
+      "id": "43-bash-openssl-0-escape",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "13926b305e03b8ec92c652097411dc346560984b55c1365e358d36178129a676"
+    },
+    {
+      "id": "43-bash-openssl-0-concatenation",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "7bd381a70264af5dfc0b43bf5bd7032032ea78ee9581ed4eeea9090eb6df794e"
+    },
+    {
+      "id": "43-bash-openssl-0-substitution",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "6dcc283e59da6a8274cce4f09d283365f9ab6f280429f320ec435df7d2fcbb1b"
+    },
+    {
+      "id": "43-bash-FINDINGS3",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "bash",
+      "classification": "notice-gap",
+      "commandHash": "6faae520de1244b26413971d8415c94d8e2e95f08d04008d5c6d20d1d2f90fd9"
+    },
+    {
+      "id": "43-bash-live-tsig",
+      "program": "dig",
+      "spelling": "local-key",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "ac2408fa754c56a2a0122973db87b81f94f65311927e904680109cbaff2e6f6d"
+    },
+    {
+      "id": "43-bash-redirect-cross-host",
+      "program": "curl",
+      "spelling": "redirect",
+      "shell": "bash",
+      "classification": "missed-protection",
+      "commandHash": "6906e44a59420dde4108a214c0b267dfaecb8b1bb28f2835536c37d2b8067a45"
+    },
+    {
+      "id": "43-bash-curl-default-config",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "bash",
+      "classification": "notice-gap",
+      "commandHash": "288a612d2b9061bddb694112d59120f4313d15e659af5231885769b2644eb838"
+    },
+    {
+      "id": "43-bash-nslookup-srchlist",
+      "program": "nslookup",
+      "spelling": "search-domain",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "a693817ff1472c5b2a7ed30fcfa0347dc667178d749ce7a2a43813f36f4ecc40"
+    },
+    {
+      "id": "43-bash-resolvectl-search",
+      "program": "resolvectl",
+      "spelling": "search-domain",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "a101762212ece8b7a9de1583a78a5502e494bf5feecbf10b2436a55a7c631c47"
+    },
+    {
+      "id": "43-zsh-ssh-0-none",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "f05f63f00bbcc8b076263a20b45d9e2badec9ab125923ca0f6617de05936251e"
+    },
+    {
+      "id": "43-zsh-ssh-0-single",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "84a228c52e25cf838ad4a73f62b086e340d14b18c0a33e6d42b125f562ff02a5"
+    },
+    {
+      "id": "43-zsh-ssh-0-double",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "c95bf501538dade5d4f454ca09a1714cf16f4437ec5fae5d1dc11461518589b7"
+    },
+    {
+      "id": "43-zsh-ssh-0-ansi-c",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "64e5b87bd76e22bd558053e0752aa0c33f12c4abf1b449b0f273e7048c6dfb4d"
+    },
+    {
+      "id": "43-zsh-ssh-0-escape",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "a5d103a35e6905245cdb752f090984b0c5eb0276de0022c7eb20068c5ae1d707"
+    },
+    {
+      "id": "43-zsh-ssh-0-concatenation",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "23f13692bb509b18177cfb774d55d3b1336dcb946a7407ff5cdc75f8e0773025"
+    },
+    {
+      "id": "43-zsh-ssh-0-substitution",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "f2dfd6efbccbb73ad36f8d0b854701def79de81c558b36670a52cb6339ff4c8a"
+    },
+    {
+      "id": "43-zsh-ssh-1-none",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "6dd6dc00e6ef2e555cd9b701b9cb0d32f280a8fdcd0eef2c22e884ef5cf81643"
+    },
+    {
+      "id": "43-zsh-ssh-1-single",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "ca546f5ee05972c9af29b7ce4e67743b4a21d76d7c45f49f3ea9ac152ccefd39"
+    },
+    {
+      "id": "43-zsh-ssh-1-double",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "e53e30185e98aefd8f37d291aea01339241abbd6b1468ab3f730ef1ddb41aaa1"
+    },
+    {
+      "id": "43-zsh-ssh-1-ansi-c",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "1c24c51901202a4a7059b9d8f0980bc9f1ce2c8f09ad573304d8cfdba5dbde33"
+    },
+    {
+      "id": "43-zsh-ssh-1-escape",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "178bf68f81f7cb7645cec3523e189d5161334ca03a36f8c129fec95c2a96fb7b"
+    },
+    {
+      "id": "43-zsh-ssh-1-concatenation",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "d4c9db5451f1e1de27dbc33dc5c83e514eb6854abbd081c3d7a29ef9cfb41179"
+    },
+    {
+      "id": "43-zsh-ssh-1-substitution",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "083dfae4cec2b0b2d50500430b2b1aface0f370f3f06bfafa31aa3d9c798f9e6"
+    },
+    {
+      "id": "43-zsh-openssl-0-none",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "f5476db46c1cc58792f035238a258b2653e7a52e56ef19b6cba1f49e968f4c93"
+    },
+    {
+      "id": "43-zsh-openssl-0-single",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "7c1b7ba45869797a8cc67979f58941f33967ba4e80752d7f1fefade7c9797699"
+    },
+    {
+      "id": "43-zsh-openssl-0-double",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "c7a3579cc89ffca9731300465117f34d0be3964705c679c3da3b68aad483fe6a"
+    },
+    {
+      "id": "43-zsh-openssl-0-ansi-c",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "b28fc1943707777abb30a3ee8c12cd63b78e00f04873a7df5d34e1eded7e68ec"
+    },
+    {
+      "id": "43-zsh-openssl-0-escape",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "13926b305e03b8ec92c652097411dc346560984b55c1365e358d36178129a676"
+    },
+    {
+      "id": "43-zsh-openssl-0-concatenation",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "7bd381a70264af5dfc0b43bf5bd7032032ea78ee9581ed4eeea9090eb6df794e"
+    },
+    {
+      "id": "43-zsh-openssl-0-substitution",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "6dcc283e59da6a8274cce4f09d283365f9ab6f280429f320ec435df7d2fcbb1b"
+    },
+    {
+      "id": "43-zsh-FINDINGS3",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "zsh",
+      "classification": "notice-gap",
+      "commandHash": "6faae520de1244b26413971d8415c94d8e2e95f08d04008d5c6d20d1d2f90fd9"
+    },
+    {
+      "id": "43-zsh-live-tsig",
+      "program": "dig",
+      "spelling": "local-key",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "ac2408fa754c56a2a0122973db87b81f94f65311927e904680109cbaff2e6f6d"
+    },
+    {
+      "id": "43-zsh-redirect-cross-host",
+      "program": "curl",
+      "spelling": "redirect",
+      "shell": "zsh",
+      "classification": "missed-protection",
+      "commandHash": "6906e44a59420dde4108a214c0b267dfaecb8b1bb28f2835536c37d2b8067a45"
+    },
+    {
+      "id": "43-zsh-curl-default-config",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "zsh",
+      "classification": "notice-gap",
+      "commandHash": "288a612d2b9061bddb694112d59120f4313d15e659af5231885769b2644eb838"
+    },
+    {
+      "id": "43-zsh-nslookup-srchlist",
+      "program": "nslookup",
+      "spelling": "search-domain",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "a693817ff1472c5b2a7ed30fcfa0347dc667178d749ce7a2a43813f36f4ecc40"
+    },
+    {
+      "id": "43-zsh-resolvectl-search",
+      "program": "resolvectl",
+      "spelling": "search-domain",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "a101762212ece8b7a9de1583a78a5502e494bf5feecbf10b2436a55a7c631c47"
+    },
+    {
+      "id": "43-pwsh-ssh-0-none",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "f05f63f00bbcc8b076263a20b45d9e2badec9ab125923ca0f6617de05936251e"
+    },
+    {
+      "id": "43-pwsh-ssh-0-single",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "84a228c52e25cf838ad4a73f62b086e340d14b18c0a33e6d42b125f562ff02a5"
+    },
+    {
+      "id": "43-pwsh-ssh-0-double",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "c95bf501538dade5d4f454ca09a1714cf16f4437ec5fae5d1dc11461518589b7"
+    },
+    {
+      "id": "43-pwsh-ssh-1-none",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "6dd6dc00e6ef2e555cd9b701b9cb0d32f280a8fdcd0eef2c22e884ef5cf81643"
+    },
+    {
+      "id": "43-pwsh-ssh-1-single",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "ca546f5ee05972c9af29b7ce4e67743b4a21d76d7c45f49f3ea9ac152ccefd39"
+    },
+    {
+      "id": "43-pwsh-ssh-1-double",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "e53e30185e98aefd8f37d291aea01339241abbd6b1468ab3f730ef1ddb41aaa1"
+    },
+    {
+      "id": "43-pwsh-openssl-0-none",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "f5476db46c1cc58792f035238a258b2653e7a52e56ef19b6cba1f49e968f4c93"
+    },
+    {
+      "id": "43-pwsh-openssl-0-single",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "7c1b7ba45869797a8cc67979f58941f33967ba4e80752d7f1fefade7c9797699"
+    },
+    {
+      "id": "43-pwsh-openssl-0-double",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "c7a3579cc89ffca9731300465117f34d0be3964705c679c3da3b68aad483fe6a"
+    },
+    {
+      "id": "43-pwsh-git-1-none",
+      "program": "git",
+      "spelling": "-cATTACHED",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "f032e9cf958459d1536d3170501341a20f77f260fd44da0407f82c9ca67edb91"
+    },
+    {
+      "id": "43-pwsh-git-1-single",
+      "program": "git",
+      "spelling": "-cATTACHED",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "cd90cbb1a4f5988f50dc74f0f588fdf93b56bf512051763fa002ce186ed6bfb8"
+    },
+    {
+      "id": "43-pwsh-git-1-double",
+      "program": "git",
+      "spelling": "-cATTACHED",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "60fb98c0dbcdbb03abdf156594b37b1721579f51ab6ab2ed8cc1a13003ff76c4"
+    },
+    {
+      "id": "43-pwsh-FINDINGS3",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "pwsh",
+      "classification": "notice-gap",
+      "commandHash": "6faae520de1244b26413971d8415c94d8e2e95f08d04008d5c6d20d1d2f90fd9"
+    },
+    {
+      "id": "43-pwsh-live-tsig",
+      "program": "dig",
+      "spelling": "local-key",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "ac2408fa754c56a2a0122973db87b81f94f65311927e904680109cbaff2e6f6d"
+    },
+    {
+      "id": "43-pwsh-redirect-cross-host",
+      "program": "curl",
+      "spelling": "redirect",
+      "shell": "pwsh",
+      "classification": "missed-protection",
+      "commandHash": "6906e44a59420dde4108a214c0b267dfaecb8b1bb28f2835536c37d2b8067a45"
+    },
+    {
+      "id": "43-pwsh-curl-default-config",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "pwsh",
+      "classification": "notice-gap",
+      "commandHash": "288a612d2b9061bddb694112d59120f4313d15e659af5231885769b2644eb838"
+    },
+    {
+      "id": "43-pwsh-nslookup-srchlist",
+      "program": "nslookup",
+      "spelling": "search-domain",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "a693817ff1472c5b2a7ed30fcfa0347dc667178d749ce7a2a43813f36f4ecc40"
+    },
+    {
+      "id": "43-pwsh-resolvectl-search",
+      "program": "resolvectl",
+      "spelling": "search-domain",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "a101762212ece8b7a9de1583a78a5502e494bf5feecbf10b2436a55a7c631c47"
+    },
+    {
+      "id": "43-powershell-ssh-0-none",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "f05f63f00bbcc8b076263a20b45d9e2badec9ab125923ca0f6617de05936251e"
+    },
+    {
+      "id": "43-powershell-ssh-0-single",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "84a228c52e25cf838ad4a73f62b086e340d14b18c0a33e6d42b125f562ff02a5"
+    },
+    {
+      "id": "43-powershell-ssh-0-double",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "c95bf501538dade5d4f454ca09a1714cf16f4437ec5fae5d1dc11461518589b7"
+    },
+    {
+      "id": "43-powershell-ssh-1-none",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "6dd6dc00e6ef2e555cd9b701b9cb0d32f280a8fdcd0eef2c22e884ef5cf81643"
+    },
+    {
+      "id": "43-powershell-ssh-1-single",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "ca546f5ee05972c9af29b7ce4e67743b4a21d76d7c45f49f3ea9ac152ccefd39"
+    },
+    {
+      "id": "43-powershell-ssh-1-double",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "e53e30185e98aefd8f37d291aea01339241abbd6b1468ab3f730ef1ddb41aaa1"
+    },
+    {
+      "id": "43-powershell-openssl-0-none",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "f5476db46c1cc58792f035238a258b2653e7a52e56ef19b6cba1f49e968f4c93"
+    },
+    {
+      "id": "43-powershell-openssl-0-single",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "7c1b7ba45869797a8cc67979f58941f33967ba4e80752d7f1fefade7c9797699"
+    },
+    {
+      "id": "43-powershell-openssl-0-double",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "c7a3579cc89ffca9731300465117f34d0be3964705c679c3da3b68aad483fe6a"
+    },
+    {
+      "id": "43-powershell-git-1-none",
+      "program": "git",
+      "spelling": "-cATTACHED",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "f032e9cf958459d1536d3170501341a20f77f260fd44da0407f82c9ca67edb91"
+    },
+    {
+      "id": "43-powershell-git-1-single",
+      "program": "git",
+      "spelling": "-cATTACHED",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "cd90cbb1a4f5988f50dc74f0f588fdf93b56bf512051763fa002ce186ed6bfb8"
+    },
+    {
+      "id": "43-powershell-git-1-double",
+      "program": "git",
+      "spelling": "-cATTACHED",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "60fb98c0dbcdbb03abdf156594b37b1721579f51ab6ab2ed8cc1a13003ff76c4"
+    },
+    {
+      "id": "43-powershell-FINDINGS3",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "powershell",
+      "classification": "notice-gap",
+      "commandHash": "6faae520de1244b26413971d8415c94d8e2e95f08d04008d5c6d20d1d2f90fd9"
+    },
+    {
+      "id": "43-powershell-live-tsig",
+      "program": "dig",
+      "spelling": "local-key",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "ac2408fa754c56a2a0122973db87b81f94f65311927e904680109cbaff2e6f6d"
+    },
+    {
+      "id": "43-powershell-redirect-cross-host",
+      "program": "curl",
+      "spelling": "redirect",
+      "shell": "powershell",
+      "classification": "missed-protection",
+      "commandHash": "6906e44a59420dde4108a214c0b267dfaecb8b1bb28f2835536c37d2b8067a45"
+    },
+    {
+      "id": "43-powershell-curl-default-config",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "powershell",
+      "classification": "notice-gap",
+      "commandHash": "288a612d2b9061bddb694112d59120f4313d15e659af5231885769b2644eb838"
+    },
+    {
+      "id": "43-powershell-nslookup-srchlist",
+      "program": "nslookup",
+      "spelling": "search-domain",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "a693817ff1472c5b2a7ed30fcfa0347dc667178d749ce7a2a43813f36f4ecc40"
+    },
+    {
+      "id": "43-powershell-resolvectl-search",
+      "program": "resolvectl",
+      "spelling": "search-domain",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "a101762212ece8b7a9de1583a78a5502e494bf5feecbf10b2436a55a7c631c47"
+    },
+    {
+      "id": "43-cmd-ssh-0-none",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "f05f63f00bbcc8b076263a20b45d9e2badec9ab125923ca0f6617de05936251e"
+    },
+    {
+      "id": "43-cmd-ssh-0-double",
+      "program": "ssh",
+      "spelling": "-o",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "c95bf501538dade5d4f454ca09a1714cf16f4437ec5fae5d1dc11461518589b7"
+    },
+    {
+      "id": "43-cmd-ssh-1-none",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "6dd6dc00e6ef2e555cd9b701b9cb0d32f280a8fdcd0eef2c22e884ef5cf81643"
+    },
+    {
+      "id": "43-cmd-ssh-1-double",
+      "program": "ssh",
+      "spelling": "-oATTACHED",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "e53e30185e98aefd8f37d291aea01339241abbd6b1468ab3f730ef1ddb41aaa1"
+    },
+    {
+      "id": "43-cmd-openssl-0-none",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "f5476db46c1cc58792f035238a258b2653e7a52e56ef19b6cba1f49e968f4c93"
+    },
+    {
+      "id": "43-cmd-openssl-0-double",
+      "program": "openssl",
+      "spelling": "-connect",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "c7a3579cc89ffca9731300465117f34d0be3964705c679c3da3b68aad483fe6a"
+    },
+    {
+      "id": "43-cmd-FINDINGS3",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "cmd",
+      "classification": "notice-gap",
+      "commandHash": "6faae520de1244b26413971d8415c94d8e2e95f08d04008d5c6d20d1d2f90fd9"
+    },
+    {
+      "id": "43-cmd-live-tsig",
+      "program": "dig",
+      "spelling": "local-key",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "ac2408fa754c56a2a0122973db87b81f94f65311927e904680109cbaff2e6f6d"
+    },
+    {
+      "id": "43-cmd-redirect-cross-host",
+      "program": "curl",
+      "spelling": "redirect",
+      "shell": "cmd",
+      "classification": "missed-protection",
+      "commandHash": "6906e44a59420dde4108a214c0b267dfaecb8b1bb28f2835536c37d2b8067a45"
+    },
+    {
+      "id": "43-cmd-curl-default-config",
+      "program": "curl",
+      "spelling": "config-file",
+      "shell": "cmd",
+      "classification": "notice-gap",
+      "commandHash": "288a612d2b9061bddb694112d59120f4313d15e659af5231885769b2644eb838"
+    },
+    {
+      "id": "43-cmd-nslookup-srchlist",
+      "program": "nslookup",
+      "spelling": "search-domain",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "a693817ff1472c5b2a7ed30fcfa0347dc667178d749ce7a2a43813f36f4ecc40"
+    },
+    {
+      "id": "43-cmd-resolvectl-search",
+      "program": "resolvectl",
+      "spelling": "search-domain",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "a101762212ece8b7a9de1583a78a5502e494bf5feecbf10b2436a55a7c631c47"
+    },
+    {
+      "id": "43-bash-comment",
+      "program": "curl",
+      "spelling": "comment",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "a7fba44e69472a4be91f0a67c1c1f7cc4319b3ceed1e02e084cef1ebd60fe046"
+    },
+    {
+      "id": "43-zsh-comment",
+      "program": "curl",
+      "spelling": "comment",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "a7fba44e69472a4be91f0a67c1c1f7cc4319b3ceed1e02e084cef1ebd60fe046"
+    },
+    {
+      "id": "43-pwsh-reference-suffix",
+      "program": "curl",
+      "spelling": "reference-suffix",
+      "shell": "pwsh",
+      "classification": "notice-gap",
+      "commandHash": "6f386ac90064f6fa4011def299d383e9a5cb25607b6503c1913d690180b1eb05"
+    },
+    {
+      "id": "43-pwsh-reference-boundary",
+      "program": "curl",
+      "spelling": "reference-boundary",
+      "shell": "pwsh",
+      "classification": "notice-gap",
+      "commandHash": "e12b5d5aa891c87dd38b5a52dde471e9af3f447defea2f4500ee8ba02c8d03ce"
+    },
+    {
+      "id": "43-powershell-reference-suffix",
+      "program": "curl",
+      "spelling": "reference-suffix",
+      "shell": "powershell",
+      "classification": "notice-gap",
+      "commandHash": "6f386ac90064f6fa4011def299d383e9a5cb25607b6503c1913d690180b1eb05"
+    },
+    {
+      "id": "43-powershell-reference-boundary",
+      "program": "curl",
+      "spelling": "reference-boundary",
+      "shell": "powershell",
+      "classification": "notice-gap",
+      "commandHash": "e12b5d5aa891c87dd38b5a52dde471e9af3f447defea2f4500ee8ba02c8d03ce"
+    },
+    {
+      "id": "43-spike-03",
+      "program": "curl",
+      "spelling": "spike",
+      "shell": "bash",
+      "classification": "notice-gap",
+      "commandHash": "6faae520de1244b26413971d8415c94d8e2e95f08d04008d5c6d20d1d2f90fd9"
+    },
+    {
+      "id": "43-spike-09",
+      "program": "dig",
+      "spelling": "spike",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "dd8708fbf29d03a0e421389bcc4baf897028f5c87a38ddbe8936eacafab8eab7"
+    },
+    {
+      "id": "43-spike-20",
+      "program": "openssl",
+      "spelling": "spike",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "a11e9117d3c6f0c72d219f644c52fd656a1face30db5838fb3c265c90699679e"
+    },
+    {
+      "id": "43-spike-32",
+      "program": "curl",
+      "spelling": "spike",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "ed826127ce02597253afcd1f0f203e5d6277e85c5609fadf02243fe31415de34"
+    },
+    {
+      "id": "43-spike-33",
+      "program": "FOO=$(cat",
+      "spelling": "spike",
+      "shell": "bash",
+      "classification": "notice-gap",
+      "commandHash": "ff9c388cd2e7f8f80cb9de2ba8719f59f72909798f3ad763d8e9d891c7ec91ef"
+    },
+    {
+      "id": "43-spike-44",
+      "program": "mysql",
+      "spelling": "spike",
+      "shell": "bash",
+      "classification": "missed-protection",
+      "commandHash": "c37125690fc390b1262472900c4f96a52e828c556a6b76d6ee14fb6f4ae3ce8b"
+    },
+    {
+      "id": "43-bash-curl-5-none-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "dc7feea0d6e6d0c9960ee6c3817614a95fb101cdaac87523498ce2fbfb21d1a8"
+    },
+    {
+      "id": "43-bash-curl-5-single-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "6856bbbd77cf0aa0fe10f03bb4d23d2421346439af739775d57ab7c1190b5b36"
+    },
+    {
+      "id": "43-bash-curl-5-double-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "8e11e50a2996d7645eeefcb79f21a62ae97f5ace406d959246ce9db6f68b6a1f"
+    },
+    {
+      "id": "43-bash-curl-5-ansi-c-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "53f7d567304aac98938d45c500fe8e26efb1154aef7800be669899fd69242fa6"
+    },
+    {
+      "id": "43-bash-curl-5-escape-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "347e69a9cb30a13c2082c7cfbb21e28b5d0c0c52f40f2b63619e139ee39b27e4"
+    },
+    {
+      "id": "43-bash-curl-5-concatenation-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "bash",
+      "classification": "false-stop",
+      "commandHash": "3f05ac4be2fb00ef94a389c16954195b239e2bc5699feaf175815e10215dcf32"
+    },
+    {
+      "id": "43-zsh-curl-5-none-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "dc7feea0d6e6d0c9960ee6c3817614a95fb101cdaac87523498ce2fbfb21d1a8"
+    },
+    {
+      "id": "43-zsh-curl-5-single-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "6856bbbd77cf0aa0fe10f03bb4d23d2421346439af739775d57ab7c1190b5b36"
+    },
+    {
+      "id": "43-zsh-curl-5-double-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "8e11e50a2996d7645eeefcb79f21a62ae97f5ace406d959246ce9db6f68b6a1f"
+    },
+    {
+      "id": "43-zsh-curl-5-ansi-c-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "53f7d567304aac98938d45c500fe8e26efb1154aef7800be669899fd69242fa6"
+    },
+    {
+      "id": "43-zsh-curl-5-escape-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "347e69a9cb30a13c2082c7cfbb21e28b5d0c0c52f40f2b63619e139ee39b27e4"
+    },
+    {
+      "id": "43-zsh-curl-5-concatenation-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "zsh",
+      "classification": "false-stop",
+      "commandHash": "3f05ac4be2fb00ef94a389c16954195b239e2bc5699feaf175815e10215dcf32"
+    },
+    {
+      "id": "43-pwsh-curl-5-none-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "dc7feea0d6e6d0c9960ee6c3817614a95fb101cdaac87523498ce2fbfb21d1a8"
+    },
+    {
+      "id": "43-pwsh-curl-5-single-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "6856bbbd77cf0aa0fe10f03bb4d23d2421346439af739775d57ab7c1190b5b36"
+    },
+    {
+      "id": "43-pwsh-curl-5-double-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "pwsh",
+      "classification": "false-stop",
+      "commandHash": "8e11e50a2996d7645eeefcb79f21a62ae97f5ace406d959246ce9db6f68b6a1f"
+    },
+    {
+      "id": "43-powershell-curl-5-none-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "dc7feea0d6e6d0c9960ee6c3817614a95fb101cdaac87523498ce2fbfb21d1a8"
+    },
+    {
+      "id": "43-powershell-curl-5-single-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "6856bbbd77cf0aa0fe10f03bb4d23d2421346439af739775d57ab7c1190b5b36"
+    },
+    {
+      "id": "43-powershell-curl-5-double-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "powershell",
+      "classification": "false-stop",
+      "commandHash": "8e11e50a2996d7645eeefcb79f21a62ae97f5ace406d959246ce9db6f68b6a1f"
+    },
+    {
+      "id": "43-cmd-curl-5-none-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "dc7feea0d6e6d0c9960ee6c3817614a95fb101cdaac87523498ce2fbfb21d1a8"
+    },
+    {
+      "id": "43-cmd-curl-5-double-allowed",
+      "program": "curl",
+      "spelling": "--data-b",
+      "shell": "cmd",
+      "classification": "false-stop",
+      "commandHash": "8e11e50a2996d7645eeefcb79f21a62ae97f5ace406d959246ce9db6f68b6a1f"
+    },
+    {
+      "id": "43-bash-historical-tar-protected-extraction",
+      "program": "tar",
+      "spelling": "tar-protected-extraction",
+      "shell": "bash",
+      "classification": "missed-protection",
+      "commandHash": "b6c54893acf29c9166a7b0b6d424c6a4d03abe25bc8e4e2753758c9525fa03c1"
+    },
+    {
+      "id": "43-zsh-historical-tar-protected-extraction",
+      "program": "tar",
+      "spelling": "tar-protected-extraction",
+      "shell": "zsh",
+      "classification": "missed-protection",
+      "commandHash": "b6c54893acf29c9166a7b0b6d424c6a4d03abe25bc8e4e2753758c9525fa03c1"
+    }
+  ]
+}

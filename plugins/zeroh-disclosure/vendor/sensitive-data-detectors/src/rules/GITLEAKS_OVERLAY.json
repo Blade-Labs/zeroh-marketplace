@@ -1,0 +1,53 @@
+{
+  "source": "Phase 52; overrides are text-only adaptations of gitleaks v8.30.1, never edits to upstream data.",
+  "rules": [
+    {
+      "id": "generic-api-key",
+      "genericShape": true,
+      "source": "gitleaks config/gitleaks.toml: secret-name assignment; apply the local code-value guard"
+    },
+    {
+      "id": "hashicorp-tf-password",
+      "genericShape": true,
+      "source": "gitleaks config/gitleaks.toml: text-only detector cannot establish a .tf path"
+    },
+    {
+      "id": "kubernetes-secret-yaml",
+      "secretInside": "^[\\w.-]+:(?:[ \\t]*(?:\\||>[-+]?)\\s+)?[ \\t]*",
+      "source": "gitleaks config/gitleaks.toml: strip the YAML key from the captured secret"
+    },
+    {
+      "id": "curl-auth-user",
+      "credentialPair": true,
+      "regex": "[ \\t\\n\\r](?:-u|--user)(?:=|[ \\t]{0,5})((?:\"[^\"\\r\\n]*\"|'[^'\\r\\n]*'|[^\\s\"'])+)(?=\\s|$)",
+      "secretGroup": 1,
+      "source": "https://curl.se/docs/manpage.html#-u; gitleaks cmd/generate/config/rules/curl.go. Parse the real separator before stopwords; preserve quote/interpreter context; empty-password references and punctuation are missing upstream."
+    }
+  ],
+  "gaps": [
+    {
+      "id": "github-app-token-stateless",
+      "fillsGapOf": "github-app-token",
+      "regex": "(?<![A-Za-z0-9_-])ghs_\\d{1,20}_[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])",
+      "flags": "g",
+      "type": "API_KEY",
+      "risk": "critical",
+      "confidence": 0.99,
+      "source": "https://github.blog/changelog/2026-04-24-notice-about-upcoming-new-format-for-github-app-installation-tokens/"
+    },
+    {
+      "id": "mysql-password-option",
+      "regex": "[ \\t]--password=(?:\"([^\"\\r\\n]+)\"|'([^'\\r\\n]+)'|([^\\s\"']+))",
+      "flags": "g",
+      "type": "PASSWORD",
+      "risk": "critical",
+      "confidence": 0.94,
+      "groups": [1, 2, 3],
+      "source": "https://dev.mysql.com/doc/refman/8.4/en/connection-options.html#option_general_password; upstream has no mysql CLI password rule",
+      "anchor": {
+        "word": "mysql",
+        "lineBreaks": 0
+      }
+    }
+  ]
+}

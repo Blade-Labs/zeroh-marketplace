@@ -1,0 +1,6 @@
+Test-only parser artifacts, kept byte-for-byte from their pinned npm tarballs.
+web-tree-sitter 0.27.0: Copyright (c) 2018 Max Brunsfeld.
+tree-sitter-bash 0.25.1: Copyright (c) 2017 Max Brunsfeld.
+Both are licensed under MIT. See runtime/LICENSE and bash/LICENSE.
+SOURCE.json records tarball integrity and SHA-256 of each vendored artifact.
+These adapters precede phase 44; that phase must use identical pinned artifacts.

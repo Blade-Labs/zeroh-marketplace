@@ -2,14 +2,18 @@
 
 // Shared plumbing for hook scripts.
 import {
-  baseUrlOverridden,
+  baseUrlRoutingState,
   refreshRoute as refreshSessionRoute,
   sessionNamesInstallProxy,
   sessionProxyState,
   settingsEntryState,
-} from './proxy-manager.js';
-import { proxyPaths, readProxyConfig, routeSeen } from './proxy-state.js';
-import { projectRootFromEnv } from './session.js';
+} from '../packages/local-proxy/proxy-manager.js';
+import {
+  proxyPaths,
+  readProxyConfig,
+  routeSeen,
+} from '../packages/local-proxy/proxy-state.js';
+import { projectRootFromEnv } from '../packages/zeroh-disclosure-core/session.js';
 
 // The hook's event. Under hooks/run.js the loader has already read stdin.
 export async function readStdinJson() {
@@ -110,7 +114,11 @@ export async function proxyActive({
 // What the banner and /zeroh-disclosure:status say about typed text (see
 // lib/banner.js): on, ready (the first prompt puts the session behind the
 // proxy), overridden, off, provider or down.
-export async function proxyState({ sessionId = null, env = process.env } = {}) {
+export async function proxyState({
+  sessionId = null,
+  env = process.env,
+  root = process.cwd(),
+} = {}) {
   let state;
   try {
     state = await sessionProxyState({ env, sessionId });
@@ -122,7 +130,8 @@ export async function proxyState({ sessionId = null, env = process.env } = {}) {
   if (state.reason === 'turned-off') return 'turned-off';
   if (state.reason === 'provider') return 'provider';
   if (state.reason === 'not-configured') {
-    if (baseUrlOverridden(env)) return 'overridden';
+    const routing = baseUrlRoutingState({ env, cwd: root });
+    if (routing) return routing;
     if (settingsEntryState(env) === 'removed-by-user') return 'off';
     return readProxyConfig(proxyPaths(env)) ? 'ready' : 'off';
   }

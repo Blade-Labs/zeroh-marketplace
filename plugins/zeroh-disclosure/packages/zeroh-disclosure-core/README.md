@@ -1,0 +1,3 @@
+# ZeroH Disclosure core
+
+This package owns host-independent disclosure policy, detection, masking, vault and token state, receipts and reports, session evidence, and user-authority checks. Its target contract allows Node built-ins, the vendored detector engine, and other files in this package; imports from `hooks/`, `commands/`, `bin/`, or `mcp/` are forbidden. The current core-to-`lib/` and core-to-shell-analysis imports are measured transitional debt in `lint-budget.json`, preserved by this pure move, tracked for reduction in phase 46, and removed during the 1.2 host extraction; core must not add new host, shell-analysis, or local-proxy imports.

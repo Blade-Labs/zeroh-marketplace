@@ -57,11 +57,11 @@ follows them, and every release is checked against them.
 | A secret heading to a host that isn't allowed                                                              | stopped, with the allow command                                         | stopped                                                     |
 | The model changing ZeroH's settings, keys or hooks                                                         | stopped                                                                 | stopped                                                     |
 | A secret heading somewhere ZeroH can't work out                                                            | runs; "not protected" line; recorded                                    | stopped, with the reason                                    |
-| A command ZeroH can't parse                                                                                | runs; "not protected" line; recorded                                    | stopped, with the reason                                    |
+| A secret-bearing command or protected-path access ZeroH can't parse                                        | runs; "not protected" line; recorded                                    | stopped, with the reason                                    |
 | A secret typed while the local proxy isn't running                                                         | sent; "not protected" line; recorded                                    | prompt stopped                                              |
 | Reading an SSH key, kubeconfig or credentials file                                                         | read; what the detector finds is masked; recorded                       | refused                                                     |
 | A hook that runs out of time                                                                               | passes unchecked; "not protected" line; recorded                        | stopped or withheld                                         |
-| A project `.zeroh.env` that can't be read                                                                  | defaults apply; "not protected" line; recorded                          | stopped                                                     |
+| A project `.zeroh.env` that can't be read during PreToolUse                                                | defaults apply; "not protected" line; recorded                          | stopped                                                     |
 | Tool output over 1 MB                                                                                      | passed unscanned; "not protected" line; recorded                        | withheld                                                    |
 | Tool output whose check fails                                                                              | passed as is; "not protected" line; recorded                            | withheld                                                    |
 | ZeroH's vault can't be opened (tool output, file reads, prompts through the proxy)                         | passed unmasked, never with dead tokens; "not protected" line; recorded | withheld or stopped                                         |
@@ -72,9 +72,28 @@ follows them, and every release is checked against them.
 ## For contributors
 
 A change that adds a denial or a stop is accepted only if it is one of the two kinds in rule 3,
-or applies only in `uncertain block` mode. The deny-inventory test (`test/deny-inventory.test.mjs`)
+or applies only in `uncertain block` mode. The deny-inventory test (`test/host/deny-inventory.test.mjs`)
 fails on a new denial reason until it is added there with a justification. A change that masks
-must mask with the project's vault and save it through `lib/restorable.js` (`maskRestorably` or
-`saveRestorably`), so every token it emits can be put back (rule 8). `test/rc2-last-stops.test.mjs`
+must mask with the project's vault and save it through `packages/zeroh-disclosure-core/restorable.js` (`maskRestorably` or
+`saveRestorably`), so every token it emits can be put back (rule 8). `test/zeroh-disclosure-core/mask-safety.test.mjs`
 checks that no mask path emits a token when the vault can't be opened, and
-`test/vault-unsaveable.test.mjs` that none emits one it couldn't save.
+`test/zeroh-disclosure-core/vault-unsaveable.test.mjs` that none emits one it couldn't save.
+
+### Limits of uncertain block in 1.1.0
+
+Block mode applies to the operations ZeroH checks. Images, scanned PDFs and non-text image
+blocks still pass unmasked with an unknown-format notice. During a proxy request, a vault that
+opens but cannot be saved leaves already saved values masked and sends new values unmasked;
+Stop reports them. Node older than 20 steps aside in both modes, with one SessionStart warning.
+These three cases do not gain protection from block mode. A Node 26 V8 crash on Windows can
+also lose an event before any check or notice; use Node 22 LTS there.
+
+Unparseable commands without a known secret, restored token or protected path run unchecked
+without a notice in both modes. With an unreadable project `.zeroh.env`, PreToolUse can stop
+only when the user's readable settings establish block mode; prompt and output hooks continue
+with defaults, and a block setting confined to the unreadable file is lost.
+
+If this session is still pointed at a dead ZeroH proxy and it cannot be restarted in the
+three-second prompt budget, the prompt stops in either mode: that request would fail. This
+also applies after proxy off when the session still points at an unavailable proxy. A session
+not routed through the proxy instead follows the typed-secret pass/block rule.

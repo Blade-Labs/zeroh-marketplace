@@ -11,7 +11,7 @@
 //   node scripts/features.mjs --check   fail when the table, the JSON or an
 //                                       evidence path is out of date
 //
-// test/features.test.mjs runs the check, and the release pipeline
+// test/host/features.test.mjs runs the check, and the release pipeline
 // (apps/zeroh-marketplace/release/publish-public.mjs) refuses a release whose
 // feature list is stale. Node built-ins only.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';

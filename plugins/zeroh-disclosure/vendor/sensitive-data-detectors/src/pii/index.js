@@ -142,24 +142,32 @@ const CARD_CANDIDATE = new RegExp(
 
 // A country code, check digits and groups of four, compact or spaced; the
 // candidate is tried with fewer trailing groups when the whole fails
-// ("DE89 3704 0044 0532 0130 00 2 days" → the IBAN without " 2").
+// ("DE89 3704 0044 0532 0130 00 2 days" → the IBAN without " 2"). Scanning
+// resumes where the found IBAN ends, or one character on when none is found,
+// so text a candidate swallowed is tried again: two adjacent IBANs, or an
+// IBAN after a non-IBAN that looked like one.
 const IBAN_CANDIDATE =
   /(?<![A-Z0-9])[A-Z]{2}\d{2}(?:[ -]?[A-Z0-9]{4}){2,7}(?:[ -]?[A-Z0-9]{1,3})?(?![A-Z0-9])/gu;
 
 function findIbans(text) {
   const out = [];
-  for (const m of text.matchAll(IBAN_CANDIDATE)) {
+  const re = new RegExp(IBAN_CANDIDATE.source, IBAN_CANDIDATE.flags);
+  let m;
+  while ((m = re.exec(text))) {
     const ends = [m[0].length];
     for (const g of m[0].matchAll(/[ -]/gu)) ends.push(g.index);
     ends.sort((a, b) => b - a);
+    let resume = m.index + 1;
     for (const end of ends) {
       const value = m[0].slice(0, end);
       if (value.replace(/[ -]/gu, '').length < 15) break;
       if (isIBAN(value)) {
         out.push({ start: m.index, end: m.index + end });
+        resume = m.index + end;
         break;
       }
     }
+    re.lastIndex = resume;
   }
   return out;
 }

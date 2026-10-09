@@ -4,26 +4,25 @@
 // three plain lines, what was found and why it could not be masked, the
 // masked copy to send instead, and whether the next prompt is masked. It never
 // repeats the prompt or any value; provider names come only from the public
-// prefix catalog (lib/detector.js providerLabel).
-import { isSecretType } from './data-kinds.js';
-import { PERSONAL_DATA_KINDS, providerLabel } from './detector.js';
+// prefix catalog (packages/zeroh-disclosure-core/detector.js providerLabel).
+import { kindName } from '../packages/zeroh-disclosure-core/kind-name.js';
+import {
+  ProtectionState,
+  ProtectionSurface,
+  protectionWording,
+} from '../packages/zeroh-disclosure-core/protection-state.js';
 
-const KIND_NAMES = {
-  ...Object.fromEntries(
-    PERSONAL_DATA_KINDS.map(({ type, name }) => [type, name]),
-  ),
-  PASSWORD: 'password',
-  PRIVATE_KEY: 'private key',
-  TOKEN: 'token',
-};
+const stateWord = (state) =>
+  protectionWording(state, { surface: ProtectionSurface.STOP }).word;
 
 // Why the prompt could not be sent for masking.
 export const STOP_REASONS = Object.freeze({
   'not-ready': "masking isn't ready yet in this session",
   off: 'the ZeroH proxy is off',
   provider: "Bedrock, Vertex and Foundry traffic doesn't pass the ZeroH proxy",
-  overridden:
-    "ANTHROPIC_BASE_URL is set outside ZeroH, so the ZeroH proxy isn't used",
+  overridden: `${stateWord(ProtectionState.OVERRIDDEN)}: the ZeroH proxy isn't used`,
+  'upstream-mismatch': stateWord(ProtectionState.UPSTREAM_MISMATCH),
+  credentials: stateWord(ProtectionState.BASE_URL_CREDENTIALS),
   'not-set-up': "ZeroH couldn't put this session behind its proxy",
   'not-applied': "Claude Code didn't switch this session to the ZeroH proxy",
   unreachable: "the ZeroH proxy isn't reachable",
@@ -31,24 +30,6 @@ export const STOP_REASONS = Object.freeze({
 
 function withArticle(label) {
   return /^(?:[aeiou]|IBAN\b)/iu.test(label) ? `an ${label}` : `a ${label}`;
-}
-
-// A human name for one value of `type`, never derived from its characters
-// beyond the public prefix catalog and rule names.
-export function kindName(type, value) {
-  if (isSecretType(type)) {
-    let label = null;
-    try {
-      label = providerLabel(value);
-    } catch {
-      label = null;
-    }
-    if (label) return label;
-  }
-  const key = String(type || '').toUpperCase();
-  if (KIND_NAMES[key]) return KIND_NAMES[key];
-  if (isSecretType(key)) return 'secret';
-  return key.toLowerCase().replace(/_/gu, ' ') || 'sensitive value';
 }
 
 // "a Stripe live secret key", "a Stripe live secret key and an email

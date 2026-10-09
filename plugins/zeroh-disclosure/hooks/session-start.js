@@ -1,43 +1,69 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
+import { pruneWrappedCache } from '../lib/statusline-cache.js';
 // SessionStart: load configuration and known secrets, start or repair the
 // local proxy, scan preloaded context and print the banner.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { configWarning, loadConfig, uncertainMode } from '../lib/config.js';
+import {
+  configWarning,
+  loadConfig,
+  uncertainMode,
+} from '../packages/zeroh-disclosure-core/config.js';
 import {
   collectActiveTokens,
   loadSession,
   pruneCommitmentKeys,
-} from '../lib/session.js';
-import { Vault, vaultProblem, vaultRetention } from '../lib/vault.js';
-import { loadKnownSecrets, usersKnownSecrets } from '../lib/secrets.js';
+  readJson,
+  writeLocalJson,
+} from '../packages/zeroh-disclosure-core/session.js';
+import {
+  Vault,
+  vaultProblem,
+  vaultRetention,
+} from '../packages/zeroh-disclosure-core/vault.js';
+import {
+  loadKnownSecrets,
+  usersKnownSecrets,
+} from '../packages/shell-analysis/secrets.js';
 import { emit, projectDir, proxyState, readStdinJson } from '../lib/hook-io.js';
-import { cleanupStaleRunFiles } from '../lib/late-bind.js';
-import { ALLOW_FILE_NOTICE, readAllowRules } from '../lib/allow-rules.js';
-import { scanSessionContext } from '../lib/context-scan.js';
+import { cleanupStaleRunFiles } from '../packages/shell-analysis/late-bind.js';
+import {
+  ALLOW_FILE_NOTICE,
+  readAllowRules,
+} from '../packages/zeroh-disclosure-core/allow-rules.js';
+import { scanSessionContext } from '../packages/zeroh-disclosure-core/context-scan.js';
 import {
   checkSessionProxy,
   ensureDefaultProxy,
   repairDeadProxySetting,
-} from '../lib/proxy-manager.js';
+} from '../packages/local-proxy/proxy-manager.js';
 import {
   activeUnmaskStatus,
   colourAllowed,
   renderBanner,
   warningLines,
 } from '../lib/banner.js';
-import { registeredProjectRoots, registerProjectRoot } from '../lib/report.js';
-import { pruneReceipts } from '../lib/receipt-retention.js';
-import { updateSessionStatus } from '../lib/session-status.js';
+import {
+  registeredProjectRoots,
+  registerProjectRoot,
+} from '../packages/zeroh-disclosure-core/report.js';
+import { pruneReceipts } from '../packages/zeroh-disclosure-core/receipt-retention.js';
+import { updateSessionStatus } from '../packages/zeroh-disclosure-core/session-status.js';
 import { recordPluginRoot } from '../lib/statusline-settings.js';
 import {
   checkPluginIntegrity,
   integrityLines,
-} from '../lib/plugin-integrity.js';
+} from '../packages/zeroh-disclosure-core/plugin-integrity.js';
 import { shadowedStatusline } from '../lib/first-run.js';
 import { managedSettingsPath } from '../lib/statusline.js';
-import { zerohHome } from '../lib/private-fs.js';
+import {
+  zerohHome,
+  sessionCanPersist,
+  storageProtectionStatus,
+  STORAGE_PROTECTION_NOTICE,
+} from '../packages/zeroh-disclosure-core/private-fs.js';
+import { NOT_PROTECTED_LINE } from '../packages/zeroh-disclosure-core/protection-state.js';
 import { hookDeadlineMs } from './fail-closed.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -53,6 +79,7 @@ updateSessionStatus(
 );
 try {
   cleanupStaleRunFiles();
+  pruneWrappedCache();
 } catch {
   // A file held open (Windows antivirus) is removed at the next start.
 }
@@ -141,7 +168,7 @@ const contextFindings = scanSessionContext({
       }
     : {}),
 });
-let proxy = await proxyState({ sessionId });
+let proxy = await proxyState({ sessionId, root });
 // The first prompt can put this session behind the proxy only when the
 // proxy is set up (see ensureDefaultProxy; without a login item it runs for
 // the session all the same).
@@ -154,7 +181,7 @@ if (proxy === 'ready' && (proxyError || !proxyResult?.enabled)) {
 let proxyGuard = null;
 if (proxy === 'down') {
   proxyGuard = await checkSessionProxy({ sessionId, root }).catch(() => null);
-  if (!proxyGuard?.block) proxy = await proxyState({ sessionId });
+  if (!proxyGuard?.block) proxy = await proxyState({ sessionId, root });
 }
 const proxyIsActive = proxy === 'on' || proxy === 'ready';
 const unmask = await activeUnmaskStatus({ root, sessionId });
@@ -176,15 +203,20 @@ if (proxyGuard?.report) {
   warnings.push(`  Details (stays on this machine): ${proxyGuard.report}`);
 }
 const vaultNotice = vaultError ? vaultNoticeText(vaultError) : null;
-const banner = renderBanner({
-  known,
-  proxy,
-  warnings,
-  paused: Boolean(vaultError),
-  uncertain: uncertainMode(),
-  // Claude Code renders colour in the SessionStart message only (T-28).
-  colour: colourAllowed(),
-});
+// /compact keeps the model briefing below, but a healthy compaction does not
+// repeat the user-facing banner. A warning still gets one plain line.
+const banner =
+  source === 'compact'
+    ? vaultNotice || warnings[0] || ''
+    : renderBanner({
+        known,
+        proxy,
+        warnings,
+        paused: Boolean(vaultError),
+        uncertain: uncertainMode(),
+        // Claude Code renders colour in the SessionStart message only (T-28).
+        colour: colourAllowed(),
+      });
 
 const lines = [
   '🛡  ZeroH Disclosure is active. Secrets and personal data never reach you as real values.',
@@ -215,7 +247,7 @@ const lines = [
   "- When the user asks you to unmask a kind of data, call request_unmask for it; they decide in Claude Code's dialog. Keys never unmask.",
   '- When the user asks to stop showing real values, call end_unmask (the kind, or all).',
   "- To change how ZeroH's status line looks, when the user asks, edit this with Write or Edit:",
-  `  ${path.join(zerohHome(), 'statusline-style.json')}`,
+  `  ${path.join(zerohHome(), 'presentation.json')}`,
   '  {"version": 1} plus any of: fields (order of shield, name, state, fix, masked, sent,',
   '  notProtected, unmask, receipt), separator, labels, emoji (true/false), wording',
   '  ("long"/"compact"), colour (true/false), onlyWhenNotProtected, position ("line": its own',
@@ -296,7 +328,7 @@ if (proxyError) {
     `ZeroH Disclosure: the local proxy could not start (${proxyError.message}). ${recovery} ${
       uncertainMode() === 'block'
         ? 'Typed secrets remain blocked.'
-        : 'Until it runs, what you type is not masked: a typed secret is sent with a "not protected" line.'
+        : `Until it runs, what you type is not masked: ${NOT_PROTECTED_LINE}.`
     }`,
   );
 }
@@ -313,7 +345,7 @@ updateSessionStatus({ cwd: root, sessionId }, (status) => {
 const pluginRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 recordPluginRoot(zerohHome(), pluginRoot);
 // A folder an earlier build left for this version, which `claude plugin
-// update` keeps as it is (lib/plugin-integrity.js): said at every session
+// update` keeps as it is (packages/zeroh-disclosure-core/plugin-integrity.js): said at every session
 // start until the user replaces it. About 35 ms (one git ls-tree). It can
 // only speak when that folder's code already has this check.
 {
@@ -339,8 +371,37 @@ function vaultNoticeText(error) {
   return `⚠ ZeroH Disclosure can't open its vault for this project: ${problem.reason}. Until that is fixed, ${until}. ${problem.fix}`;
 }
 
+const visibleNotices =
+  source === 'compact'
+    ? userNotices
+        .filter((line) => /⚠|not protected|unmasked|proxy/iu.test(line))
+        .slice(0, 1)
+    : userNotices;
+// Keep notice history separate from state.json: later hooks may have advanced it.
+const storageNoticePath = path.join(
+  session.dir,
+  'storage-protection-notice.json',
+);
+// Show the known storage limitation once, including after /compact or resume.
+if (
+  storageProtectionStatus() === 'not confirmed' &&
+  !session.state.storageProtectionNoticed &&
+  !(await readJson(storageNoticePath).catch(() => null))?.noticed
+) {
+  visibleNotices.push(STORAGE_PROTECTION_NOTICE);
+  try {
+    // Local session state, never receipt transport; memory-only sessions keep
+    // nothing on disk.
+    if (sessionCanPersist(storageNoticePath))
+      await writeLocalJson(storageNoticePath, { noticed: true });
+  } catch {
+    // An unwritable session cannot retain notice history across processes.
+  }
+}
 emit({
-  ...(userNotices.length ? { systemMessage: userNotices.join('\n') } : {}),
+  ...(visibleNotices.length
+    ? { systemMessage: visibleNotices.join('\n') }
+    : {}),
   hookSpecificOutput: {
     hookEventName: 'SessionStart',
     additionalContext: lines.join('\n'),

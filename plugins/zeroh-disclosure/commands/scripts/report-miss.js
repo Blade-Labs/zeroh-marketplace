@@ -3,11 +3,11 @@
 // /zeroh-disclosure:report-miss (1.0.1): with no arguments, the user reports
 // a value ZeroH missed through the MCP tool's private form; `list` shows the
 // local notes of reported values (their shape, never a value); `delete <id>`
-// removes one, as the user (lib/user-authority.js: the CLI needs the user's
+// removes one, as the user (packages/zeroh-disclosure-core/user-authority.js: the CLI needs the user's
 // own typed command). Reports stay on this computer.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { listReports } from '../../lib/report-miss.js';
+import { listReports } from '../../packages/zeroh-disclosure-core/report-miss.js';
 import { commandRoot } from './_helpers.js';
 
 const CLI = fileURLToPath(

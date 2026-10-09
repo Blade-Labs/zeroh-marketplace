@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "findings": {
+    "windows-retest-1": {
+      "unitTests": [
+        "Windows re-test 1: the scheduled task XML is UTF-16LE with a byte order mark and declares UTF-16",
+        "Windows re-test 1 (real Windows): schtasks /Create /XML registers the task file ZeroH writes"
+      ],
+      "liveScenarios": []
+    },
+    "windows-retest-2": {
+      "unitTests": [
+        "Windows re-test 2: a refused login item still gives the session a masking proxy and says why",
+        "a refused login item still gives the session a running proxy, and says why with the fix"
+      ],
+      "liveScenarios": []
+    },
+    "windows-retest-3": {
+      "unitTests": [
+        "Windows re-test 3: two typed values are two sent, on the status line and in the turn record"
+      ],
+      "liveScenarios": ["typed-secret-sent-count"]
+    },
+    "windows-retest-4": {
+      "unitTests": [
+        "Windows re-test 4: the signed receipt covers the file-read masking it shows"
+      ],
+      "liveScenarios": []
+    },
+    "windows-retest-5": {
+      "unitTests": [
+        "Windows re-test 5: the restore wrapper passes Claude Code’s shell check, and a command that never ran leaves no values file",
+        "Windows re-test 5 (real Windows): the restore wrapper passes Claude Code’s check and runs in Git Bash"
+      ],
+      "liveScenarios": ["try-it-stripe"]
+    },
+    "windows-retest-6": {
+      "unitTests": [
+        "Windows re-test 6: a pure reference runs in pass mode, with a notice, not as a raw secret",
+        "Windows re-test 6: curl -u with a shell or PowerShell variable reference is not stopped as a secret"
+      ],
+      "liveScenarios": [
+        "variable-reference-not-a-key",
+        "variable-reference-not-a-key-powershell"
+      ]
+    },
+    "windows-retest-7": {
+      "unitTests": [
+        "Windows re-test 7: status says the proxy is not running and why there is no login item"
+      ],
+      "liveScenarios": []
+    },
+    "windows-retest-8": {
+      "unitTests": [
+        "Windows re-test 8: no httpbin demo is left in the plugin or the acceptance suite"
+      ],
+      "liveScenarios": []
+    },
+    "windows-retest-9": {
+      "unitTests": [
+        "Windows re-test 9: the marketplace under its old name is detected, and the install steps say how to re-add it"
+      ],
+      "liveScenarios": []
+    },
+    "windows-removal-no-console": {
+      "unitTests": [
+        "Windows removal hides the detached child, Claude commands and scheduled tasks"
+      ],
+      "liveScenarios": []
+    },
+    "windows-locks-no-powershell": {
+      "unitTests": [
+        "a removal lock left by a dead process is reclaimed",
+        "SessionStart reclaims a proxy lock left by a killed owner"
+      ],
+      "liveScenarios": []
+    },
+    "windows-removal-log": {
+      "unitTests": [
+        "removal keeps its log when Claude Code cannot remove the plugin",
+        "uninstall keeps the public part of 0.1 receipts in a project and leaves a folder with keys or typed values"
+      ],
+      "liveScenarios": []
+    },
+    "live-context-token-restore": {
+      "unitTests": [
+        "context-token-restored-in-local-command: a CLAUDE.md email the proxy masked is the real author of a local git commit"
+      ],
+      "liveScenarios": [
+        "context-token-restored-in-local-command",
+        "context-token-restored-in-local-command-powershell",
+        "session-header-missing"
+      ]
+    },
+    "live-raw-sent-claim": {
+      "unitTests": [
+        "a prompt sent as typed without the proxy says raw content was sent, in the receipt and the signed summary"
+      ],
+      "liveScenarios": []
+    },
+    "live-prose-password": {
+      "unitTests": [
+        "a typed plain word is masked where its key names it, not bare in later output"
+      ],
+      "liveScenarios": []
+    }
+  }
+}

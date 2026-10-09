@@ -2,7 +2,7 @@
 
 // Clipboard writes for the blocked-prompt path: a masked copy of a stopped
 // prompt goes to pbcopy, wl-copy, xclip, xsel or clip, whichever exists.
-import { spawn } from 'node:child_process';
+import { spawn } from '../packages/zeroh-disclosure-core/child-process.js';
 import path from 'node:path';
 
 // Best-effort cross-platform clipboard write. Returns the tool name on

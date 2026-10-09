@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
+import { removeSessionCache } from '../lib/statusline-cache.js';
 // SessionEnd: apply the vault's retention policy. With "session" retention,
 // detected values last used by the ending session are removed; with 7d/30d,
 // values past the window are. The policy is the one SessionStart stored in
 // the vault; this process's configuration is only the fallback. Known values
 // (.env, credential files) always stay.
-import { loadConfig } from '../lib/config.js';
-import { Vault, vaultRetention } from '../lib/vault.js';
-import { removeCommitmentKey } from '../lib/session.js';
-import { endSessionRoute } from '../lib/proxy-state.js';
+import { loadConfig } from '../packages/zeroh-disclosure-core/config.js';
+import {
+  Vault,
+  vaultRetention,
+} from '../packages/zeroh-disclosure-core/vault.js';
+import { removeCommitmentKey } from '../packages/zeroh-disclosure-core/session.js';
+import { endSessionRoute } from '../packages/local-proxy/proxy-state.js';
 import { projectDir, readStdinJson } from '../lib/hook-io.js';
 
 const event = await readStdinJson();
@@ -19,6 +23,7 @@ try {
   // Fall back to the process environment.
 }
 const sessionId = event?.session_id;
+removeSessionCache(sessionId);
 try {
   const vault = new Vault(root, { sessionId });
   vault.save({ lifecycle: { event: 'end', sessionId } });

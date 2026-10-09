@@ -1,0 +1,567 @@
+{
+  "platform": "linux",
+  "node": "26.1.0",
+  "shells": [
+    {
+      "shell": "bash",
+      "available": true,
+      "argvCases": 10,
+      "restoration": {
+        "hook": {
+          "allowed": "allow",
+          "denied": "deny",
+          "delivered": true,
+          "notice": "notice",
+          "receipt": true
+        },
+        "nonzeroReported": true,
+        "exitStatusWrapper": true,
+        "supported": true,
+        "delivered": true,
+        "exitStatus": 0,
+        "valuesFileRemoved": true
+      },
+      "wrongExpectationDetected": true,
+      "failures": [],
+      "differences": [
+        {
+          "id": "bash-zsh-array-origin",
+          "category": "array-origin",
+          "expectedIndexBase": 0
+        }
+      ],
+      "corpus": {
+        "shell": "bash",
+        "count": 410,
+        "observed": 410,
+        "status": 0,
+        "failures": [],
+        "complete": true
+      },
+      "parser": {
+        "shell": "bash",
+        "cases": 48,
+        "failures": [],
+        "disagreements": []
+      }
+    },
+    {
+      "shell": "zsh",
+      "available": true,
+      "argvCases": 10,
+      "restoration": {
+        "hook": {
+          "allowed": "allow",
+          "denied": "deny",
+          "delivered": true,
+          "notice": "notice",
+          "receipt": true
+        },
+        "nonzeroReported": true,
+        "exitStatusWrapper": true,
+        "supported": true,
+        "delivered": true,
+        "exitStatus": 0,
+        "valuesFileRemoved": true
+      },
+      "wrongExpectationDetected": true,
+      "failures": [],
+      "differences": [
+        {
+          "id": "bash-zsh-array-origin",
+          "category": "array-origin",
+          "expectedIndexBase": 1
+        }
+      ],
+      "corpus": {
+        "shell": "zsh",
+        "count": 410,
+        "observed": 410,
+        "status": 0,
+        "failures": [],
+        "complete": true
+      },
+      "parser": {
+        "shell": "zsh",
+        "cases": 48,
+        "failures": [],
+        "disagreements": []
+      }
+    }
+  ],
+  "requests": {
+    "config": true,
+    "defaultConfig": true,
+    "qDisablesDefault": true,
+    "crossHostRedirect": true,
+    "tls": true,
+    "multiAddress": true,
+    "dns": {
+      "digSearch": true,
+      "nslookupDomain": true,
+      "nslookupSearchList": "program-rejected: installed BIND nslookup does not accept -srchlist",
+      "tsigSecretLocal": true,
+      "tsigNameDelivered": true,
+      "tsigQueryDelivered": true,
+      "resolvectl": "requires a CI systemd-resolved fixture; not run here"
+    },
+    "wildcard": {
+      "checked": true,
+      "cases": 7,
+      "sslip": "pinned Go regexp expressions; Go binary not executed",
+      "nip": "unmodified pinned Python backend",
+      "pins": [
+        {
+          "name": "sslip",
+          "commit": "a754dfb9ac25e3efc34253302074c0a145c8f6a1",
+          "license": "Apache-2.0"
+        },
+        {
+          "name": "nip",
+          "commit": "541ddad4aa8fc7e669baf28fd5899fbe001a2925",
+          "license": "Apache-2.0"
+        }
+      ]
+    },
+    "historical": {
+      "results": [
+        {
+          "id": "43-bash-historical-rg-protected-quoted-option",
+          "shell": "bash",
+          "program": "rg",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 1
+        },
+        {
+          "id": "43-bash-historical-rg-protected-escaped-option",
+          "shell": "bash",
+          "program": "rg",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 1
+        },
+        {
+          "id": "43-bash-historical-source-data",
+          "shell": "bash",
+          "program": "source",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-dot-data",
+          "shell": "bash",
+          "program": ".",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-sed-write-expression",
+          "shell": "bash",
+          "program": "sed",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-sed-abbreviated-expression",
+          "shell": "bash",
+          "program": "sed",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-perl-optional-numeric-code",
+          "shell": "bash",
+          "program": "perl",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-awk-continued-write",
+          "shell": "bash",
+          "program": "awk",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-awk-regex-semicolon-write",
+          "shell": "bash",
+          "program": "awk",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-python-literal-path-read",
+          "shell": "bash",
+          "program": "python3",
+          "effect": "local",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-perl-literal-path-read",
+          "shell": "bash",
+          "program": "perl",
+          "effect": "local",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-awk-literal-path-read",
+          "shell": "bash",
+          "program": "awk",
+          "effect": "local",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-git-named-custom-transport",
+          "shell": "bash",
+          "program": "git",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 128
+        },
+        {
+          "id": "43-bash-historical-gh-extension-execution",
+          "shell": "bash",
+          "program": "gh",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-bash-historical-tar-protected-extraction",
+          "shell": "bash",
+          "program": "tar",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-rg-protected-quoted-option",
+          "shell": "zsh",
+          "program": "rg",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 1
+        },
+        {
+          "id": "43-zsh-historical-rg-protected-escaped-option",
+          "shell": "zsh",
+          "program": "rg",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 1
+        },
+        {
+          "id": "43-zsh-historical-source-data",
+          "shell": "zsh",
+          "program": "source",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-dot-data",
+          "shell": "zsh",
+          "program": ".",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-sed-write-expression",
+          "shell": "zsh",
+          "program": "sed",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-sed-abbreviated-expression",
+          "shell": "zsh",
+          "program": "sed",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-perl-optional-numeric-code",
+          "shell": "zsh",
+          "program": "perl",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-awk-continued-write",
+          "shell": "zsh",
+          "program": "awk",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-awk-regex-semicolon-write",
+          "shell": "zsh",
+          "program": "awk",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-python-literal-path-read",
+          "shell": "zsh",
+          "program": "python3",
+          "effect": "local",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-perl-literal-path-read",
+          "shell": "zsh",
+          "program": "perl",
+          "effect": "local",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-awk-literal-path-read",
+          "shell": "zsh",
+          "program": "awk",
+          "effect": "local",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-git-named-custom-transport",
+          "shell": "zsh",
+          "program": "git",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 128
+        },
+        {
+          "id": "43-zsh-historical-gh-extension-execution",
+          "shell": "zsh",
+          "program": "gh",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "43-zsh-historical-tar-protected-extraction",
+          "shell": "zsh",
+          "program": "tar",
+          "effect": "protection",
+          "status": "passed",
+          "exitStatus": 0
+        },
+        {
+          "id": "git-ext-bash",
+          "shell": "bash",
+          "program": "git",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 128
+        },
+        {
+          "id": "git-ext-zsh",
+          "shell": "zsh",
+          "program": "git",
+          "effect": "code",
+          "status": "passed",
+          "exitStatus": 128
+        }
+      ],
+      "failures": [],
+      "pending": []
+    },
+    "programs": {
+      "results": [
+        {
+          "program": "wget",
+          "id": "post-config-rejection",
+          "status": "passed",
+          "exitStatus": 0,
+          "requests": 1,
+          "delivered": true,
+          "rejectedBeforeNetwork": true
+        },
+        {
+          "program": "git",
+          "id": "http-header-and-fetch",
+          "status": "passed",
+          "exitStatus": 128,
+          "requests": 1,
+          "delivered": true,
+          "remoteFetchDelivered": true
+        },
+        {
+          "program": "gh",
+          "id": "api-header",
+          "status": "passed",
+          "exitStatus": 0,
+          "requests": 1,
+          "delivered": true
+        },
+        {
+          "program": "az",
+          "id": "rest-header-and-local-sku-rejection",
+          "status": "passed",
+          "exitStatus": 0,
+          "requests": 1,
+          "delivered": true,
+          "skuOptionRejectedBeforeNetwork": true
+        },
+        {
+          "program": "docker",
+          "id": "registry-login",
+          "status": "passed",
+          "exitStatus": 0,
+          "requests": 2,
+          "delivered": true,
+          "defaultRegistryAddressRecorded": true,
+          "privateRegistryAddressRecorded": true,
+          "proof": "real Docker CLI Engine authentication requests"
+        },
+        {
+          "program": "kubectl",
+          "id": "api-token",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "helm",
+          "id": "kube-token",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "aws",
+          "id": "s3-endpoint",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "gcloud",
+          "id": "storage-endpoint",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "nc",
+          "id": "stdin-and-rejection",
+          "status": "passed",
+          "exitStatus": 0,
+          "delivered": true,
+          "rejected": true
+        },
+        {
+          "program": "openssl",
+          "id": "tls-input-local-passphrase-and-sni",
+          "status": "passed",
+          "exitStatus": 0,
+          "requests": 1,
+          "delivered": true,
+          "passphraseLocal": true,
+          "sniDelivered": true,
+          "encryptedKeyUsed": true,
+          "wrongPassphraseRejected": true
+        },
+        {
+          "program": "redis-cli",
+          "id": "auth",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "psql",
+          "id": "password",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "mysql",
+          "id": "hashed-password",
+          "status": "ci-required",
+          "reason": "program not installed"
+        },
+        {
+          "program": "ssh",
+          "id": "loopback-handshake",
+          "status": "passed",
+          "exitStatus": 255,
+          "handshakeObserved": true,
+          "valueAbsentBeforeAuthentication": true,
+          "rejected": true
+        },
+        {
+          "program": "ssh",
+          "id": "authenticated-delivery",
+          "status": "ci-required",
+          "reason": "disposable account and real SSH server required; no real user home may be opened"
+        },
+        {
+          "program": "scp",
+          "id": "loopback-handshake",
+          "status": "passed",
+          "exitStatus": 1,
+          "handshakeObserved": true,
+          "valueAbsentBeforeAuthentication": true,
+          "rejected": true
+        },
+        {
+          "program": "scp",
+          "id": "authenticated-delivery",
+          "status": "ci-required",
+          "reason": "disposable account and real SSH server required; no real user home may be opened"
+        }
+      ],
+      "failures": [],
+      "pending": [
+        "kubectl/api-token: ci-required",
+        "helm/kube-token: ci-required",
+        "aws/s3-endpoint: ci-required",
+        "gcloud/storage-endpoint: ci-required",
+        "redis-cli/auth: ci-required",
+        "psql/password: ci-required",
+        "mysql/hashed-password: ci-required",
+        "ssh/authenticated-delivery: ci-required",
+        "scp/authenticated-delivery: ci-required"
+      ],
+      "resolver": "fixture-owned LD_PRELOAD; static Go clients use loopback proxy or IP endpoints"
+    },
+    "resolved": {
+      "status": "ci-required",
+      "reason": "root-owned disposable systemd-resolved namespace required; never attempted on developer host"
+    },
+    "sshAuthenticated": {
+      "status": "ci-required",
+      "reason": "preprovisioned disposable SSH account required"
+    }
+  },
+  "failures": [],
+  "oracleRequirementsChecked": true,
+  "pending": [
+    "programs: kubectl/api-token: ci-required",
+    "programs: helm/kube-token: ci-required",
+    "programs: aws/s3-endpoint: ci-required",
+    "programs: gcloud/storage-endpoint: ci-required",
+    "programs: redis-cli/auth: ci-required",
+    "programs: psql/password: ci-required",
+    "programs: mysql/hashed-password: ci-required",
+    "programs: ssh/authenticated-delivery: ci-required",
+    "programs: scp/authenticated-delivery: ci-required",
+    "resolved: root-owned disposable systemd-resolved namespace required; never attempted on developer host"
+  ],
+  "run": "phase-43-second-continuation-loopback"
+}

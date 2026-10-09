@@ -1,0 +1,53 @@
+[
+  {
+    "id": "multiple-dotted",
+    "sslipHost": "198.51.100.9.x.203.0.113.7.sslip.io",
+    "sslipAddress": "198.51.100.9",
+    "nipHost": "198.51.100.9.x.203.0.113.7.nip.io",
+    "nipAddress": "203.0.113.7"
+  },
+  {
+    "id": "multiple-dashed",
+    "sslipHost": "198-51-100-9.x.203-0-113-7.sslip.io",
+    "sslipAddress": "198.51.100.9",
+    "nipHost": "198-51-100-9.x.203-0-113-7.nip.io",
+    "nipAddress": "203.0.113.7"
+  },
+  {
+    "id": "dash-before-dot",
+    "sslipHost": "198.51.100.9.x.203-0-113-7.sslip.io",
+    "sslipAddress": "203.0.113.7",
+    "nipHost": "198.51.100.9.x.203-0-113-7.nip.io",
+    "nipAddress": "203.0.113.7"
+  },
+  {
+    "id": "hex",
+    "sslipHost": "cb007107.sslip.io",
+    "sslipAddress": "203.0.113.7",
+    "nipHost": "cb007107.nip.io",
+    "nipAddress": "203.0.113.7"
+  },
+  {
+    "id": "invalid",
+    "sslipHost": "probe.sslip.io",
+    "sslipAddress": null,
+    "nipHost": "probe.nip.io",
+    "nipAddress": null
+  },
+  {
+    "id": "ipv6-dashed",
+    "sslipHost": "2001-0db8-0-0-0-0-0-7.sslip.io",
+    "sslipAddress": "0.0.0.0",
+    "nipHost": "2001-0db8-0-0-0-0-0-7.nip.io",
+    "nipAddress": "0.0.0.7",
+    "sslipIPv6": "2001:db8::7"
+  },
+  {
+    "id": "ipv6-hex",
+    "sslipHost": "20010db8000000000000000000000007.sslip.io",
+    "sslipAddress": null,
+    "nipHost": "20010db8000000000000000000000007.nip.io",
+    "nipAddress": null,
+    "sslipIPv6": "2001:db8::7"
+  }
+]

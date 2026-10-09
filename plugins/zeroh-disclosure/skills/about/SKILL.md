@@ -1,7 +1,7 @@
 ---
 name: about
 description: Answer the user's questions about ZeroH Disclosure itself - what it protects and what it doesn't, how masking, restore, unmask, receipts and the local proxy work, Free vs Premium, its commands, limits and privacy. Use when the user asks "what does ZeroH Disclosure protect?", "does ZeroH catch X?", "how does ZeroH work?" or similar.
-allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command)
+allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" catalog), Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" statusline segment-command), Bash(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" style *), PowerShell(node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" style *)
 ---
 
 # About ZeroH Disclosure
@@ -74,18 +74,20 @@ counts rather than the whole list unless they ask for it.
   `/zeroh-disclosure:settings receipts keep <forever|1y|90d|30d>`, and a repository may only
   shorten it.
 - **Status line**: with the first message after the install ZeroH adds one line under the prompt,
-  unless the user has their own: 🟢 `protected` (the proxy masks typing), 🟡 protected in part
+  including below the user's own line: 🟢 `protected` (the proxy masks typing), 🟡 protected in part
   (it names the fix) or 🔴 not protecting (it names why), with the session's masked and sent
   counts, active unmasks and a `receipt ↗` link that opens the receipt.
   `/zeroh-disclosure:settings statusline off` (or deleting it with `/statusline`) removes it for
   good; `statusline on` turns it on again. When the user already has a status line of their own,
-  `statusline on` adds ZeroH's part after it (their script is not changed; `statusline off` puts
-  their line back exactly): tell them to type `/zeroh-disclosure:settings statusline on`.
+  `statusline on` adds ZeroH's part below it on every OS (their script is not changed;
+  `statusline off` puts their entry back exactly): tell them to type
+  `/zeroh-disclosure:settings statusline on`.
 - **Changing how the status line looks**: when the user asks ("make it smaller", "no emoji",
-  "rename ZeroH to 🔒", "only show it when something is wrong"), edit
-  `<ZEROH_HOME>/statusline-style.json` (`~/.zeroh/statusline-style.json`, or
-  `%LOCALAPPDATA%\ZeroH\statusline-style.json` on Windows) with the Write or Edit tool; it is the
-  one ZeroH file you may change. Keys (`"version": 1` required): `fields` (order and choice of
+  "rename ZeroH to 🔒", "only show it when something is wrong"), first run
+  `node "${CLAUDE_SKILL_DIR}/../../bin/zeroh-disclosure.mjs" style <key> <value>`.
+  Use `style show` to inspect the validated values and `style banner <big|compact|mini|off>` for
+  the session banner. Direct editing of `<ZEROH_HOME>/presentation.json` remains compatible,
+  but the command is the documented path. Keys (`"version": 1` required): `fields` (order and choice of
   `shield`, `name`, `state`, `fix`, `masked`, `sent`, `notProtected`, `unmask`, `receipt`),
   `separator` (≤ 5 characters), `labels` (≤ 24 characters each), `emoji`, `wording`
   (`"long"`/`"compact"`), `colour`, `onlyWhenNotProtected`, `position` (`"line"`: ZeroH's part
@@ -103,8 +105,9 @@ counts rather than the whole list unless they ask for it.
 - **Session banner**: the first session after the install shows the big ZEROH banner; later
   sessions show one line, for example
   `ZeroH Disclosure ✓ Protected: your secrets are masked · Free · /zeroh-disclosure:status`, or the
-  state that needs attention and its fix. The user picks `/zeroh-disclosure:settings banner
-big|compact|mini|off` (mini is the default); warnings show in every mode.
+  state that needs attention and its fix. Use `style banner <big|compact|mini|off>` when the user
+  asks; `/zeroh-disclosure:settings banner <mode>` does the same. Mini is the default, and warnings
+  show in every mode.
 - **The local proxy** runs as a per-user login item, needs no administrator rights, and is turned
   off with `/zeroh-disclosure:proxy off`.
 
@@ -117,8 +120,10 @@ When the user says ZeroH or its protection isn't working, or a ZeroH notice or t
 shows 🟡 or 🔴, suggest `/zeroh-disclosure:doctor` (and `/zeroh-disclosure:doctor --fix` if it finds
 a problem).
 
-Only the user can run `/zeroh-disclosure:allow`, `:proxy`, `:doctor`, `:settings` and
-`:uninstall`: never invoke them yourself. Tell the user the exact line to type.
+Only the user can change protection with `/zeroh-disclosure:allow`, `:proxy`, `:doctor`,
+`:settings receipts|uncertain|vault`, `:unmask caps` and `:uninstall`, or turn the status line on
+or off. Never invoke those yourself; tell the user the exact line to type. Presentation forms of
+`:settings` (`banner` and `statusline style`) are model-runnable.
 `/zeroh-disclosure:allow` with no arguments shows where each known value may go and why.
 
 ## How to test it

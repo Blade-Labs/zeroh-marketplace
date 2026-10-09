@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // MessageDisplay: show real values on the user's screen. The stored answer and
 // what the model sees keep the tokens (what the user typed is stored as typed
-// by Claude Code; see lib/transcript-files.js).
+// by Claude Code; see packages/zeroh-disclosure-core/transcript-files.js).
 //
 // Runs once per flush of a streaming message (up to ten a second, three at a
 // time in Claude Code 2.1.283), and a flush whose hook fails or runs past
 // the loader's deadline is shown as Claude Code sent it: with tokens. So the
 // path is kept short: only the token pattern and the carry-over
 // (lib/display-carry.js) load up front, and a flush without a token answers
-// from there. The detectors (lib/secrets.js) and the proxy plumbing
+// from there. The detectors (packages/shell-analysis/secrets.js) and the proxy plumbing
 // (lib/hook-io.js) are never loaded here; they cost more than everything
 // else this hook does. The answer goes out before the vault's last-use
 // bookkeeping is saved.
@@ -17,7 +17,7 @@ import {
   containsToken,
   nameMentionedTokens,
   TOKEN_RE,
-} from '../lib/token-pattern.js';
+} from '../packages/zeroh-disclosure-core/token-pattern.js';
 import {
   clearCarry,
   putCarry,
@@ -100,9 +100,9 @@ if (!containsToken(text)) showAsIs('no-token');
 
 const [{ loadConfig }, { saveQuietly, Vault }, { projectRootFromEnv }] =
   await Promise.all([
-    import('../lib/config.js'),
-    import('../lib/vault.js'),
-    import('../lib/session.js'),
+    import('../packages/zeroh-disclosure-core/config.js'),
+    import('../packages/zeroh-disclosure-core/vault.js'),
+    import('../packages/zeroh-disclosure-core/session.js'),
   ]);
 const root = projectRootFromEnv(event?.cwd);
 try {

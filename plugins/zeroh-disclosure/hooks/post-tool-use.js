@@ -1,9 +1,15 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
-// PostToolUse: mask secrets and personal data in every tool's output before the
-// model reads it. The response keeps its shape; only strings change.
-import path from 'node:path';
-import { loadConfig, uncertainMode } from '../lib/config.js';
+import {
+  outputRecoveryBudget,
+  scrubBashResponse,
+  scrubGrepResponse,
+} from '../packages/zeroh-disclosure-core/bash-output-context.js';
+import { fileDetectionOptions } from '../packages/zeroh-disclosure-core/detection-context.js';
+import {
+  loadConfig,
+  uncertainMode,
+} from '../packages/zeroh-disclosure-core/config.js';
 import {
   displayName,
   firstFormatNotice,
@@ -17,29 +23,63 @@ import {
   readStdinJson,
   refreshRoute,
 } from '../lib/hook-io.js';
-import { shellOf } from '../lib/shell-tools.js';
+import { shellOf } from '../packages/shell-analysis/shell-tools.js';
 import { ERROR_WITHHELD, withheldOutput } from './fail-closed.js';
-import { deleteValuesFile } from '../lib/late-bind.js';
+import { cleanupValuesFile } from '../lib/hook-steps/post-tool-use/cleanup-values.js';
 import {
   extractPdfText,
   extractPdfTextFromBuffer,
   hasUsefulPdfText,
-} from '../lib/pdf-text.js';
-import { loadKnownSecrets, scrub, scrubDeep } from '../lib/secrets.js';
-import { Vault } from '../lib/vault.js';
-import { saveRestorably, UNSAVEABLE_REASON } from '../lib/restorable.js';
-import { activeGrants, recordRevealedUnderGrant } from '../lib/unmask.js';
-import { addSent, updateSessionStatus } from '../lib/session-status.js';
-import { recordMaskedOutput, recordMissReported } from '../lib/report.js';
-import { modelReportNotice } from '../lib/report-miss.js';
-import { recordUnchecked, uncheckedNotice } from '../lib/unchecked.js';
-import { NAMING_REMINDER, namingReminder } from '../lib/token-pattern.js';
+} from '../packages/zeroh-disclosure-core/pdf-text.js';
+import {
+  loadKnownSecrets,
+  scrub,
+  scrubDeep,
+} from '../packages/shell-analysis/secrets.js';
+import { saveRestorably } from '../packages/zeroh-disclosure-core/restorable.js';
+import {
+  activeGrants,
+  recordRevealedUnderGrant,
+} from '../packages/zeroh-disclosure-core/unmask.js';
+import {
+  recordMaskedOutput,
+  recordMissReported,
+} from '../packages/zeroh-disclosure-core/report.js';
+import { modelReportNotice } from '../packages/zeroh-disclosure-core/report-miss.js';
+import {
+  recordUnchecked,
+  uncheckedNotice,
+} from '../packages/zeroh-disclosure-core/unchecked.js';
+import {
+  NAMING_REMINDER,
+  namingReminder,
+} from '../packages/zeroh-disclosure-core/token-pattern.js';
+import {
+  channelForTool,
+  hasImage,
+  imageBlocks,
+  joinLines,
+  readResponseText,
+} from '../lib/hook-steps/post-tool-use/inspect-response.js';
+import {
+  outputFindingMemos,
+  truncatedOutputNotice,
+  unsaveableOutputNotice,
+} from '../lib/hook-steps/post-tool-use/recovery-notice.js';
+import { describeTokenObservations } from '../lib/hook-steps/post-tool-use/describe-output-source.js';
 
+import { Vault } from '../packages/zeroh-disclosure-core/vault.js';
+
+// PostToolUse: mask secrets and personal data in every tool's output before the
+// model reads it. The response keeps its shape; only strings change.
 // Output larger than this is withheld rather than scanned, so the hook finishes
 // well inside its 15 s timeout (Claude Code passes the original output through
 // when a hook times out). Output dense with findings scans slower than linear:
 // about 2 s for 1 MB and 9 s for 2 MB on the reference machine.
 const MAX_SCANNED_OUTPUT_BYTES = 1024 * 1024;
+const recoveryBudget = outputRecoveryBudget({
+  hookStart: globalThis.zerohHook?.hookStart ?? performance.now(),
+});
 
 const VAULT_WITHHELD =
   'ZeroH Disclosure could not open its vault, so this tool output was withheld. Ask the user to run `/zeroh-disclosure:doctor --fix`.';
@@ -52,7 +92,7 @@ const SAVE_LABEL = 'ZeroH Disclosure (PostToolUse)';
 // (hooks/run.js), which does the same.
 const event = await readStdinJson();
 if (!event || event.tool_response === undefined) {
-  cleanupValuesFile();
+  cleanupValuesFile(event);
   process.exit(0);
 }
 // The configuration first, for the `uncertain` mode: what can't be checked
@@ -68,7 +108,7 @@ try {
 const mode = uncertainMode(process.env);
 let vault;
 // The read-only view of the values on disk after a failed save
-// (lib/restorable.js): receipt labels are masked with it from then on.
+// (packages/zeroh-disclosure-core/restorable.js): receipt labels are masked with it from then on.
 let labelVault = null;
 let vaultFailed = false;
 let readPath;
@@ -79,7 +119,7 @@ let labelKnown = null;
 // The one-line notice when Claude reported a missed value itself.
 let missNotice = null;
 try {
-  cleanupValuesFile();
+  cleanupValuesFile(event);
   if (
     Buffer.byteLength(JSON.stringify(event.tool_response) ?? '') >
     MAX_SCANNED_OUTPUT_BYTES
@@ -137,24 +177,57 @@ try {
   }
 
   const known = loadKnownSecrets(root);
+  // A failed save masks again with the disk-only vault. Reuse deterministic
+  // findings for identical detector input/options, including all recovery
+  // completed before the shared budget expired. Ordinary metadata and
+  // recovered output use separate caches because their detectors differ.
+  const findingsFor = outputFindingMemos(recoveryBudget, () => labelVault);
   const maskOutput = (maskWith) => {
     const replacements = [];
     const revealed = [];
-    const masked = scrubDeep(
-      event.tool_response,
-      { vault: maskWith, known, profile: piiProfile(), unmaskedTypes },
-      replacements,
-      revealed,
-    );
+    const scan = (value, context = {}) => {
+      return scrubDeep(
+        value,
+        {
+          vault: maskWith,
+          known,
+          profile: piiProfile(),
+          unmaskedTypes,
+          ...context,
+          detectFindings: findingsFor(context),
+        },
+        replacements,
+        revealed,
+      );
+    };
+    const masked =
+      event.tool_name === 'Bash'
+        ? scrubBashResponse(
+            event.tool_response,
+            event.tool_input?.command,
+            scan,
+            recoveryBudget,
+          )
+        : event.tool_name === 'Grep'
+          ? scrubGrepResponse(event.tool_response, scan, recoveryBudget)
+          : scan(event.tool_response, fileDetectionOptions(readPath));
     return { masked, replacements, revealed };
   };
   let result = maskOutput(vault);
+  if (recoveryBudget.truncated && mode === 'block') {
+    // deny-inventory: output-check-failed
+    emitWithheld(ERROR_WITHHELD);
+    process.exit(0);
+  }
   // Image blocks in any other tool's output (an MCP screenshot): their
   // strings were scanned, the picture was not.
   const images = imageBlocks(event.tool_response);
   const imageLine = joinLines(
     missNotice,
     images ? await noteUncheckedFormat(images) : null,
+    recoveryBudget.truncated
+      ? await truncatedOutputNotice({ cwd: root, event })
+      : null,
   );
   if (!result.replacements.length) {
     recordReveals(result.revealed);
@@ -172,7 +245,13 @@ try {
     result = maskOutput(labelVault);
     observations = tokenObservations(result.replacements);
     auditPath = event.tool_name === 'Read' ? maskLabel(readPath) : null;
-    notice = joinLines(await unsaveableNotice(), imageLine);
+    notice = joinLines(
+      await unsaveableOutputNotice({ cwd: root, event }),
+      imageLine,
+      recoveryBudget.truncated && !imageLine?.includes('not fully checked')
+        ? await truncatedOutputNotice({ cwd: root, event })
+        : null,
+    );
   }
   recordReveals(result.revealed);
   if (!result.replacements.length) {
@@ -188,7 +267,7 @@ try {
     observations,
   });
   await emitMasked(result.masked, result.replacements, notice);
-} catch {
+} catch (error) {
   if (mode === 'block') {
     // deny-inventory: output-check-failed
     emitWithheld(vaultFailed ? VAULT_WITHHELD : ERROR_WITHHELD);
@@ -200,7 +279,7 @@ try {
   }
 }
 
-// Saves the vault after masking (rule 8, lib/restorable.js). True when the
+// Saves the vault after masking (rule 8, packages/zeroh-disclosure-core/restorable.js). True when the
 // masking stands, or when the save failed and `labelVault` now holds the
 // view of the values on disk to mask with again. False when block mode
 // withheld the output instead (already answered).
@@ -216,29 +295,8 @@ async function savedOrFallback() {
   return true;
 }
 
-// The one-line notice for new values that went unmasked because the vault
-// could not be saved, recorded on the turn (lib/unchecked.js).
-async function unsaveableNotice() {
-  try {
-    const { notice } = await recordUnchecked({
-      reason: UNSAVEABLE_REASON,
-      tool: event.tool_name,
-      cwd: root,
-      sessionId: event.session_id,
-      subject: 'tool output',
-    });
-    return notice;
-  } catch {
-    return uncheckedNotice(UNSAVEABLE_REASON, { subject: 'tool output' });
-  }
-}
-
-function joinLines(...lines) {
-  return lines.filter(Boolean).join('\n') || null;
-}
-
 // The output goes to the model as the tool returned it, with the one-line
-// "not protected" notice, recorded on the turn (lib/unchecked.js).
+// "not protected" notice, recorded on the turn (packages/zeroh-disclosure-core/unchecked.js).
 async function passUnscanned(reason) {
   // An answer already written stands.
   if (globalThis.zerohHook?.state?.emitted) return;
@@ -255,20 +313,6 @@ async function passUnscanned(reason) {
     notice = uncheckedNotice(reason, { subject: 'tool output' });
   }
   emitNotice(notice);
-}
-
-// The late-binding values file is normally removed by the command itself; this
-// is the fallback. A failure here must not stop the output from being masked.
-function cleanupValuesFile() {
-  if (!event?.session_id || !event?.tool_use_id) return;
-  try {
-    deleteValuesFile({
-      sessionId: event.session_id,
-      toolUseId: event.tool_use_id,
-    });
-  } catch {
-    // The stale-file sweep at Stop removes it later.
-  }
 }
 
 function emitWithheld(message) {
@@ -337,7 +381,7 @@ async function handlePdf() {
     result = maskText(labelVault);
     observations = tokenObservations(result.replacements);
     maskedPath = maskLabel(filePath);
-    unsaved = await unsaveableNotice();
+    unsaved = await unsaveableOutputNotice({ cwd: root, event });
   }
   recordReveals(result.revealed);
   const content = result.text;
@@ -411,7 +455,7 @@ async function handleNotebook() {
         maskNotebook(labelVault));
       observations = tokenObservations(replacements);
       maskedPath = maskLabel(readPath || masked.file?.filePath);
-      unsaved = await unsaveableNotice();
+      unsaved = await unsaveableOutputNotice({ cwd: root, event });
     }
     if (replacements.length) {
       await recordMaskedOutput({
@@ -457,7 +501,13 @@ async function handleNotebook() {
     const maskValue = (value) =>
       scrubDeep(
         value,
-        { vault: maskWith, known, profile: piiProfile(), unmaskedTypes },
+        {
+          vault: maskWith,
+          known,
+          profile: piiProfile(),
+          unmaskedTypes,
+          ...fileDetectionOptions(readPath),
+        },
         found,
         shown,
       );
@@ -495,17 +545,6 @@ async function handleNotebook() {
       imageOutputs: images,
     };
   }
-}
-
-function hasImage(output) {
-  if (!output || typeof output !== 'object') return false;
-  if (output.image?.media_type?.startsWith('image/')) return true;
-  return [output, output.data].some(
-    (container) =>
-      container &&
-      typeof container === 'object' &&
-      Object.keys(container).some((key) => key.startsWith('image/')),
-  );
 }
 
 async function once(kind, message) {
@@ -579,62 +618,22 @@ function maskedContext(replacements) {
 // Values shown under a grant reached the model in plain text: they count as
 // "sent" on the status line too (docs/receipt-format.md, values sent).
 function recordReveals(revealed) {
-  const entries = recordRevealedUnderGrant({
+  recordRevealedUnderGrant({
     root,
     sessionId: event.session_id,
     grants,
     revealed,
   });
-  if (!entries) return;
-  const kinds = new Set(grants.map((grant) => grant.kind));
-  const shown = (revealed ?? [])
-    .filter((item) => kinds.has(item.type))
-    .reduce((sum, item) => sum + (item.count ?? 1), 0);
-  if (shown > 0) {
-    updateSessionStatus({ cwd: root, sessionId: event.session_id }, (status) =>
-      addSent(status, shown),
-    );
-  }
-}
-
-function channelForTool(toolName) {
-  if (toolName === 'Read') return 'file read';
-  if (shellOf(toolName)) return 'command output';
-  if (toolName === 'WebFetch' || toolName === 'WebSearch') return 'web';
-  if (String(toolName).startsWith('mcp__')) return 'MCP result';
-  return 'command output';
 }
 
 function tokenObservations(replacements) {
-  const channel = channelForTool(event.tool_name);
-  return replacements.map((replacement) => ({
-    token: replacement.token || replacement.replacement,
-    type: replacement.type || replacement.entity_type,
-    channel,
-    source: sourceForReplacement(replacement),
-    ...(replacement.source?.startsWith('known:')
-      ? { name: replacement.source.slice(6) }
-      : {}),
-    count: replacement.count || 1,
-  }));
-}
-
-// Where a masked value came from, as the receipt shows it. The path, command
-// or variable name can itself hold a sensitive value, so the label is masked
-// with the same vault before it is stored or shown (Astra finding 9).
-function sourceForReplacement(replacement) {
-  return maskLabel(rawSourceFor(replacement)) || 'tool output';
-}
-
-function rawSourceFor(replacement) {
-  if (event.tool_name === 'Read') return readSource(replacement);
-  if (shellOf(event.tool_name)) {
-    return String(event.tool_input?.command || event.tool_name)
-      .trim()
-      .replace(/\s+/gu, ' ');
-  }
-  if (String(event.tool_name).startsWith('mcp__')) return event.tool_name;
-  return String(event.tool_name || 'tool output');
+  return describeTokenObservations(replacements, {
+    event,
+    readPath,
+    root,
+    vault,
+    maskLabel,
+  });
 }
 
 // A path, command or label with every vault value, known secret and detected
@@ -656,44 +655,8 @@ function maskLabel(text) {
   }
 }
 
-function readSource(replacement) {
-  const file = readPath || event.tool_response?.file?.filePath || 'file';
-  const absolute = path.resolve(root, file);
-  const relative = path.relative(root, absolute).replace(/\\/gu, '/');
-  const displayPath =
-    relative && !relative.startsWith('../') ? relative : String(file);
-  const token = replacement.token || replacement.replacement;
-  const value = vault.valueOf(token);
-  const content = readResponseText(event.tool_response);
-  const lines = content.split(/\r?\n/u);
-  const lineIndex =
-    value == null ? -1 : lines.findIndex((line) => line.includes(value));
-  const startLine = Number(event.tool_response?.file?.startLine) || 1;
-  const variable = replacement.source?.startsWith('known:')
-    ? replacement.source.slice(6)
-    : lineIndex >= 0
-      ? lines[lineIndex].match(
-          /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=/u,
-        )?.[1]
-      : null;
-  const parts = [displayPath];
-  if (lineIndex >= 0) parts.push(`line ${startLine + lineIndex}`);
-  if (variable) parts.push(variable);
-  return parts.join(' · ');
-}
-
-function readResponseText(value) {
-  if (typeof value === 'string') return value;
-  if (typeof value?.file?.content === 'string') return value.file.content;
-  if (Array.isArray(value)) return value.map(readResponseText).join('\n');
-  if (value && typeof value === 'object') {
-    return Object.values(value).map(readResponseText).join('\n');
-  }
-  return '';
-}
-
 // A format passed without its content being read (a scan or image, which may
-// show text): counted on the turn as unknown-format (lib/unchecked.js), tool
+// show text): counted on the turn as unknown-format (packages/zeroh-disclosure-core/unchecked.js), tool
 // name only. Returns the one-line notice for the user, or null when that was
 // already shown this turn.
 async function noteUncheckedFormat(count = 1) {
@@ -706,17 +669,4 @@ async function noteUncheckedFormat(count = 1) {
     count,
   });
   return notice;
-}
-
-// Image content blocks anywhere in a tool response ({ type: 'image', data |
-// source }), as MCP servers return them.
-function imageBlocks(value, depth = 0) {
-  if (!value || typeof value !== 'object' || depth > 20) return 0;
-  if (Array.isArray(value))
-    return value.reduce((sum, item) => sum + imageBlocks(item, depth + 1), 0);
-  if (value.type === 'image' && (value.data || value.source)) return 1;
-  return Object.values(value).reduce(
-    (sum, item) => sum + imageBlocks(item, depth + 1),
-    0,
-  );
 }

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.5",
+  "version": "1.1.0",
   "platforms": [
     "claude-code",
     "codex",
@@ -31,11 +31,11 @@
         "hooks/hooks.json",
         ".mcp.json",
         "skills/about/SKILL.md",
-        "test/commands.test.mjs",
-        "test/mcp-unmask.test.mjs",
-        "test/about-skill.test.mjs",
+        "test/host/commands.test.mjs",
+        "test/zeroh-disclosure-core/mcp-unmask.test.mjs",
+        "test/host/about-skill.test.mjs",
         "lib/first-run.js",
-        "test/marketplace-name.test.mjs"
+        "test/host/marketplace-name.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -101,7 +101,7 @@
       "evidence": [
         "lib/first-run.js",
         "hooks/user-prompt-submit.js",
-        "test/statusline.test.mjs"
+        "test/host/statusline.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -149,12 +149,12 @@
       "description": "The first prompt of a session not yet behind the local proxy sets it up: it writes ZeroH's ANTHROPIC_BASE_URL entry and waits about two seconds so it applies at once, and adds the status line unless you have your own. A secret typed in that prompt is sent with a notice (stopped with `uncertain block`).",
       "claude_code": "UserPromptSubmit routeSession (Claude Code re-reads the settings `env` in the running session); first-run defaults",
       "evidence": [
-        "lib/proxy-manager.js",
+        "packages/local-proxy/proxy-manager.js",
         "lib/first-run.js",
         "hooks/user-prompt-submit.js",
-        "test/hooks.test.mjs",
-        "test/proxy-manager.test.mjs",
-        "test/statusline.test.mjs"
+        "test/host/hooks.test.mjs",
+        "test/local-proxy/proxy-manager.test.mjs",
+        "test/host/statusline.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -203,7 +203,7 @@
       "area": "install",
       "description": "The hooks need Node.js 20 or later; on an older Node.js the session start says so once and ZeroH steps aside without stopping Claude Code.",
       "claude_code": "hooks/run.js checks process.versions.node before loading a hook",
-      "evidence": ["hooks/run.js", "test/fail-closed.test.mjs"],
+      "evidence": ["hooks/run.js", "test/host/fail-closed.test.mjs"],
       "platforms": {
         "claude-code": {
           "status": "shipped",
@@ -241,14 +241,14 @@
     {
       "id": "hooks.watchdog",
       "area": "install",
-      "description": "Every hook answers two seconds before Claude Code's own timeout: a hook that is stuck or crashes lets the event through with a \"timed out\" or \"check failed\" line (stops it with `uncertain block`), and a broken install never stops Claude Code.",
+      "description": "Every hook has a deadline two seconds before Claude Code's timeout. A stuck guarding hook returns a not-protected notice in pass mode or a stop/withheld output in block mode. A separate hard exit one second after the deadline delivers its prepared answer if needed and terminates a stuck loader. An unreadable mode falls back to pass; a native Node/V8 crash can bypass both timers.",
       "claude_code": "hooks/run.js worker-thread loader with deadlines from hooks.json",
       "evidence": [
         "hooks/run.js",
         "hooks/worker.js",
         "hooks/fail-closed.js",
-        "test/watchdog.test.mjs",
-        "test/fail-closed.test.mjs"
+        "test/host/watchdog.test.mjs",
+        "test/host/fail-closed.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -293,16 +293,16 @@
     {
       "id": "proxy.lifecycle",
       "area": "install",
-      "description": "The local proxy runs as you on 127.0.0.1 and starts at login. A proxy that stopped is restarted within the prompt's budget, restarts with new code after a plugin update (the new proxy takes the port over from the old one once it is loaded, so requests of the sessions still open are not refused; the old one finishes its open requests), and removes itself 24 hours after the plugin is gone. Where the system refuses the login item, the proxy still runs for each session, so what you type is masked, and takes its settings entry out once no ZeroH session is open; the banner, status and doctor say why the login item failed and how to fix it.",
+      "description": "The local proxy runs as you on 127.0.0.1 and starts at login. A proxy that stopped is restarted within the prompt's budget, restarts with new code after a plugin update (the new proxy takes the port over from the old one once it is loaded, so requests of the sessions still open are not refused; the old one finishes its open requests), and restores settings and removes its login item 24 hours after the plugin is gone. The orphaned daemon drains sessions still using its port and exits once they go idle. Where the system refuses the login item, the proxy still runs for each session, so what you type is masked, and takes its settings entry out once no ZeroH session is open; the banner, status and doctor say why the login item failed and how to fix it.",
       "claude_code": "LaunchAgent, systemd user unit, XDG autostart or per-user scheduled task (task XML written as UTF-16 with a byte order mark); checkSessionProxy, code-hash restart, orphan cleanup, session-only daemon without a login item",
       "evidence": [
-        "lib/service-manager.js",
-        "lib/proxy-manager.js",
-        "bin/proxy-daemon.mjs",
-        "test/service-manager.test.mjs",
-        "test/proxy-recovery.test.mjs",
-        "test/proxy-lifecycle.test.mjs",
-        "test/proxy-manager.test.mjs"
+        "packages/local-proxy/service-manager.js",
+        "packages/local-proxy/proxy-manager.js",
+        "packages/local-proxy/daemon.js",
+        "test/local-proxy/service-manager.test.mjs",
+        "test/local-proxy/proxy-recovery.test.mjs",
+        "test/local-proxy/proxy-lifecycle.test.mjs",
+        "test/local-proxy/proxy-manager.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -347,16 +347,16 @@
     {
       "id": "proxy.upstream",
       "area": "install",
-      "description": "The proxy forwards only to the ANTHROPIC_BASE_URL you had before, or api.anthropic.com, through your HTTPS_PROXY, NO_PROXY and CA settings; it keeps no request or response bodies, leaves responses unchanged and reports its own errors plainly. While a ZeroH session runs it also masks Claude Code sessions where the plugin is disabled. It is not used with Bedrock, Vertex or Foundry, or when your shell sets ANTHROPIC_BASE_URL.",
+      "description": "The proxy forwards to the original upstream saved from user settings, or api.anthropic.com, through HTTPS_PROXY, NO_PROXY and CA settings. It stores no request or response bodies and leaves responses unchanged. An environment URL routes only if it is Anthropic's default endpoint; put a gateway in user settings.json env. Bedrock, Vertex, Foundry, higher-precedence overrides and host-managed providers are not routed. The upstream is never taken from a session environment.",
       "claude_code": "restore record next to the settings file; network settings recorded in proxy.json; 4xx for proxy errors, 502 for network failures",
       "evidence": [
-        "lib/proxy.js",
-        "lib/proxy-manager.js",
-        "lib/network.js",
-        "bin/proxy-daemon.mjs",
-        "test/proxy.test.mjs",
-        "test/proxy-network.test.mjs",
-        "test/proxy-manager.test.mjs"
+        "packages/local-proxy/proxy.js",
+        "packages/local-proxy/proxy-manager.js",
+        "packages/local-proxy/network.js",
+        "packages/local-proxy/daemon.js",
+        "test/local-proxy/proxy.test.mjs",
+        "test/local-proxy/proxy-network.test.mjs",
+        "test/local-proxy/proxy-manager.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -408,14 +408,14 @@
       "id": "mask.prompt",
       "area": "masking",
       "core": true,
-      "description": "What you type reaches the model with tokens in place of secrets and personal data, through the local proxy. The first prompt that sets the proxy up, and any prompt while it isn't running, is sent as typed with a notice.",
+      "description": "Typed secrets and personal data are masked through the local proxy. A secret sent before routing is confirmed, or while the session is not routed, goes as typed with a notice in pass mode and is stopped in block mode. A session still pointed at a dead proxy stops in both modes if it cannot be restarted.",
       "claude_code": "local proxy (ANTHROPIC_BASE_URL); UserPromptSubmit routes the session and records the turn",
       "evidence": [
-        "lib/proxy.js",
+        "packages/local-proxy/proxy.js",
         "hooks/user-prompt-submit.js",
-        "test/proxy.test.mjs",
-        "test/hooks.test.mjs",
-        "test/rc2-a1-pass.test.mjs"
+        "test/local-proxy/proxy.test.mjs",
+        "test/host/hooks.test.mjs",
+        "test/host/pass-through.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -472,15 +472,15 @@
     {
       "id": "mask.prompt-hook",
       "area": "masking",
-      "description": "Without the proxy ZeroH still checks what you type: a secret is sent with a \"not protected (proxy not running)\" line, and with `uncertain block` the prompt is stopped in at most three plain lines, with a masked copy on your clipboard.",
+      "description": "Without confirmed proxy routing, ZeroH checks typed text: a secret is sent with a not-protected notice in pass mode, or stopped with a masked clipboard copy in block mode. An override has its own routing reason. If the session still points at a dead proxy, the prompt stops in both modes.",
       "claude_code": "UserPromptSubmit, which can't rewrite a prompt: a notice, or exit 2 with a clipboard copy (pbcopy, wl-copy, xclip, xsel or clip)",
       "evidence": [
         "hooks/user-prompt-submit.js",
         "lib/stop-message.js",
         "lib/clipboard.js",
-        "test/hooks.test.mjs",
-        "test/stop-message.test.mjs",
-        "test/rc2-a1-pass.test.mjs"
+        "test/host/hooks.test.mjs",
+        "test/host/stop-message.test.mjs",
+        "test/host/pass-through.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -529,12 +529,12 @@
       "description": "CLAUDE.md, memory, the system prompt, earlier turns and tool results in each request are masked by the local proxy, the same way every time so prompt caching keeps working. The session start names the files that hold secrets; without the proxy they are only named.",
       "claude_code": "local proxy (system prompt, messages and text documents; thinking blocks and images pass); SessionStart context scan",
       "evidence": [
-        "lib/context-scan.js",
-        "lib/proxy.js",
+        "packages/zeroh-disclosure-core/context-scan.js",
+        "packages/local-proxy/proxy.js",
         "hooks/session-start.js",
-        "test/proxy.test.mjs",
-        "test/hooks.test.mjs",
-        "test/context-token-restore.test.mjs"
+        "test/local-proxy/proxy.test.mjs",
+        "test/host/hooks.test.mjs",
+        "test/local-proxy/context-token-restore.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -592,10 +592,10 @@
       "claude_code": "PostToolUse `updatedToolOutput`; PreToolUse wraps foreground commands (`|| echo …`, PowerShell try/finally) because failed-command output goes to PostToolUseFailure, which can't replace it",
       "evidence": [
         "hooks/post-tool-use.js",
-        "lib/exit-status.js",
-        "test/hooks.test.mjs",
-        "test/exit-status-escapes.test.mjs",
-        "test/fail-closed.test.mjs"
+        "packages/shell-analysis/exit-status.js",
+        "test/host/hooks.test.mjs",
+        "test/shell-analysis/exit-status-escapes.test.mjs",
+        "test/host/fail-closed.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -660,9 +660,9 @@
       "claude_code": "PreToolUse checks the proxy for run_in_background and Monitor; the proxy masks the streamed output",
       "evidence": [
         "hooks/pre-tool-use.js",
-        "lib/proxy.js",
-        "test/rc2-pass-default.test.mjs",
-        "test/fail-closed.test.mjs"
+        "packages/local-proxy/proxy.js",
+        "test/zeroh-disclosure-core/rc2-pass-default.test.mjs",
+        "test/host/fail-closed.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -707,9 +707,9 @@
       "evidence": [
         "hooks/post-tool-use.js",
         "hooks/pre-tool-use.js",
-        "lib/secrets.js",
-        "test/hooks.test.mjs",
-        "test/rc2-pass-default.test.mjs"
+        "packages/shell-analysis/secrets.js",
+        "test/host/hooks.test.mjs",
+        "test/zeroh-disclosure-core/rc2-pass-default.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -755,15 +755,15 @@
     {
       "id": "mask.documents",
       "area": "masking",
-      "description": "A PDF with a text layer reaches the model as masked text (through pdftotext when installed, or a built-in extractor), and notebook cells and text outputs are masked. Images, scanned PDFs and image blocks in MCP results pass unmasked with a one-line notice and count as \"passed unchecked\".",
+      "description": "Text-layer PDFs become masked text; notebook cells and text outputs are masked. Images, scanned PDFs and MCP image blocks pass unmasked with a notice and count as passed unchecked, even in uncertain block mode.",
       "claude_code": "PostToolUse on Read with a `pdf`, `notebook` or `image` response",
       "evidence": [
-        "lib/pdf-text.js",
+        "packages/zeroh-disclosure-core/pdf-text.js",
         "hooks/post-tool-use.js",
         "lib/format-audit.js",
-        "test/format-hooks.test.mjs",
-        "test/pdf-text.test.mjs",
-        "test/unchecked-report.test.mjs"
+        "test/host/format-hooks.test.mjs",
+        "test/zeroh-disclosure-core/pdf-text.test.mjs",
+        "test/zeroh-disclosure-core/unchecked-report.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -812,9 +812,9 @@
       "description": "A raw secret the model writes into a Write, Edit or subagent prompt is replaced by a token before the tool runs.",
       "claude_code": "PreToolUse `updatedInput` (tool policy `rewrite`); the tokens are registered so they can be restored later",
       "evidence": [
-        "lib/tool-policies.js",
+        "packages/zeroh-disclosure-core/tool-policies.js",
         "hooks/pre-tool-use.js",
-        "test/detection-correctness.test.mjs"
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -862,15 +862,17 @@
     {
       "id": "token.format",
       "area": "masking",
-      "description": "Each value becomes a token such as [API_KEY-3f9a1c], keyed to this install so it reveals nothing about the value; the same value always gets the same token, and an expired token is never given to another value. At the session start Claude is told how to work with tokens, and reminded after /compact.",
+      "description": "Each value becomes a token such as [API_KEY-3f9a1c], keyed to this install so it reveals nothing about the value; the same value always gets the same token, and an expired token is never given to another value. At the session start Claude is told how to work with tokens, and reminded after /compact. Gateway <TYPE_N> tokens are recognised as already masked and remain unchanged; the shared format and cross-restore are planned for 1.1.x.",
       "claude_code": "HMAC-SHA256 token names under a per-install key; value-free tombstones; SessionStart briefing",
       "evidence": [
-        "lib/tokens.js",
-        "lib/vault.js",
+        "packages/zeroh-disclosure-core/tokens.js",
+        "packages/zeroh-disclosure-core/vault.js",
         "hooks/session-start.js",
-        "test/detection-correctness.test.mjs",
-        "test/vault.test.mjs",
-        "test/hooks.test.mjs"
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs",
+        "test/zeroh-disclosure-core/vault.test.mjs",
+        "test/host/hooks.test.mjs",
+        "packages/zeroh-disclosure-core/token-pattern.js",
+        "test/zeroh-disclosure-core/gateway-tokens.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -920,15 +922,15 @@
       "description": "A token in a Bash command becomes the real value on this machine, bound through a short-lived private file and never written into the command text, in a form Claude Code's own shell checks accept; the file goes as soon as the command ran, failed or was refused, at the latest when the turn ends. A host that isn't allowed for the value stops the command; a destination ZeroH can't read is restored with a notice.",
       "claude_code": "PreToolUse `updatedInput` with Bash late binding (a values file sourced by an `if` wrapper, no `{ … }` group); PostToolUseFailure and PermissionDenied remove it",
       "evidence": [
-        "lib/late-bind.js",
+        "packages/shell-analysis/late-bind.js",
         "hooks/pre-tool-use.js",
-        "test/late-bind.test.mjs",
-        "test/late-bind-differential.test.mjs",
-        "test/hooks.test.mjs",
-        "test/claude-code-shell-check.test.mjs",
-        "test/values-file-cleanup.test.mjs",
+        "test/shell-analysis/late-bind.test.mjs",
+        "test/shell-analysis/late-bind-differential.test.mjs",
+        "test/host/hooks.test.mjs",
+        "test/shell-analysis/claude-code-shell-check.test.mjs",
+        "test/shell-analysis/values-file-cleanup.test.mjs",
         "hooks/tool-not-run.js",
-        "test/context-token-restore.test.mjs"
+        "test/local-proxy/context-token-restore.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -990,12 +992,12 @@
       "description": "A token in a PowerShell command becomes the real value on this machine, bound through a short-lived private file read with Import-Csv (no .NET call, no execution policy needed) and never written into the command text, in PowerShell 7 and Windows PowerShell 5.1.",
       "claude_code": "PreToolUse `updatedInput` with PowerShell late binding (a CSV values file); PostToolUseFailure and PermissionDenied remove it",
       "evidence": [
-        "lib/late-bind.js",
+        "packages/shell-analysis/late-bind.js",
         "hooks/pre-tool-use.js",
-        "test/late-bind.test.mjs",
-        "test/late-bind-differential.test.mjs",
-        "test/hooks.test.mjs",
-        "test/claude-code-shell-check.test.mjs"
+        "test/shell-analysis/late-bind.test.mjs",
+        "test/shell-analysis/late-bind-differential.test.mjs",
+        "test/host/hooks.test.mjs",
+        "test/shell-analysis/claude-code-shell-check.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1045,10 +1047,10 @@
       "description": "A token in a Read, Edit, Write, NotebookEdit or Grep call becomes the real value on this machine, so an edit matches the file on disk; Claude Code's local transcript then holds that value.",
       "claude_code": "PreToolUse literal restore (`updatedInput`) for local tools",
       "evidence": [
-        "lib/tool-policies.js",
+        "packages/zeroh-disclosure-core/tool-policies.js",
         "hooks/pre-tool-use.js",
-        "test/hooks.test.mjs",
-        "test/detection-correctness.test.mjs"
+        "test/host/hooks.test.mjs",
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1097,11 +1099,11 @@
       "description": "An MCP tool gets a real value only when you allowed that server for it (`mcp:<server>`); a host named in its input never counts.",
       "claude_code": "PreToolUse restore scope `mcp` with signed `mcp:` allow rules; other tokens pass as tokens with a note",
       "evidence": [
-        "lib/tool-policies.js",
-        "lib/secrets.js",
+        "packages/zeroh-disclosure-core/tool-policies.js",
+        "packages/shell-analysis/secrets.js",
         "hooks/pre-tool-use.js",
-        "test/hooks.test.mjs",
-        "test/rc2-pass-default.test.mjs"
+        "test/host/hooks.test.mjs",
+        "test/zeroh-disclosure-core/rc2-pass-default.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1147,13 +1149,13 @@
       "id": "restore.scope",
       "area": "restoring",
       "description": "Real values go only where a tool needs them: a WebFetch URL gets one only for a host allowed for it, and a subagent prompt, a skill or slash command, or a WebFetch prompt never gets one, because those go to a model.",
-      "claude_code": "PreToolUse restore scopes `fields` (the WebFetch URL) and `none` (Agent, Task, Skill, SlashCommand)",
+      "claude_code": "PreToolUse restore scopes `fields` (WebFetch URL) and `none` (Agent, Skill, SlashCommand); the matcher has Agent, not the legacy Task tool",
       "evidence": [
-        "lib/tool-policies.js",
+        "packages/zeroh-disclosure-core/tool-policies.js",
         "hooks/pre-tool-use.js",
-        "test/rc2-last-stops.test.mjs",
-        "test/detection-correctness.test.mjs",
-        "test/hooks.test.mjs"
+        "test/zeroh-disclosure-core/mask-safety.test.mjs",
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1202,12 +1204,12 @@
       "description": "When ZeroH can't read where a command sends a value (a $HOST variable, a script, git push, gh without a host), it still puts the value back and says so in one line; `uncertain block` refuses before restoring.",
       "claude_code": "PreToolUse shell destination check: restore with a notice, or deny in block mode",
       "evidence": [
-        "lib/shell-destinations.js",
+        "packages/shell-analysis/shell-destinations.js",
         "hooks/pre-tool-use.js",
-        "test/rc2-destinations.test.mjs",
-        "test/rc2-astra3-shell.test.mjs",
-        "test/rc2-astra4.test.mjs",
-        "test/rc2-astra3-followup.test.mjs"
+        "test/shell-analysis/rc2-destinations.test.mjs",
+        "test/shell-analysis/shell-integration.test.mjs",
+        "test/shell-analysis/guard-integration.test.mjs",
+        "test/zeroh-disclosure-core/report-followup.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1254,9 +1256,9 @@
       "claude_code": "PreToolUse token-* reasons plus additionalContext; counted apart on the Stop line",
       "evidence": [
         "hooks/pre-tool-use.js",
-        "lib/unchecked.js",
-        "test/rc2-last-stops.test.mjs",
-        "test/hooks.test.mjs"
+        "packages/zeroh-disclosure-core/unchecked.js",
+        "test/zeroh-disclosure-core/mask-safety.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1302,10 +1304,10 @@
       "claude_code": "MessageDisplay",
       "evidence": [
         "hooks/message-display.js",
-        "lib/token-pattern.js",
-        "lib/config.js",
-        "test/named-display.test.mjs",
-        "test/hooks.test.mjs"
+        "packages/zeroh-disclosure-core/token-pattern.js",
+        "packages/zeroh-disclosure-core/config.js",
+        "test/zeroh-disclosure-core/named-display.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1364,13 +1366,13 @@
       "description": "A secret heading to a host that isn't allowed for it is stopped, with the one command that allows it: a token Claude would restore, and a known secret it writes straight into a command, an MCP call or a WebFetch URL.",
       "claude_code": "PreToolUse deny with the `/zeroh-disclosure:allow NAME HOST` line",
       "evidence": [
-        "lib/secrets.js",
-        "lib/shell-destinations.js",
+        "packages/shell-analysis/secrets.js",
+        "packages/shell-analysis/shell-destinations.js",
         "hooks/pre-tool-use.js",
-        "test/rc2-destinations.test.mjs",
-        "test/hooks.test.mjs",
-        "test/rc2-pass-default.test.mjs",
-        "test/rc2-last-stops.test.mjs"
+        "test/shell-analysis/rc2-destinations.test.mjs",
+        "test/host/hooks.test.mjs",
+        "test/zeroh-disclosure-core/rc2-pass-default.test.mjs",
+        "test/zeroh-disclosure-core/mask-safety.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1428,12 +1430,12 @@
       "description": "Only you allow a secret to reach a new host or MCP server (`/zeroh-disclosure:allow NAME HOST`), per project, in a signed allow list. A value you typed is allowed by its token (`⟦API_KEY-…⟧` or `[API_KEY-…]`); a raw value is stored as its token, never as itself. `allow` alone shows where each known value may go and why (typed keys by token, never the value); Claude Code's own `CLAUDE_CODE_*` variables stay masked but are not offered.",
       "claude_code": "user-only slash command applied on the typed prompt; HMAC-signed allow list under ZEROH_HOME (a hand edit makes ZeroH ignore the file and warn)",
       "evidence": [
-        "lib/allow-rules.js",
-        "lib/allow-list.js",
+        "packages/zeroh-disclosure-core/allow-rules.js",
+        "packages/shell-analysis/allow-list.js",
         "bin/zeroh-disclosure.mjs",
-        "test/allow-rules.test.mjs",
-        "test/allow-typed.test.mjs",
-        "test/user-authority.test.mjs"
+        "test/shell-analysis/allow-rules.test.mjs",
+        "test/shell-analysis/allow-typed.test.mjs",
+        "test/zeroh-disclosure-core/user-authority.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1487,10 +1489,10 @@
       "description": "Keys with a known provider prefix (Stripe, Anthropic, OpenAI, OpenRouter, GitHub, GitLab, AWS, Google, Slack, Hugging Face, npm, ZeroH) may reach their provider's hosts with no setup, and this machine (localhost, 127.0.0.0/8, 0.0.0.0 and ::1) is always allowed.",
       "claude_code": "built-in destination table by prefix; one loopback rule",
       "evidence": [
-        "lib/secrets.js",
-        "lib/loopback.js",
-        "test/secrets.test.mjs",
-        "test/allow-rules.test.mjs"
+        "packages/shell-analysis/secrets.js",
+        "packages/local-proxy/loopback.js",
+        "test/shell-analysis/secrets.test.mjs",
+        "test/shell-analysis/allow-rules.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1529,9 +1531,9 @@
       "description": "The model can't use Write, Edit or other file tools to change ZeroH's settings, keys, vault, allow list or plugin files, or the Claude Code settings that route through the proxy, turn hooks or the plugin off, or change the status line.",
       "claude_code": "PreToolUse settings guard; Claude Code settings judged on the parsed result",
       "evidence": [
-        "lib/settings-guard.js",
-        "test/settings-guard.test.mjs",
-        "test/hooks.test.mjs"
+        "packages/shell-analysis/settings-guard.js",
+        "test/shell-analysis/settings-guard.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1584,13 +1586,13 @@
       "description": "A shell command the model runs that clearly writes, deletes or runs against those files is stopped, whatever the quoting or launcher; one whose effect ZeroH can't read runs with a \"not protected\" line (stopped with `uncertain block`). ZeroH's own keys, vault and allow list stay closed to shell commands in both modes.",
       "claude_code": "shared shell tokenizer and per-program grammars (sed, awk, Perl, Python, Node, git, gh, openssl, …)",
       "evidence": [
-        "lib/settings-guard.js",
-        "lib/shell-scan.js",
-        "lib/shell-programs.js",
-        "test/rc2-protected-paths.test.mjs",
-        "test/rc2-astra3-shell.test.mjs",
-        "test/rc2-astra4.test.mjs",
-        "test/shell-tokenizer.test.mjs"
+        "packages/shell-analysis/settings-guard.js",
+        "packages/shell-analysis/shell-scan.js",
+        "packages/shell-analysis/shell-programs.js",
+        "test/shell-analysis/rc2-protected-paths.test.mjs",
+        "test/shell-analysis/shell-integration.test.mjs",
+        "test/shell-analysis/guard-integration.test.mjs",
+        "test/shell-analysis/shell-tokenizer.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1639,9 +1641,9 @@
       "description": "A command that copies, uploads or prints Claude Code's session files (~/.claude/projects/…/*.jsonl, not its auto-memory), which keep what you typed as typed, values shown under an unmask and the real values ZeroH put back into edits, runs with a notice that they may hold your real values; `/zeroh-disclosure:settings uncertain block` stops it.",
       "claude_code": "PreToolUse on Bash, PowerShell and Monitor, with the shared shell tokenizer",
       "evidence": [
-        "lib/transcript-files.js",
+        "packages/zeroh-disclosure-core/transcript-files.js",
         "hooks/pre-tool-use.js",
-        "test/transcript-files.test.mjs"
+        "test/zeroh-disclosure-core/transcript-files.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1686,7 +1688,10 @@
       "area": "guards",
       "description": "The model can't disable, uninstall or reconfigure the plugin through the `claude` command line, or add an Elicitation hook that would answer unmask dialogs for you.",
       "claude_code": "PreToolUse settings guard (`claude` arguments; Elicitation hook edits in files and shell)",
-      "evidence": ["lib/settings-guard.js", "test/settings-guard.test.mjs"],
+      "evidence": [
+        "packages/shell-analysis/settings-guard.js",
+        "test/shell-analysis/settings-guard.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
@@ -1727,17 +1732,17 @@
       "id": "pass.uncertain-notice",
       "area": "guards",
       "description": "What ZeroH can't check (a dynamic destination, a variable whose value it can't see, output over 1 MB, a prompt over 256 KB, a check that failed, …) runs as it would without ZeroH, with one \"not protected\" line per reason per turn, counted by reason in the receipt. A variable ZeroH knows is named (\"ZeroH couldn't check where $STRIPE_KEY went\"), and the line says how to stop these instead (`/zeroh-disclosure:settings uncertain block`).",
-      "claude_code": "lib/unchecked.js in every hook; size limits in PostToolUse and UserPromptSubmit",
+      "claude_code": "packages/zeroh-disclosure-core/unchecked.js in every hook; size limits in PostToolUse and UserPromptSubmit",
       "evidence": [
-        "lib/unchecked.js",
-        "lib/shell-destinations.js",
+        "packages/zeroh-disclosure-core/unchecked.js",
+        "packages/shell-analysis/shell-destinations.js",
         "hooks/post-tool-use.js",
         "hooks/user-prompt-submit.js",
-        "test/unchecked.test.mjs",
-        "test/unchecked-report.test.mjs",
-        "test/rc2-pass-default.test.mjs",
-        "test/rc2-last-stops.test.mjs",
-        "test/rc2-ups-pass.test.mjs"
+        "test/zeroh-disclosure-core/unchecked.test.mjs",
+        "test/zeroh-disclosure-core/unchecked-report.test.mjs",
+        "test/zeroh-disclosure-core/rc2-pass-default.test.mjs",
+        "test/zeroh-disclosure-core/mask-safety.test.mjs",
+        "test/zeroh-disclosure-core/vault-pass.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1782,10 +1787,10 @@
       "description": "`/zeroh-disclosure:settings uncertain block` stops the uncertain cases instead of passing them; a repository's .zeroh.env may set `block` too, and that wins over your `pass`.",
       "claude_code": "configuration read by every hook",
       "evidence": [
-        "lib/config.js",
-        "test/rc2-last-stops.test.mjs",
-        "test/config-uncertain.test.mjs",
-        "test/user-authority.test.mjs"
+        "packages/zeroh-disclosure-core/config.js",
+        "test/zeroh-disclosure-core/mask-safety.test.mjs",
+        "test/zeroh-disclosure-core/config-uncertain.test.mjs",
+        "test/zeroh-disclosure-core/user-authority.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1833,13 +1838,13 @@
       "id": "detect.keys-gitleaks",
       "area": "detection",
       "description": "221 key-format rules from gitleaks v8.30.1: 214 for a named provider's keys and 7 generic ones (API keys, private keys, JWTs, curl credentials, Kubernetes secrets). A variable reference (`$KEY`, `${KEY}`, `$env:KEY`, `%KEY%`, `${{ secrets.KEY }}`) is masked like a value, since whether it is expanded depends on the program that reads it; in a Bash or PowerShell command, a value that is only variable references is not stopped as a raw secret (it runs with a \"not protected\" line when it is sent somewhere; `uncertain block` stops it). A local rule adds GitHub App installation tokens in the stateless format of 2026 (`ghs_<app id>_<JWT>`, about 520 characters), which the gitleaks rule misses, and masks the whole token.",
-      "claude_code": "lib/detector.js with the vendored engine (gitleaks rules imported by the vendored generator; one rule, pkcs12-file, skipped)",
+      "claude_code": "packages/zeroh-disclosure-core/detector.js with the vendored engine (gitleaks rules imported by the vendored generator; one rule, pkcs12-file, skipped)",
       "evidence": [
-        "lib/detector.js",
-        "test/detectors.test.mjs",
-        "test/features.test.mjs",
-        "test/shell-variable-reference.test.mjs",
-        "test/github-app-token.test.mjs"
+        "packages/zeroh-disclosure-core/detector.js",
+        "test/zeroh-disclosure-core/detectors.test.mjs",
+        "test/host/features.test.mjs",
+        "test/shell-analysis/shell-variable-reference.test.mjs",
+        "test/shell-analysis/github-app-token.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1876,11 +1881,11 @@
       "id": "detect.secrets-context",
       "area": "detection",
       "description": "Passwords, tokens and secrets next to a key-like name, private keys, Authorization headers, credentials in URLs and connection strings, signed URLs, OTP seeds and password hashes are masked. A plain word found this way is masked where its name is beside it, not everywhere.",
-      "claude_code": "lib/detector.js with the vendored engine (secret rules, generic rules)",
+      "claude_code": "packages/zeroh-disclosure-core/detector.js with the vendored engine (secret rules, generic rules)",
       "evidence": [
-        "lib/detector.js",
-        "test/detection-correctness.test.mjs",
-        "test/detectors.test.mjs",
+        "packages/zeroh-disclosure-core/detector.js",
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs",
+        "test/zeroh-disclosure-core/detectors.test.mjs",
         "vendor/sensitive-data-detectors/src/detector.js"
       ],
       "platforms": {
@@ -1920,9 +1925,9 @@
       "description": "Every value in your project's .env files, secret-named environment variables and credential files (AWS, gh, npm, PyPI, .netrc, .git-credentials, Docker) is masked by exact match, also base64-, hex- or URL-encoded, and a value masked once stays masked wherever it comes back.",
       "claude_code": "known secrets loaded at SessionStart and in every hook; exact-value matcher over every live vault value and its encodings",
       "evidence": [
-        "lib/secrets.js",
-        "test/secrets.test.mjs",
-        "test/detection-correctness.test.mjs"
+        "packages/shell-analysis/secrets.js",
+        "test/shell-analysis/secrets.test.mjs",
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -1959,13 +1964,13 @@
     {
       "id": "detect.pii-33",
       "area": "detection",
-      "description": "33 kinds of personal data, each decided by a vendored library or a published rule (checksums, libphonenumber, national ID rules); digit-only IDs, passports and dates of birth count only next to a word naming them. `ZEROH_MASK_PII=off` leaves personal data in tool output unmasked, and `ZEROH_PHONE_REGION` sets the region for phone numbers without a country code.",
-      "claude_code": "lib/detector.js with the vendored engine; environment or config.env",
+      "description": "33 kinds of personal data, checked by vendored libraries or published rules; digit-only IDs, passports and dates of birth need a context word. ZEROH_MASK_PII=off disables personal-data detection in the tool-output hook; the proxy still masks personal data in prompts and tool results, and vault values still match. ZEROH_PHONE_REGION selects the region for numbers without a country code.",
+      "claude_code": "packages/zeroh-disclosure-core/detector.js with the vendored engine; environment or config.env",
       "evidence": [
-        "lib/detector.js",
+        "packages/zeroh-disclosure-core/detector.js",
         "lib/hook-io.js",
-        "test/detection-correctness.test.mjs",
-        "test/detectors.test.mjs"
+        "test/zeroh-disclosure-core/detection-correctness.test.mjs",
+        "test/zeroh-disclosure-core/detectors.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2002,12 +2007,12 @@
       "id": "detect.typed-random",
       "area": "detection",
       "description": "A random-looking value you type that matches no rule is sent as it is, and ZeroH suggests `/zeroh-disclosure:report-miss`.",
-      "claude_code": "UserPromptSubmit entropy check; recorded as ENTROPY_WARNING in the receipt",
-      "evidence": ["hooks/user-prompt-submit.js", "test/hooks.test.mjs"],
+      "claude_code": "UserPromptSubmit entropy check; user notice in systemMessage and model context in additionalContext; recorded as ENTROPY_WARNING in the receipt",
+      "evidence": ["hooks/user-prompt-submit.js", "test/host/hooks.test.mjs"],
       "platforms": {
         "claude-code": {
           "status": "shipped",
-          "note": "the suggestion goes to the model (additionalContext), not straight to you; to check in a live session"
+          "note": "Value-free suggestion emitted through systemMessage and additionalContext; offline hook contract verified, live screen/version check pending."
         },
         "codex": {
           "status": "planned",
@@ -2050,10 +2055,10 @@
       "claude_code": "MCP elicitation (`request_unmask`); signed grants bound to the session, applied by the hooks and the proxy",
       "evidence": [
         "mcp/server.mjs",
-        "lib/unmask.js",
-        "test/mcp-unmask.test.mjs",
-        "test/unmask.test.mjs",
-        "test/proxy.test.mjs"
+        "packages/zeroh-disclosure-core/unmask.js",
+        "test/zeroh-disclosure-core/mcp-unmask.test.mjs",
+        "test/zeroh-disclosure-core/unmask.test.mjs",
+        "test/local-proxy/proxy.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2114,11 +2119,11 @@
       "claude_code": "slash command `!` block, then the model calls `request_unmask`; HMAC-signed unmask.json, user-only caps command",
       "evidence": [
         "bin/zeroh-disclosure.mjs",
-        "lib/unmask.js",
-        "lib/settings-guard.js",
-        "test/unmask.test.mjs",
-        "test/mcp-unmask.test.mjs",
-        "test/user-authority.test.mjs"
+        "packages/zeroh-disclosure-core/unmask.js",
+        "packages/shell-analysis/settings-guard.js",
+        "test/zeroh-disclosure-core/unmask.test.mjs",
+        "test/zeroh-disclosure-core/mcp-unmask.test.mjs",
+        "test/zeroh-disclosure-core/user-authority.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2167,13 +2172,13 @@
       "claude_code": "MCP `end_unmask` (no dialog; it can only end grants); CLI `unmask revoke`; UserPromptSubmit systemMessage; status line countdown",
       "evidence": [
         "mcp/server.mjs",
-        "lib/unmask.js",
+        "packages/zeroh-disclosure-core/unmask.js",
         "hooks/user-prompt-submit.js",
         "lib/statusline.js",
-        "test/mcp-unmask.test.mjs",
-        "test/unmask.test.mjs",
-        "test/hooks.test.mjs",
-        "test/statusline.test.mjs"
+        "test/zeroh-disclosure-core/mcp-unmask.test.mjs",
+        "test/zeroh-disclosure-core/unmask.test.mjs",
+        "test/host/hooks.test.mjs",
+        "test/host/statusline.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2217,19 +2222,21 @@
     {
       "id": "receipt.signed",
       "area": "receipts",
-      "description": "Every turn gets a receipt signed on this machine (ECDSA P-256), with an HTML view and the session's token map; receipts are chained per session and can be checked with `zeroh-disclosure verify`.",
+      "description": "Every turn gets a receipt signed on this machine (ECDSA P-256), with an HTML view and the session's token map; receipts are chained per session and can be checked with `zeroh-disclosure verify`. New receipts and turn summaries use schema v2 and describe their token spec and signer; v1 still verifies. Writers use a local-file sink; the AF2 core relay is not built.",
       "claude_code": "Stop hook signs with a local ES256 key; receipt.html and the session bundle in ZEROH_HOME",
       "evidence": [
-        "lib/receipt.js",
+        "packages/zeroh-disclosure-core/receipt.js",
         "hooks/stop.js",
-        "lib/report-html.js",
-        "lib/verify-receipt.js",
-        "lib/receipt-bundle.js",
-        "test/receipt.test.mjs",
-        "test/report.test.mjs",
-        "test/hooks.test.mjs",
-        "lib/turn-summary.js",
-        "test/raw-sent-claim.test.mjs"
+        "packages/zeroh-disclosure-core/report-html.js",
+        "packages/zeroh-disclosure-core/verify-receipt.js",
+        "packages/zeroh-disclosure-core/receipt-bundle.js",
+        "test/zeroh-disclosure-core/receipt.test.mjs",
+        "test/zeroh-disclosure-core/report.test.mjs",
+        "test/host/hooks.test.mjs",
+        "packages/zeroh-disclosure-core/turn-summary.js",
+        "test/zeroh-disclosure-core/raw-sent-claim.test.mjs",
+        "packages/zeroh-disclosure-core/receipt-sink.js",
+        "test/zeroh-disclosure-core/receipts-v2-sink.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2274,15 +2281,17 @@
     {
       "id": "receipt.stop-line",
       "area": "receipts",
-      "description": "After a turn that masked, stopped, blocked, sent or revealed something, one line says what happened and links the receipt; a quiet turn prints nothing. It shows up to three tokens, personal data next to a short preview and secrets with at most their last four characters (never a whole value, never the start of a secret), then the rest counted by kind and where they came from in plain words (\"in your message\", \"in signup-errors.log\", \"for STRIPE_KEY\"). \"Sent\" and values shown under an unmask count each value once per tool call, the same on the status line, this line, the receipt slip and `/report`.",
+      "description": "After a turn that masks, stops, sends or reveals values, one line links the receipt and describes the result. It shows up to three tokens with safe previews, then counts the rest by kind and source. An allowed destination send says real value allowed to <host>; it is distinct from a real value sent to the model. Signed turn summaries reconcile the status-line counts.",
       "claude_code": "Stop hook systemMessage",
       "evidence": [
         "hooks/stop.js",
-        "lib/report.js",
-        "lib/report-counts.js",
-        "test/hooks.test.mjs",
-        "test/report.test.mjs",
-        "test/rc2-a1-pass.test.mjs"
+        "packages/zeroh-disclosure-core/report.js",
+        "packages/zeroh-disclosure-core/report-counts.js",
+        "test/host/hooks.test.mjs",
+        "test/zeroh-disclosure-core/report.test.mjs",
+        "test/host/pass-through.test.mjs",
+        "test/host/stop-budget.test.mjs",
+        "test/zeroh-disclosure-core/stop-verifications.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2326,9 +2335,9 @@
       "description": "Receipts are kept 90 days by default (`/zeroh-disclosure:settings receipts keep forever|1y|90d|30d`), pruned at most once a day and never the current session's; a repository may only shorten it.",
       "claude_code": "SessionStart pruning; user-only CLI `receipts keep`",
       "evidence": [
-        "lib/receipt-retention.js",
+        "packages/zeroh-disclosure-core/receipt-retention.js",
         "hooks/session-start.js",
-        "test/receipt-retention.test.mjs"
+        "test/zeroh-disclosure-core/receipt-retention.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2374,9 +2383,9 @@
       "evidence": [
         "commands/scripts/receipt.js",
         "commands/scripts/show.js",
-        "lib/report.js",
-        "test/receipt.test.mjs",
-        "test/report.test.mjs"
+        "packages/zeroh-disclosure-core/report.js",
+        "test/zeroh-disclosure-core/receipt.test.mjs",
+        "test/zeroh-disclosure-core/report.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2425,11 +2434,11 @@
       "description": "`/zeroh-disclosure:report` prints the receipt slip for the last 7d, 30d, 90d or all time, as text, from local files only; the command-line tool also writes it as HTML or JSON, for this project or all projects.",
       "claude_code": "slash command (text); CLI `report [--since] [--html path] [--json path] [--all-projects]`",
       "evidence": [
-        "lib/report.js",
-        "lib/report-html.js",
+        "packages/zeroh-disclosure-core/report.js",
+        "packages/zeroh-disclosure-core/report-html.js",
         "commands/scripts/report.js",
         "bin/zeroh-disclosure.mjs",
-        "test/report.test.mjs"
+        "test/zeroh-disclosure-core/report.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2479,12 +2488,12 @@
       "description": "Report a value ZeroH did not mask in a private form rather than in chat; it is masked from then on. Each report is kept on this machine as a shape-only note (type, prefix, length, character classes) that you can list or delete with `/zeroh-disclosure:report-miss list|delete <id>`. Reports stay on this computer.",
       "claude_code": "MCP `report_missed_secret` (one elicitation form when the user runs the command), user-only slash command with `list`/`delete`; CLI `reports list|show|delete` (delete needs the user)",
       "evidence": [
-        "lib/report-miss.js",
+        "packages/zeroh-disclosure-core/report-miss.js",
         "mcp/server.mjs",
         "bin/zeroh-disclosure.mjs",
         "commands/scripts/report-miss.js",
         "hooks/post-tool-use.js",
-        "test/report-miss.test.mjs"
+        "test/zeroh-disclosure-core/report-miss.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2535,9 +2544,9 @@
       "claude_code": "MCP `report_missed_secret` with `value`; the model is briefed at SessionStart",
       "evidence": [
         "mcp/server.mjs",
-        "lib/report-miss.js",
+        "packages/zeroh-disclosure-core/report-miss.js",
         "hooks/post-tool-use.js",
-        "test/report-miss.test.mjs"
+        "test/zeroh-disclosure-core/report-miss.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2578,13 +2587,13 @@
     {
       "id": "banner.session-start",
       "area": "status",
-      "description": "The session banner: the big ZEROH view after the install, then one line (`mini`) with what is protected, or what needs attention and its fix; `big`, `compact` or `off` in `/zeroh-disclosure:settings banner`. Warnings print below it in every mode. The session start also says once when a project's .zeroh.env was ignored, the allow list was hand-edited, a setting hides the status line, or ZeroH's folder is read-only.",
+      "description": "The session banner: the big ZEROH view after the install, then one line (`mini`) with what is protected, or what needs attention and its fix; `big`, `compact` or `off` through the model-runnable validated `style banner` command or `/zeroh-disclosure:settings banner`. Warnings print below it in every mode. The session start also says once when a project's .zeroh.env was ignored, the allow list was hand-edited, a setting hides the status line, or ZeroH's folder is read-only.",
       "claude_code": "SessionStart `systemMessage` (ANSI colour); `ZEROH_BANNER` wins over the saved mode",
       "evidence": [
         "lib/banner.js",
         "hooks/session-start.js",
-        "test/banner.test.mjs",
-        "test/hooks.test.mjs"
+        "test/host/banner.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2634,16 +2643,16 @@
       "id": "statusline",
       "area": "status",
       "core": true,
-      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a link to the receipt. It is added with the first message unless you have your own; then `/zeroh-disclosure:settings statusline on` adds ZeroH's part on its own line under yours in one step (or after it, `position: \"end\"`; not yet on Windows, 1.1), without changing your script, stopping your command after 2 seconds so it never hides ZeroH's part, and `off` or uninstall put your line back exactly. `/zeroh-disclosure:settings statusline off`, or removing it, turns it off for good.",
-      "claude_code": "`statusLine` command (a minimal `node -e` resolver, in `wrap` mode around the user's own command); hooks keep status.json and a heartbeat, compared with the latest prompt or tool result in the transcript's tail; choice recorded per settings file",
+      "description": "A status line under the prompt (🟢 protected, 🟡 in part, 🔴 not protecting, each with the reason and fix), with counts, the unmask countdown and a receipt link. It is added with the first message on macOS, Linux and Windows, including on its own line below the user's status line (or after it, `position: \"end\"`). The user's script is unchanged; its last good output is cached across slow, failed and empty runs, and `off` or uninstall restore its entry exactly. A short launcher under ZEROH_HOME prints the segment or JSON data for scripts of the user's own.",
+      "claude_code": "`statusLine` command (a verified `node -e` resolver, in `wrap` mode around the user's own command); hooks keep status.json and a heartbeat, compared with the latest hook-bearing transcript entry while compact boundaries are excluded; choice and exact restoration recorded per settings file",
       "evidence": [
         "lib/statusline.js",
         "lib/statusline-settings.js",
-        "lib/session-status.js",
+        "packages/zeroh-disclosure-core/session-status.js",
         "lib/first-run.js",
-        "test/statusline.test.mjs",
-        "test/statusline-wrap.test.mjs",
-        "test/rc2-astra3-lifecycle.test.mjs"
+        "test/host/statusline.test.mjs",
+        "test/host/statusline-wrap.test.mjs",
+        "test/host/lifecycle.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2700,13 +2709,15 @@
     {
       "id": "statusline.style",
       "area": "status",
-      "description": "Change how the status line looks (fields, order, labels, emoji, compact wording, only when not 🟢) by asking Claude, which may edit only the style file; the state and its fix can't be hidden or faked while ZeroH isn't 🟢.",
-      "claude_code": "`statusline-style.json` under ZEROH_HOME, validated on every draw; the settings guard allows only that file",
+      "description": "Ask Claude to change appearance with the validated style command or a direct edit of presentation.json; SessionStart currently briefs it to edit that file. The legacy statusline-style.json is migration-only. Fields, order, labels, emoji, wording, colour, position, formats and verbosity are configurable; a warning state and fix cannot be hidden or faked.",
+      "claude_code": "`style <key> <value>` writes validated `presentation.json` under ZEROH_HOME; the settings guard allows the command and only that raw ZeroH file",
       "evidence": [
         "lib/statusline.js",
-        "lib/settings-guard.js",
+        "lib/style.js",
+        "lib/cli/style.js",
+        "packages/shell-analysis/settings-guard.js",
         "docs/statusline.md",
-        "test/statusline-style.test.mjs"
+        "test/host/statusline-style.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2722,7 +2733,7 @@
         },
         "opencode": {
           "status": "planned",
-          "note": "the TUI plugin reads and validates statusline-style.json on each draw; the settings guard adds tui.json",
+          "note": "the TUI plugin reads and validates presentation.json on each draw; the settings guard adds tui.json",
           "sources": [
             "https://github.com/anomalyco/opencode/blob/v1.18.33/packages/plugin/src/tui.ts#L455-L486"
           ]
@@ -2756,7 +2767,7 @@
       "evidence": [
         "lib/statusline.js",
         "bin/zeroh-disclosure.mjs",
-        "test/statusline-style.test.mjs"
+        "test/host/statusline-style.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2792,14 +2803,14 @@
     {
       "id": "cmd.status",
       "area": "status",
-      "description": "`/zeroh-disclosure:status` shows what is protected now, whether the local proxy is running and this session goes through it, whether a login item starts it after a restart (and why not, with the fix), unmask grants, receipts and warnings, without a model tool call.",
+      "description": "/zeroh-disclosure:status shows shared protection-state wording, routing, login-item fixes, restart guidance, grants, receipts and warnings without a model call. It currently supplies paused:false, so a closed vault is not shown as Paused there; the status line can show it. The command form is plain text.",
       "claude_code": "slash command `!` block (the full banner view plus the proxy's real state)",
       "evidence": [
         "commands/scripts/status.js",
         "lib/banner.js",
-        "test/banner.test.mjs",
-        "lib/proxy-manager.js",
-        "test/commands.test.mjs"
+        "test/host/banner.test.mjs",
+        "packages/local-proxy/proxy-manager.js",
+        "test/host/commands.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2846,14 +2857,14 @@
     {
       "id": "mgmt.user-authority",
       "area": "management",
-      "description": "Changes to ZeroH's protection (proxy, allow, settings, unmask caps, uninstall) run only for your own typed command, never for the model; a Skill or SlashCommand call of such a command is refused. Outside Claude Code the command-line tool applies a change only after you type the four-character code it shows.",
-      "claude_code": "UserPromptSubmit ticket (the CLI refuses without it); settings guard for Skill and SlashCommand; terminal confirmation code",
+      "description": "Changes to ZeroH's protection run only for your own typed command, never for the model; a Skill or SlashCommand call of such a command is refused. Outside Claude Code they apply only after you type the four-character code shown. Status-line on/off remains user-only because it writes Claude Code settings, but runs without a code; presentation changes are model-runnable.",
+      "claude_code": "UserPromptSubmit ticket for user-only commands; settings guard for model calls; terminal confirmation code only for protection changes",
       "evidence": [
-        "lib/user-authority.js",
-        "lib/settings-guard.js",
+        "packages/zeroh-disclosure-core/user-authority.js",
+        "packages/shell-analysis/settings-guard.js",
         "bin/zeroh-disclosure.mjs",
-        "test/user-authority.test.mjs",
-        "test/settings-guard.test.mjs"
+        "test/zeroh-disclosure-core/user-authority.test.mjs",
+        "test/shell-analysis/settings-guard.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -2904,7 +2915,10 @@
       "area": "management",
       "description": "Every message that points to a fix names the slash command and, for when Claude Code can't start, the full terminal command with the plugin's path.",
       "claude_code": "terminal command quoted per platform",
-      "evidence": ["lib/fix-command.js", "test/fix-command.test.mjs"],
+      "evidence": [
+        "packages/zeroh-disclosure-core/fix-command.js",
+        "test/zeroh-disclosure-core/fix-command.test.mjs"
+      ],
       "platforms": {
         "claude-code": {
           "status": "shipped",
@@ -2954,8 +2968,8 @@
         "commands/scripts/settings.js",
         "commands/scripts/config.js",
         "bin/zeroh-disclosure.mjs",
-        "test/statusline.test.mjs",
-        "test/commands.test.mjs"
+        "test/host/statusline.test.mjs",
+        "test/host/commands.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3001,16 +3015,16 @@
     {
       "id": "settings.user-config",
       "area": "management",
-      "description": "Every setting can also live in ZeroH's own config.env, and real environment variables win; `ZEROH_HOME`, `ZEROH_PROXY_PORT` and `ZEROH_CLAUDE_SETTINGS` move ZeroH's folder, fix the proxy's port and choose the Claude Code settings file it writes to.",
-      "claude_code": "config.env in ZEROH_HOME, loaded by lib/config.js; environment (ZEROH_HOME from the environment only)",
+      "description": "User settings live in <ZEROH_HOME>/config.env; environment values win. ZEROH_HOME is environment-only; ZEROH_PROXY_PORT, ZEROH_CLAUDE_SETTINGS and ZEROH_RECEIPTS_DIR choose the proxy port, Claude settings file and kept-receipt folder. ZEROH_PUBLISHED_VERSION_CHECK=off disables doctor's public-version GET; ZEROH_STATUSLINE_DEV=1 enables source-checkout status-line development.",
+      "claude_code": "config.env in ZEROH_HOME, loaded by packages/zeroh-disclosure-core/config.js; environment (ZEROH_HOME from the environment only)",
       "evidence": [
-        "lib/config.js",
-        "lib/vault.js",
-        "lib/proxy-manager.js",
+        "packages/zeroh-disclosure-core/config.js",
+        "packages/zeroh-disclosure-core/vault.js",
+        "packages/local-proxy/proxy-manager.js",
         "lib/claude-settings.js",
-        "test/hooks.test.mjs",
-        "test/secrets.test.mjs",
-        "test/proxy-manager.test.mjs"
+        "test/host/hooks.test.mjs",
+        "test/shell-analysis/secrets.test.mjs",
+        "test/local-proxy/proxy-manager.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3046,15 +3060,15 @@
     {
       "id": "settings.repo-tighten-only",
       "area": "management",
-      "description": "A project's .zeroh.env may set only the banner, on-screen values and vault retention, shorten receipt retention, turn personal-data masking on or set `uncertain block`; anything else is ignored and named at the session start, and the model can't write the file.",
-      "claude_code": "lib/config.js allowlists; the settings guard protects .zeroh.env",
+      "description": "A project .zeroh.env may set banner, on-screen display and vault retention, shorten receipt retention, request personal-data masking on or set uncertain block. Project uncertain block overrides user pass; project ZEROH_MASK_PII=on does not override user off. Other keys are ignored and named at SessionStart; the model cannot write the file.",
+      "claude_code": "packages/zeroh-disclosure-core/config.js allowlists; the settings guard protects .zeroh.env",
       "evidence": [
-        "lib/config.js",
-        "lib/settings-guard.js",
-        "test/hooks.test.mjs",
-        "test/config-uncertain.test.mjs",
-        "test/receipt-retention.test.mjs",
-        "test/settings-guard.test.mjs"
+        "packages/zeroh-disclosure-core/config.js",
+        "packages/shell-analysis/settings-guard.js",
+        "test/host/hooks.test.mjs",
+        "test/zeroh-disclosure-core/config-uncertain.test.mjs",
+        "test/zeroh-disclosure-core/receipt-retention.test.mjs",
+        "test/shell-analysis/settings-guard.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3090,14 +3104,14 @@
     {
       "id": "proxy.toggle",
       "area": "management",
-      "description": "`/zeroh-disclosure:proxy off` puts your own Claude Code setting back and stays off, also in new sessions, until `/zeroh-disclosure:proxy on`, and the session you typed it in keeps working through the retired proxy until you exit; `ZEROH_PROXY=off claude` skips the proxy for one session without changing any settings (typed secrets are then sent with a notice).",
+      "description": "/zeroh-disclosure:proxy off restores the saved setting and stays off until proxy on. The current session can keep its retired proxy until exit; if it still points at a proxy that cannot serve it, the prompt stops in both modes and gives restart guidance. ZEROH_PROXY=off skips routing for one session; typed secrets then follow pass/block mode.",
       "claude_code": "user-only slash command, choice recorded next to the settings file; `ZEROH_PROXY` environment",
       "evidence": [
-        "lib/proxy-manager.js",
+        "packages/local-proxy/proxy-manager.js",
         "commands/scripts/proxy-status.js",
-        "test/proxy-lifecycle.test.mjs",
-        "test/proxy-manager.test.mjs",
-        "test/hooks.test.mjs"
+        "test/local-proxy/proxy-lifecycle.test.mjs",
+        "test/local-proxy/proxy-manager.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3142,20 +3156,20 @@
     {
       "id": "doctor",
       "area": "management",
-      "description": "`/zeroh-disclosure:doctor` checks the proxy, its settings entry, the login item (and why the system refused it), the vaults, whether the plugin folder Claude Code runs matches its release and whether the public marketplace is still registered under its old name, and says what to do next; `--fix` is the one reset (it removes ZeroH's settings entry, retires this install's proxy so open sessions keep working, stops any other ZeroH proxy it finds and resets vaults that can't be read; it never deletes receipts, not even those ZeroH Disclosure 0.1 kept inside a project); `--report` prints a paste-safe summary with no values, keys, paths or user names.",
+      "description": "`/zeroh-disclosure:doctor` checks the proxy, its settings entry, the login item (and why the system refused it), the vaults, whether the plugin folder Claude Code runs matches its release and whether the public marketplace is still registered under its old name, and says what to do next; `--fix` is the one reset (it removes ZeroH's settings entry, retires this install's proxy so open sessions keep working, preserves other daemons whose control it cannot prove and resets vaults that can't be read; it never deletes receipts, not even those ZeroH Disclosure 0.1 kept inside a project); `--report` prints a paste-safe summary with no values, keys, paths or user names. It checks the public marketplace version without sending user data and reports when a newer version is available or the check is unavailable.",
       "claude_code": "slash command `!` block; user-only CLI `doctor --fix`; `doctor --report` rebuilt from the fixed report schema",
       "evidence": [
         "bin/zeroh-disclosure.mjs",
-        "lib/proxy-manager.js",
-        "lib/proxy-report.js",
-        "lib/vault.js",
-        "lib/plugin-integrity.js",
-        "test/proxy-recovery.test.mjs",
-        "test/vault-lifecycle.test.mjs",
-        "test/plugin-integrity.test.mjs",
+        "packages/local-proxy/proxy-manager.js",
+        "packages/local-proxy/proxy-report.js",
+        "packages/zeroh-disclosure-core/vault.js",
+        "packages/zeroh-disclosure-core/plugin-integrity.js",
+        "test/local-proxy/proxy-recovery.test.mjs",
+        "test/zeroh-disclosure-core/vault-lifecycle.test.mjs",
+        "test/zeroh-disclosure-core/plugin-integrity.test.mjs",
         "lib/first-run.js",
-        "test/marketplace-name.test.mjs",
-        "test/legacy-receipts.test.mjs"
+        "test/host/marketplace-name.test.mjs",
+        "test/zeroh-disclosure-core/legacy-receipts.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3201,11 +3215,11 @@
       "description": "Detected values leave the vault after 7 days without use by default (`session`, `7d` or `30d`); values from your .env and credential files stay while they are there, and reported misses never age out. `vault status` shows counts and ages, never values; `vault clear --yes` removes every stored value of the project now.",
       "claude_code": "retention applied at SessionStart and SessionEnd; CLI `vault status|clear` (clear is user-only)",
       "evidence": [
-        "lib/vault.js",
+        "packages/zeroh-disclosure-core/vault.js",
         "hooks/session-end.js",
         "bin/zeroh-disclosure.mjs",
-        "test/vault.test.mjs",
-        "test/vault-lifecycle.test.mjs"
+        "test/zeroh-disclosure-core/vault.test.mjs",
+        "test/zeroh-disclosure-core/vault-lifecycle.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3252,13 +3266,13 @@
       "description": "Values live in one encrypted vault per project (AES-256-GCM) in ZeroH's own folder, readable only by you and never in your projects; a damaged or newer vault is never silently replaced. When the vault can't be opened, ZeroH says so once with the fix and passes content unmasked with a line, never leaving tokens it can't restore (`uncertain block` withholds instead).",
       "claude_code": "vault/<project hash>.json with vault.key beside it in ZEROH_HOME (0600, Windows ACL); every hook and the proxy name the fix",
       "evidence": [
-        "lib/vault.js",
-        "lib/private-fs.js",
+        "packages/zeroh-disclosure-core/vault.js",
+        "packages/zeroh-disclosure-core/private-fs.js",
         "hooks/post-tool-use.js",
-        "test/secrets.test.mjs",
-        "test/vault-lifecycle.test.mjs",
-        "test/rc2-last-stops.test.mjs",
-        "test/fail-closed.test.mjs"
+        "test/shell-analysis/secrets.test.mjs",
+        "test/zeroh-disclosure-core/vault-lifecycle.test.mjs",
+        "test/zeroh-disclosure-core/mask-safety.test.mjs",
+        "test/host/fail-closed.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3297,14 +3311,14 @@
       "description": "`/zeroh-disclosure:uninstall` removes the plugin, the proxy's settings entry, login item and runtime copy, the status line and ZeroH's folder (vault, keys, settings, allow rules, grants) in one step (typing the user-only command is the confirmation; `--dry-run` only shows what it would do). It keeps the signed receipts, value-free, with the public keys that verify them, in a folder of their own (`~/ZeroH Receipts`, `%LOCALAPPDATA%\\ZeroH Receipts` on Windows); `--delete-receipts` removes them too. Receipts ZeroH Disclosure 0.1 kept inside a project (`<project>/.zeroh`) are never deleted: their public part is copied there too, and a folder that also holds that version's private keys or typed values is left in place, with the command that deletes it. The plugin is removed last. The session you ran it in keeps working until you exit: the proxy is retired, not stopped, passes it through unmasked, and every hook stands down.",
       "claude_code": "user-only slash command and CLI",
       "evidence": [
-        "lib/plugin-removal.js",
-        "test/uninstall.test.mjs",
-        "test/watchdog.test.mjs",
-        "test/proxy-lifecycle.test.mjs",
-        "test/statusline.test.mjs",
-        "lib/receipt-keep.js",
-        "test/receipt-keep.test.mjs",
-        "test/legacy-receipts.test.mjs"
+        "packages/zeroh-disclosure-core/plugin-removal.js",
+        "test/zeroh-disclosure-core/uninstall.test.mjs",
+        "test/host/watchdog.test.mjs",
+        "test/local-proxy/proxy-lifecycle.test.mjs",
+        "test/host/statusline.test.mjs",
+        "packages/zeroh-disclosure-core/receipt-keep.js",
+        "test/zeroh-disclosure-core/receipt-keep.test.mjs",
+        "test/zeroh-disclosure-core/legacy-receipts.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3350,10 +3364,10 @@
       "description": "Works on macOS: Bash by default, Claude Code's PowerShell tool with PowerShell 7, the proxy started by a LaunchAgent, and the clipboard copy through pbcopy.",
       "claude_code": "launchd LaunchAgent (bootstrap/bootout); case-insensitive path checks",
       "evidence": [
-        "lib/service-manager.js",
+        "packages/local-proxy/service-manager.js",
         "lib/clipboard.js",
-        "test/service-manager.test.mjs",
-        "test/settings-guard.test.mjs"
+        "test/local-proxy/service-manager.test.mjs",
+        "test/shell-analysis/settings-guard.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3395,9 +3409,9 @@
       "description": "Works on Linux: the proxy starts from a systemd user unit or, in a desktop session, an XDG autostart entry; over SSH, in WSL or in a container there is no login item, so the proxy runs only while Claude Code does and ZeroH says why and how to fix it.",
       "claude_code": "systemd --user unit or XDG autostart; wl-copy, xclip or xsel for the clipboard copy",
       "evidence": [
-        "lib/service-manager.js",
+        "packages/local-proxy/service-manager.js",
         "lib/clipboard.js",
-        "test/service-manager.test.mjs"
+        "test/local-proxy/service-manager.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3436,17 +3450,17 @@
     {
       "id": "platform.windows",
       "area": "platforms",
-      "description": "Works on Windows through Git Bash or Claude Code's PowerShell tool, with ZeroH's folder in %LOCALAPPDATA%\\ZeroH limited to your account and the proxy started at logon without a console window.",
+      "description": "Windows works through Git Bash and PowerShell 5.1/7, with state in %LOCALAPPDATA%\\ZeroH and a per-user login task. Folder permissions get one bounded best-effort attempt; unconfirmed permissions show a notice without refusing content. Node 26 can rarely lose a hook call to a V8 crash, with no check or notice in either mode; use Node 22 LTS.",
       "claude_code": "per-user scheduled task (task XML in UTF-16 with a byte order mark, as schtasks requires) via conhost.exe --headless; user-only ACL on ZEROH_HOME; clip.exe from System32; forward-slash values paths for Git Bash",
       "evidence": [
-        "lib/service-manager.js",
-        "lib/private-fs.js",
-        "lib/late-bind.js",
-        "test/service-manager.test.mjs",
-        "test/vault-lifecycle.test.mjs",
-        "test/late-bind.test.mjs",
-        "test/windows-retest.test.mjs",
-        "test/windows-real.test.mjs"
+        "packages/local-proxy/service-manager.js",
+        "packages/zeroh-disclosure-core/private-fs.js",
+        "packages/shell-analysis/late-bind.js",
+        "test/local-proxy/service-manager.test.mjs",
+        "test/zeroh-disclosure-core/vault-lifecycle.test.mjs",
+        "test/shell-analysis/late-bind.test.mjs",
+        "test/host/platform-regressions.test.mjs",
+        "test/shell-analysis/windows-real.test.mjs"
       ],
       "platforms": {
         "claude-code": {
@@ -3496,11 +3510,11 @@
       "description": "Claude Code's PowerShell tool gets the same output masking, destination checks and settings guard as Bash, in PowerShell 7 and Windows PowerShell 5.1.",
       "claude_code": "PowerShell scanner and exit-status wrapper",
       "evidence": [
-        "lib/exit-status.js",
-        "lib/shell-destinations.js",
-        "test/fail-closed.test.mjs",
-        "test/late-bind-differential.test.mjs",
-        "test/hooks.test.mjs"
+        "packages/shell-analysis/exit-status.js",
+        "packages/shell-analysis/shell-destinations.js",
+        "test/host/fail-closed.test.mjs",
+        "test/shell-analysis/late-bind-differential.test.mjs",
+        "test/host/hooks.test.mjs"
       ],
       "platforms": {
         "claude-code": {

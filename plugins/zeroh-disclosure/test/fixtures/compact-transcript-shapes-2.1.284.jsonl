@@ -1,0 +1,4 @@
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-10-02T10:00:00.000Z","compactMetadata":{"trigger":"auto"}}
+{"type":"user","timestamp":"2026-10-02T10:00:00.100Z","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"shape-only"}}
+{"type":"assistant","timestamp":"2026-10-02T10:00:00.200Z","message":{"role":"assistant","content":[{"type":"text","text":"shape-only"}]}}
+{"type":"user","timestamp":"2026-10-02T10:00:00.300Z","isSidechain":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"shape-only","content":"shape-only"}]},"toolUseResult":{"status":"shape-only"}}

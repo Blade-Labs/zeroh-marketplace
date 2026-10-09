@@ -1,5 +1,104 @@
 # Changelog
 
+## 1.1.0
+
+### What's new
+
+- **Detection understands more of the text around a value.** Passwords in configuration, curl credentials and connection strings are covered more consistently. Provider rules include the upstream exceptions and reviewed local additions; values learned from context keep that scope.
+- **Gateway tokens stay masked.** Existing gateway `<TYPE_N>` tokens are left unchanged. Signed receipts and turn summaries use version 2 and identify the token formats; older receipts still verify. Receipts use a common local-file writer, ready for a later relay.
+- **The status line is on by default on Linux, macOS and Windows.** It keeps your own line and its last good output, respects off/replaced choices, and restores your original settings on removal. During compaction it says `compacting`; old sessions get restart guidance. A real compaction transcript and some live platform checks remain pending.
+- **Presentation is separate from protection.** Claude can use `zeroh-disclosure style` or edit `presentation.json` to change appearance. SessionStart currently briefs Claude to edit that file directly. Only you can change protection; status-line on/off is also yours, without a confirmation code.
+- **Status messages share protection-state wording and fixes.** The banner, status line, doctor, Stop and `/status` use the same model. `/status` does not currently report a closed vault as Paused; the status line can.
+- **Routing follows the saved settings.** A process-environment URL is routed only when it is Anthropic's default endpoint. Put a gateway in user `settings.json` `env` to route it; an environment gateway stays overridden, with a notice that typed prompts are not masked. Upgrades repair upstreams previously taken from a session environment. Not-protected prompt notices name every kind sent.
+- **Settings saves and removal are more reliable.** Concurrent Claude Code saves are preserved, symlinked settings stay symlinks, and interrupted removal has retry or `removal incomplete` guidance. Typed management replies say what was done without a model turn. If the removal process dies before local cleanup begins, protection resumes with a retry notice. After local cleanup has begun, ZeroH reports removal incomplete and the user finishes the removal.
+- **Updates are visible.** Doctor checks the public version without sending user data. Random-value suggestions use the user notice path. Idle orphaned proxies drain active routed sessions; unchanged receipt verification is reused. The release-watch and six-platform/Node test workflows are integrated; scheduled operation on the default branch remains a release check.
+- **Windows support includes PowerShell 5.1 and 7.** Values are imported from a short-lived CSV file with `Import-Csv`. Startup, child-process and timeout handling were hardened; folder-permission and Node 26 limitations are listed below. Hook timeout fallback returns the configured answer; a separate hard exit one second later terminates a stuck loader.
+- **The Stop line names an allowed send:** `real value allowed to <host>`. It distinguishes a value restored for an allowed destination from a value the model received unmasked.
+- **The plugin is organised into smaller packages and component tests.** Hook, command and skill entry points stay compatible. The destination test corpus measures the existing analyzer; the replacement engine and strict mode are planned for 1.1.1.
+
+Features: ~token.format, ~receipt.signed, ~doctor, ~detect.typed-random, ~receipt.stop-line, ~report-miss, ~hooks.watchdog, ~banner.session-start, ~statusline, ~statusline.style, ~cmd.status, ~proxy.lifecycle, ~proxy.upstream, ~pass.uncertain-notice, ~mgmt.user-authority, ~uninstall.clean, ~detect.keys-gitleaks, ~detect.secrets-context, ~detect.known-values, ~runtime.node, ~mask.documents, ~mask.prompt, ~mask.prompt-hook, ~detect.pii-33, ~restore.scope, ~settings.user-config, ~settings.repo-tighten-only, ~platform.windows, ~proxy.toggle (see [docs/features.md](docs/features.md))
+
+### Not checked in this release
+
+ZeroH 1.1.0 keeps the destination checks from 1.0.5: 112 safe-command stops and 8 missed protections. Fixes are planned for 1.1.1 (task 44.9).
+
+The following are inherited limitations, accepted for 1.1.0 by owner ruling 1 on 2026-10-05 for the 112 safe-command stops and 8 missed protections. The 16 missing warnings are separately triaged below. An allow rule permits that value to reach the named host in later calls too: use the stop's actual name/token and only a destination you intend to trust. All names and domains in this table are examples, not real credentials.
+
+| Safe-command kind (112 measured cases, including quoting variants) | Why it can stop                                                                                           | Allow command for the example; replace `NAME` and the host with the ones shown by your stop                                                                                                                                                                                                     |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SSH `-o SendEnv=…` and `-oSendEnv=…` (44)                          | A variable name is treated as data sent to the SSH host.                                                  | `/zeroh-disclosure:allow NAME host.example.com`                                                                                                                                                                                                                                                 |
+| OpenSSL `s_client -pass pass:… -connect …` (23)                    | A password used to unlock a local key is treated as sent to the TLS host.                                 | `/zeroh-disclosure:allow NAME smtp.example.com`                                                                                                                                                                                                                                                 |
+| `dig -y` TSIG signing keys (6)                                     | A local signing key is mistaken for a destination; the DNS server and query name can also be stopped.     | `/zeroh-disclosure:allow NAME 203.0.113.1` and `/zeroh-disclosure:allow NAME example.com` allow the real destinations, but **cannot clear the invented key-shaped host**: `/allow` rejects it. Use `dig -k <local-key-file>` instead; there is no valid allow command for that last false stop. |
+| `nslookup -srchlist=…` (5)                                         | The search-list value is checked even where the installed client rejects that option.                     | **No valid allow command:** the stopped host contains the secret itself, which `/allow` rejects (and must not store). Leave the secret out of DNS names; most `nslookup` builds reject `-srchlist` anyway.                                                                                      |
+| `resolvectl query --search=yes …` (5)                              | The supplied query name is treated as a destination before search behavior is understood.                 | **No valid allow command:** the stopped host contains the secret itself, which `/allow` rejects. Do not put a secret in a DNS query name.                                                                                                                                                       |
+| PowerShell Git `-chttp.extraheader=…` (6)                          | PowerShell splits a dotted attached option; ZeroH stops it before Git can reject the malformed arguments. | `/zeroh-disclosure:allow NAME git.example.com` gets past ZeroH; Git can still reject the command.                                                                                                                                                                                               |
+| Curl with a token only in a shell comment (3)                      | Comment text is treated as data sent to the URL.                                                          | `/zeroh-disclosure:allow NAME api.example.com` (or `a.example.com` in the joined-option example)                                                                                                                                                                                                |
+| Curl abbreviated `--data-b` (20)                                   | The allowed target is combined with an invented target from the value.                                    | **No valid allow command** for the invented target (it is the secret itself). Write the option in full, `--data-binary`, which ZeroH reads correctly.                                                                                                                                           |
+
+The 8 missed protections are curl redirects to another host (5 shell cases: the second host is not checked or warned about), extraction by `tar -xf … -C .claude/` into protected settings (2 Bash/zsh cases), and the recorded MySQL `-pPASSWORD` command (1 case: its database host is missed). These can run without the expected protection or notice. Check redirects and database targets yourself, and do not let archive extraction replace Claude Code or ZeroH settings. Task 44.9 in 1.1.1 covers all three kinds.
+
+The destination gate also records this limitations notice (the notice is in these notes, not emitted by every command):
+
+ZeroH Disclosure 1.1.0 uses the shipped 1.0 destination analyzer. Known limitations: 112 false stops, 8 missed protections and 16 notice gaps. Review sensitive destinations before running commands. Fixes are scheduled for 1.1.1, task 44.9.
+
+**The 16 missing warnings.** Each named case below is deferred under the release rule because it adds no new false stop, broken command or regression; it is a pre-existing check that runs without the expected warning. These release-note notices are the disclosure for 1.1.0, not a claim that the command now prints them. The unchanged baseline records ruling 1 as provenance; that ruling did not cover these 16 warnings. Each case is assigned to 1.1.1 task 44.9, which inventories its case id.
+
+- 43-bash-FINDINGS3: Bash: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.1 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.1, task 44.9.
+
+- 43-bash-curl-default-config: Bash: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.1, task 44.9.
+
+- 43-zsh-FINDINGS3: zsh: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.1 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.1, task 44.9.
+
+- 43-zsh-curl-default-config: zsh: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.1, task 44.9.
+
+- 43-pwsh-FINDINGS3: PowerShell 7: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.1 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.1, task 44.9.
+
+- 43-pwsh-curl-default-config: PowerShell 7: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.1, task 44.9.
+
+- 43-powershell-FINDINGS3: Windows PowerShell 5.1: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.1 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.1, task 44.9.
+
+- 43-powershell-curl-default-config: Windows PowerShell 5.1: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.1, task 44.9.
+
+- 43-cmd-FINDINGS3: cmd: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.1 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.1, task 44.9.
+
+- 43-cmd-curl-default-config: cmd: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.1, task 44.9.
+
+- 43-pwsh-reference-suffix: PowerShell 7: $STRIPE_KEY_SUFFIX is a different variable from $STRIPE_KEY. Deferral reason: an existing missed variable warning, with no new stop or command change; correct variable boundaries need the 1.1.1 parser. Notice: A secret loaded inside a PowerShell command through a suffixed variable may go unchecked without a warning. ZeroH 1.1.0 does not reliably track that variable; review its destination yourself. Next release: 1.1.1, task 44.9.
+
+- 43-pwsh-reference-boundary: PowerShell 7: ${STRIPE_KEY}_SUFFIX builds a value at run time. Deferral reason: an existing missed interpolation warning, with no new stop or command change; interpolation handling belongs in the 1.1.1 parser. Notice: A secret joined to other text inside a PowerShell command may go unchecked without a warning. ZeroH 1.1.0 does not reliably track the joined value; review its destination yourself. Next release: 1.1.1, task 44.9.
+
+- 43-powershell-reference-suffix: Windows PowerShell 5.1: $STRIPE_KEY_SUFFIX is a different variable from $STRIPE_KEY. Deferral reason: an existing missed variable warning, with no new stop or command change; correct variable boundaries need the 1.1.1 parser. Notice: A secret loaded inside a PowerShell command through a suffixed variable may go unchecked without a warning. ZeroH 1.1.0 does not reliably track that variable; review its destination yourself. Next release: 1.1.1, task 44.9.
+
+- 43-powershell-reference-boundary: Windows PowerShell 5.1: ${STRIPE_KEY}_SUFFIX builds a value at run time. Deferral reason: an existing missed interpolation warning, with no new stop or command change; interpolation handling belongs in the 1.1.1 parser. Notice: A secret joined to other text inside a PowerShell command may go unchecked without a warning. ZeroH 1.1.0 does not reliably track the joined value; review its destination yourself. Next release: 1.1.1, task 44.9.
+
+- 43-spike-03: Bash: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.1 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.1, task 44.9.
+
+- 43-spike-33: Bash: a heredoc inside command substitution builds the curl payload. Deferral reason: an existing missing dynamic-value warning in a recorded analysis seed, with no new stop or command change; the 1.1.1 parser must track the construct. Notice: A value built by a heredoc inside command substitution may be sent without ZeroH checking it or showing a warning. Review that command and destination yourself. Next release: 1.1.1, task 44.9.
+
+- **Windows folder permissions (ruling 10, 2026-10-06):** one bounded best-effort permission attempt. If it fails or times out, private writes and protection continue as in 1.0, with `storage folder permissions not confirmed`; no content refusal is added. This is not a guarantee that other programs running as you cannot read the folder. The owner plans to put it outside the model sandbox.
+- **Node 26 on Windows (ruling 11, 2026-10-06):** the WIN11 probe (run 37506456677) observed 14 abnormal exits in 6,000 hook calls, about 0.2%, including a V8 failure. Such an event has no check, masking or notice, and block mode cannot apply. **Use Node 22 LTS on Windows.** See [Windows limitations](docs/windows-storage.md#known-limitation-node-26-on-windows).
+- **Four block-mode exceptions:** when the uncertain mode itself cannot be read (a broken install, or an unreadable user `config.env`), hooks answer as in pass mode; images and scanned PDFs pass unmasked with an unknown-format notice; a proxy request whose vault cannot be saved sends new values unmasked and reports them at Stop (already saved values stay masked); Node older than 20 steps aside in both modes and warns once at SessionStart. Block mode does not make these checks available.
+- **Commands without secrets or protected paths:** an unparseable command runs unchecked without a notice in both modes. Parsing notices are not a promise to parse every command.
+- **Unreadable project settings:** PreToolUse can refuse in block mode when the user's own settings establish that mode; prompt and output hooks continue with defaults. A block setting only in an unreadable project file cannot take effect.
+- **Receipts stay local files.** The receipt core relay is not built. Miss reports also stay on this computer; no Blade Labs intake service is built.
+- **Typed-value suggestion:** the notice path is built, but whether the user sees the suggestion on a live screen is not checked yet.
+- **One shared token format:** recognising gateway tokens does not make them restorable by Disclosure. A common format and cross-restore wait for the gateway owners in 1.1.x (phase 58).
+- **Documentation-looking passwords (ruling 9, 2026-10-06):** the inherited exemptions apply only to URL passwords and wholly unquoted `-u user:<placeholder>` credentials. A real password shaped like a documentation placeholder can be missed there; elsewhere it is masked.
+- **Live evidence:** the real compaction transcript, macOS/Windows owner checks and desktop label remain pending. Local tests and routing captures do not replace the complete live release matrix.
+
+### Dots
+
+Headless Dots get the plugin's file/output protection, gateway-token recognition and local signed receipts. **Typed prompts stay unmasked while AF2 puts `ANTHROPIC_BASE_URL` in the process environment.** AF2 ticket **M2.2** must move the gateway URL into user `settings.json` `env`, preserving ZeroH's routing and status-line keys.
+
+The **receipt core relay is not built**; receipts stay local. A future relay must hand the unchanged receipt to the AF2 core for wrapping and signing.
+
+Both routing checks were **verified on 2026-10-05**, recorded in the 1.1 arc by commit **a7ce0fd52**, with real Claude Code **2.1.282**, isolated homes, fake values and a local capture server:
+
+- A plain-HTTP loopback upstream on a different port was accepted without triggering `isProxyLoop`. The proxy probed it, forwarded requests, and the fake typed token arrived masked, including on the first run.
+- `claude -p --input-format stream-json` sent `x-claude-code-session-id`, matching its session id; `--resume` kept the resumed id. The header also reached the fake gateway through the proxy.
+
+These checks did not exercise a real AF2 Docker box, its egress proxy or credential insertion, macOS/Windows, or an answering model.
+
 ## 1.0.5
 
 Features: ~statusline, ~uninstall.clean (see [docs/features.md](docs/features.md))
@@ -734,7 +833,7 @@ Linux and Windows.
   is detected is unchanged.
 - **Report a miss.** `/zeroh-disclosure:report-miss` takes a value ZeroH did not mask through a
   private dialog, masks it from then on and keeps a shape-only report on your machine. Sending
-  reports to Blade Labs comes in 1.1.
+  reports to Blade Labs is planned for later. Release 1.1 has no intake service.
 
 ### Receipts
 

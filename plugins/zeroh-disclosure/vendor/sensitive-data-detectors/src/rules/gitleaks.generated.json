@@ -12,6 +12,68 @@
     "imported": 221,
     "skipped": 1
   },
+  "globalAllowlist": {
+    "description": "global allow lists",
+    "regexTarget": "secret",
+    "regexes": [
+      {
+        "regex": "^(?:[tT][rR][uU][eE]|[fF][aA][lL][sS][eE]|[nN][uU][lL][lL])$",
+        "flags": "g"
+      },
+      {
+        "regex": "^(?:[aA]+|[bB]+|[cC]+|[dD]+|[eE]+|[fF]+|[gG]+|[hH]+|[iI]+|[jJ]+|[kK]+|[lL]+|[mM]+|[nN]+|[oO]+|[pP]+|[qQ]+|[rR]+|[sS]+|[tT]+|[uU]+|[vV]+|[wW]+|[xX]+|[yY]+|[zZ]+|\\*+|\\.+)$",
+        "flags": "g"
+      },
+      {
+        "regex": "^\\$(?:\\d+|{\\d+})$",
+        "flags": "g"
+      },
+      {
+        "regex": "^\\$(?:[A-Z_]+|[a-z_]+)$",
+        "flags": "g"
+      },
+      {
+        "regex": "^\\${(?:[A-Z_]+|[a-z_]+)}$",
+        "flags": "g"
+      },
+      {
+        "regex": "^\\{\\{(?=[ \\t]*[\\w ().|])(?![ \\t]*[\\w().|][\\w ().|]*\\t[ \\t]*[\\w().|])[\\w \\t().|]+}}$",
+        "flags": "g"
+      },
+      {
+        "regex": "^\\$\\{\\{[ \\t]*(?:env|github|secrets|vars)\\.[A-Za-z]\\w(?![\\w \"'&./=|]*\\t[ \\t]*[\\w\"'&./=|])[\\w \\t\"'&./=|]*}}$",
+        "flags": "g"
+      },
+      {
+        "regex": "^%(?:[A-Z_]+|[a-z_]+)%$",
+        "flags": "g"
+      },
+      {
+        "regex": "^%[+\\-# 0]?[bcdeEfFgGoOpqstTUvxX]$",
+        "flags": "g"
+      },
+      {
+        "regex": "^\\{\\d{0,2}}$",
+        "flags": "g"
+      },
+      {
+        "regex": "^@(?:[A-Z_]+|[a-z_]+)@$",
+        "flags": "g"
+      },
+      {
+        "regex": "^/Users/[A-Za-z0-9]+/[\\w .-/]+$",
+        "flags": "g"
+      },
+      {
+        "regex": "^/(?:bin|etc|home|opt|tmp|usr|var)/[\\w ./-]+$",
+        "flags": "g"
+      }
+    ],
+    "stopwords": [
+      "014df517-39d1-4453-b7b3-9930c563627c",
+      "abcdefghijklmnopqrstuvwxyz"
+    ]
+  },
   "rules": [
     {
       "id": "1password-secret-key",

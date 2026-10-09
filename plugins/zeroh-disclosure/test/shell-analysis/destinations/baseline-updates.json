@@ -1,0 +1,10 @@
+[
+  {
+    "explicit": true,
+    "date": "2026-10-05",
+    "rulingReference": "owner ruling 2026-10-05, ruling 1",
+    "reason": "Phase 43 round 3 review (review-43c-opus.md, finding 3) and the owner ruling of 2026-10-05: pin exact command text with SHA-256; preserve all 136 accepted baseline rows and classifications.",
+    "beforeHash": "17a40e1c5ec6ba95b600d434d33f58c75fe500b411660bc6a325131c04a25503",
+    "afterHash": "5ea3c1376c53f875d4d87ee6cdc91c2e57b7c9a5dadf2cb60d27afa6af31f849"
+  }
+]

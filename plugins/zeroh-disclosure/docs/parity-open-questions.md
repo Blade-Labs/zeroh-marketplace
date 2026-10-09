@@ -96,4 +96,6 @@ remove the question here.
 
 1. **Does the user see the typed-value suggestion?** (`detect.typed-random`) Type a random-looking
    fake value that matches no rule. The hook puts the `/zeroh-disclosure:report-miss` suggestion in
-   `additionalContext`, which goes to the model; check whether anything reaches the screen.
+   `additionalContext`, which goes to the model. Phase 54 also emits the same value-free suggestion
+   in `systemMessage`, the user notice path (hook contract tested offline). A live screen check
+   with the actual Claude Code version remains pending; no model call was made in this phase.

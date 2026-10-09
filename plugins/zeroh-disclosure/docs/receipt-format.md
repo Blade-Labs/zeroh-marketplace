@@ -43,7 +43,7 @@ next receipt links to.
 | `sanitized_content_may_be_sent_to_ai_provider`                                 | `false` when the prompt was stopped                                                                                               |
 | `raw_content_seen_by_zeroh_saas`                                               | Always `false`: no Blade Labs service sees your content                                                                           |
 | `unmask_receipt_extension`                                                     | Present when the receipt carries the local record of values shown under an unmask grant                                           |
-| `turn_summary_extension`                                                       | `zeroh-turn-summary/v1` (1.0.0 and later): the turn's summary signed at `Stop` is required; see below                             |
+| `turn_summary_extension`                                                       | `zeroh-turn-summary/v2` in 1.1.0 (`v1` in historical 1.0.x receipts): the turn's summary signed at `Stop` is required; see below  |
 
 Hashes use SHA-256 in base64url. Policy, boundary and engine hashes are taken over canonical JSON
 with sorted keys.
@@ -181,3 +181,80 @@ Check it with `zeroh-disclosure verify --bundle <file>`.
 
 Verification is local and makes no network call. On failure, `verify` prints `ok: false` and the
 name of every failed check.
+
+## Self-describing receipts and token-spec version (1.1)
+
+New signed prompt receipts use `schema: zeroh-disclosure-receipt/v2`,
+`schema_id: zeroh-disclosure-receipt`, `schema_version: 2`, the session's
+`signing_key_id`, and `vct: https://zeroh.io/vct/disclosure-receipt/v2`.
+The signed `token_spec_version` is an object with:
+
+- `version: zeroh-disclosure-token-spec/2`;
+- `zeroh: { family: zeroh-1.x, pattern_version: 1 }`;
+- `gateway: { family: privacy-gateway, pattern_version: 2 }`.
+
+The version describes recognition, not shared minting. ZeroH still mints its
+1.x square-bracket placeholders and restores existing transcripts and vaults.
+Gateway recognition retains the version 2 shape
+`<[A-Z][A-Z0-9_]*_(?:[0-9a-f]{16}|[0-9a-f]{32}|[0-9a-f]{64})>`,
+derived from `privacy-gateway-core/src/services/token-derivation.service.ts` and
+its caller `privacy-gateway-postgres/src/stores.ts`: an uppercase label
+followed by lowercase HMAC-SHA256 hex of exactly 16, 32 or 64 characters.
+Recognition additionally requires a known entity or credential type from
+`GATEWAY_TOKEN_LABELS` in `sensitive-data-detectors/src/masked-tokens.js`;
+an arbitrary uppercase label is not a placeholder. Unknown labels are scanned
+separately so their trailing underscore cannot hide concrete personal data.
+Recognition is case sensitive. Known values (including encoded variants) are
+always masked, even inside a gateway-shaped span. Detector findings wholly
+inside a recognized span are ignored; overlapping findings retain fragments
+outside it only when they contain a letter or digit. A credential whose
+password is wholly masked adds no credential finding. Historical token-spec version 1 remains verifiable as signed. Other angle-bracket text receives ordinary detection. Gateway
+placeholders remain unchanged and never count as ZeroH values or ask its vault
+for restoration. Phase 58 owns shared vocabulary and gateway adoption.
+
+New turn summaries use `schema: zeroh-turn-summary/v2`,
+`schema_id: zeroh-turn-summary`, `schema_version: 2`, and `signing_key_id`; their
+signed `summary` adds `token_spec_version` to the frozen v1 count fields. The
+summary's schema and metadata must match its prompt receipt. Verifiers dispatch
+by schema and continue accepting v1 summaries and historical 1.0 prompt
+receipts (which already used a `/v2` label without numeric `schema_version`).
+New v2 metadata and every summary field are signed; changing a field fails
+verification. A future recognition change needs a new token-spec pattern
+version, not a rewrite of evidence already signed.
+
+## Receipt sink and the AF2 core relay contract
+
+Every receipt writer uses the sink in
+`packages/zeroh-disclosure-core/receipt-sink.js`. Its synchronous interface is
+`write({ kind, path, bytes })`: an existing local destination and the exact serialized
+bytes. Writers serialize once. `writeReceiptJson` keeps the existing indented
+JSON plus trailing newline; `writeReceiptBytes` passes bytes unchanged.
+`withReceiptSink(sink, operation)` injects a sink for one operation and its async
+children. The default and only shipped sink, `localFileReceiptSink`, writes
+the same files, at the same paths, with the same bytes and private permissions.
+The seam includes turn ledgers, bundles, receipt HTML, Stop verification
+attestations, unmask ledger updates, exports and kept receipt copies.
+Session state and local signing-key persistence stay outside receipt transport.
+
+For a future **core relay** sink in a Dot, the box hands the **unchanged
+Disclosure receipt (the signed v2 bytes)** to the AF2 core. The core wraps it
+as the evidence of an **Audit runtime-decision record** and signs that record
+with the **tenant key**. The box never rewrites a receipt into Audit's schema
+and never holds the tenant key. The local signature and receipt hashes remain
+verifiable after transport. Relay delivery, retries, intake and Audit wrapping
+are later Dots work; no relay sink is built in 1.1.0.
+
+Each sink write carries an artifact `kind`: `receipt` for receipt evidence,
+`receipt-html` for the local receipt preview, `report-export` for report
+JSON or HTML exports, `pending-ledger` for unfinished turn ledgers and tool
+ledgers, and `keep-folder` for uninstall copies, README, manifest and public
+keys. Pending ledgers may carry `local_private.hmacKeyBytes` and must remain
+local, even when they already include a signed prompt receipt. Only finalized
+signed receipts (including bundles and signed verification attestations) are
+kind `receipt`. A relay sends only these finalized signed receipt bytes to the
+AF2 core; it never sends pending ledgers or keep-folder files. HTML previews and report exports may include personal-data previews
+and must remain local. The default local sink writes the same paths and bytes
+for every kind; this classification changes no local files. A future relay
+must filter by kind and hand the unchanged signed receipt bytes to the core,
+which wraps and signs the Audit record with its tenant key. The box never
+rewrites the receipt or holds that tenant key.

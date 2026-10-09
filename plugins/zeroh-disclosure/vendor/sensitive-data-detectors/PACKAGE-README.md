@@ -60,12 +60,12 @@ Node.js 20 or later.
 
 ### Options
 
-| Option         | Default    | Meaning                                                                                                                                                                           |
-| -------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `profile`      | `'prompt'` | `prompt`: secrets and personal data, for text a person writes. `tool`: the same without national-format phone numbers, for tool output. `secrets`: secrets only.                  |
-| `region`       | locale     | Default region for national-format phone numbers (`prompt` only): a two-letter region, `null` for none, or omitted for the locale's territory (`LC_ALL`, `LC_TELEPHONE`, `LANG`). |
-| `enabledTypes` | all        | Only these types.                                                                                                                                                                 |
-| `ignore`       | none       | `[start, end)` spans no finding may overlap, or a function `(text) => spans`. A consumer passes its own placeholders here so it never detects them again.                         |
+| Option         | Default    | Meaning                                                                                                                                                                                                            |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `profile`      | `'prompt'` | `prompt`: secrets and personal data, for text a person writes. `tool`: the same without national-format phone numbers, for tool output. `secrets`: secrets only.                                                   |
+| `region`       | locale     | Default region for national-format phone numbers (`prompt` only): a two-letter region, `null` for none, or omitted for the locale's territory (`LC_ALL`, `LC_TELEPHONE`, `LANG`).                                  |
+| `enabledTypes` | all        | Only these types.                                                                                                                                                                                                  |
+| `ignore`       | none       | `[start, end)` placeholder spans, or a function `(text) => spans`. Findings wholly inside are ignored; partial overlaps are clipped to every outside part. Entropy candidates are skipped only when wholly inside. |
 
 International phone numbers (`+44 …`) are found with any region.
 
@@ -98,7 +98,10 @@ International phone numbers (`+44 …`) are found with any region.
 - **Private keys** (PEM, OpenSSH, PuTTY, age), `Authorization` headers, credentials in URLs and
   connection strings, signed-URL signatures, OTP seeds and password hashes. A value after
   `Password=` is a value, a plain word in a sentence too: syntax cannot tell a word from a
-  password, and a missed password leaks.
+  password, and a missed password leaks. **Known limitation:** an unquoted value after a
+  secret-named key stops at `, ; ) { }`, so `DB_PASSWORD=hunter2,x9!` masks only `hunter2` and
+  `DB_PASSWORD=p4ss,w0rd!` masks nothing. Quoted values are masked whole. Whole-value reading
+  of assignments, by the format the text comes from, is planned for 1.1.
 - **References are values.** Whether `$VAR`, `${VAR:-x}`, `$env:VAR`, `%VAR%`, `{{ x }}` or
   `${{ secrets.X }}` is expanded depends on which interpreter reads the text, which a detector
   cannot know; each exemption tried before 1.0.0 let a literal password through somewhere. So
@@ -231,3 +234,13 @@ flowchart LR
 - **Planned**: the Enterprise privacy gateway as a local first pass before Presidio (the
   gateway is in the restricted privacy-services boundary and needs its owners), ai-ui-chat,
   and the Codex and OpenCode plugins.
+
+Detection can take `{channel, context}` in addition to a profile. Channels are
+`shell`, `config`, `code` and `prose`; context names the interpreter/language,
+or supplies `{language, shell, interpolation, mixed}`. Known context may only add
+findings: the engine unions unknown-context and context-aware detection, merging
+overlaps to the covering span. A reference masked without context stays masked
+with a known interpreter. Omitted/mixed contexts keep conservative detection. Plain-word
+config passwords stay detected. Local gitleaks adaptations and gap provenance
+are in `src/rules/GITLEAKS_OVERLAY.json`; global secret regexes and stopwords
+come from the pinned upstream catalogue, without its path exemptions.

@@ -39,7 +39,7 @@ import {
   ensurePrivateDir,
   writePrivateFile,
   zerohHome,
-} from './private-fs.js';
+} from '../packages/zeroh-disclosure-core/private-fs.js';
 
 // The longest token: `[` + a type name + `-` + 6 hex digits + `]`. Type names
 // are short (PHONE_NUMBER, CARD_NUMBER); 40 leaves room.

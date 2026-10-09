@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: AGPL-3.0-only
 // /zeroh-disclosure:settings (T-37): the settings a user changes from inside
-// Claude Code, each passed to the CLI: banner <mode>, receipts keep <period>,
-// uncertain <pass|block>, statusline <on|off>, vault status and vault clear
-// --yes. Nothing else
-// runs from here. Without arguments it shows the current values. A change
-// only records the request here; the user's own typed command applies it
-// (lib/user-authority.js).
+// Claude Code. Presentation changes run here immediately; user-only changes
+// record a request that the user's own typed command applies.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readBannerMode } from '../../lib/banner.js';
-import { loadConfig, uncertainMode } from '../../lib/config.js';
-import { retentionLine } from '../../lib/receipt-retention.js';
+import {
+  loadConfig,
+  uncertainMode,
+} from '../../packages/zeroh-disclosure-core/config.js';
+import { retentionLine } from '../../packages/zeroh-disclosure-core/receipt-retention.js';
 import { resolveClaudeSettingsPath } from '../../lib/claude-settings.js';
 import { statuslineState } from '../../lib/statusline-settings.js';
 import { commandRoot } from './_helpers.js';
@@ -48,7 +47,13 @@ if (!ALLOWED.has(args[0])) {
   );
   process.exit(0);
 }
-const result = spawnSync(process.execPath, [CLI, ...args, '--cwd', root], {
+const cliArgs =
+  args[0] === 'banner'
+    ? ['style', 'banner', ...args.slice(1)]
+    : args[0] === 'statusline' && args[1] === 'style'
+      ? ['style', ...(args.length === 2 ? ['show'] : args.slice(2))]
+      : args;
+const result = spawnSync(process.execPath, [CLI, ...cliArgs, '--cwd', root], {
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe'],
 });

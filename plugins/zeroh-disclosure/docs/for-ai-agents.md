@@ -11,7 +11,14 @@ follow it:
 - Never mask what we can't restore: a token must have a vault entry ZeroH can put back. When the
   vault can't be opened, pass the value unmasked with a "not protected" line; never emit a token
   from a throwaway or in-memory vault.
-- A new denial reason must be added to `test/deny-inventory.test.mjs` with a justification.
+- A new denial reason must be added to `test/host/deny-inventory.test.mjs` with a justification.
+- Presentation is the exception to rule 3. Use `zeroh-disclosure style <key> <value>` for status
+  line fields, labels, wording, colour, position, output formats and verbosity, and `style banner
+<big|compact|mini|off>` for the banner. `style show` reports the validated result. Direct edits
+  of `presentation.json` remain allowed for compatibility, but do not edit other ZeroH state.
+- Never turn the status line on or off: that writes Claude Code's `statusLine` setting and remains
+  user-only, although a terminal user is not asked for a confirmation code. Protection changes
+  remain user-only and confirmed. See the canonical [settings classification](architecture.md#model-versus-user-settings).
 - A user-visible change updates [features.json](features.json) (then
   `node scripts/features.mjs --write` for [features.md](features.md)), and the CHANGELOG section's
   `Features:` line names the IDs it adds or changes. The release pipeline refuses a stale list.

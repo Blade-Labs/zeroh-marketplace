@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { fileDetectionOptions } from '../../packages/zeroh-disclosure-core/detection-context.js';
+
 // Ordinary source code that names keys, tokens, passwords and secrets without
 // holding any. Written for these tests in the shapes a sample of 6,000 files
 // from installed npm packages and the Python standard library showed the
@@ -9,6 +11,12 @@
 // may be masked, rewritten or denied.
 
 export const NORMAL_CODE = {
+  'review/flow-map.yaml': 'api_token: {source: environment}',
+  'review/flow-schema.yaml': 'token: {type: string,description: ordinary}',
+  'review/flow-sequence.yaml': 'api_token: [read, write]',
+  'review/flow-compact-sequence.yaml': 'token: [read,write]',
+  'review/permissions.properties': 'token=read,write',
+  'review/permissions.ini': '[permissions]\ntoken=read,write',
   'src/env.ts': `import Stripe from 'stripe';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -159,3 +167,24 @@ func connect(cfg Config) error {
 - Clone with \`git clone git@github.com:acme/shop-api.git\`.
 `,
 };
+
+// Clean-reference fixtures supply the renderer contract explicitly. A .j2
+// filename alone cannot prove the interpolation of both template and env text.
+// Unknown Read templates retain the pre-phase-52 detector policy.
+export function normalCodeSegments(name, content) {
+  if (name !== 'templates/config.j2')
+    return [[content, fileDetectionOptions(name)]];
+  return content
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => [
+      line,
+      {
+        channel: 'config',
+        context: {
+          language: 'yaml',
+          interpolation: line.includes('${') ? 'dotenv' : 'jinja',
+        },
+      },
+    ]);
+}

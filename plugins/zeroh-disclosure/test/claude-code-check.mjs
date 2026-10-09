@@ -2,8 +2,8 @@
 
 // Claude Code's own Bash "too-complex" check, transcribed for tests: a
 // restored command must pass it, or Claude Code refuses it (Windows re-test,
-// finding 5). Used by test/claude-code-shell-check.test.mjs,
-// test/windows-retest.test.mjs and test/windows-real.test.mjs.
+// finding 5). Used by test/shell-analysis/claude-code-shell-check.test.mjs,
+// test/host/platform-regressions.test.mjs and test/shell-analysis/windows-real.test.mjs.
 // Claude Code's Bash check, copied from the compiled `claude` executable of
 // Claude Code 2.1.283 (~/.local/share/claude/versions/2.1.283, module that
 // starts `var he=1e4,He=new Set(["export","declare",...`), function iAe:

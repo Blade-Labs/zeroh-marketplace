@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  advanceStatuslineRestore,
+  pruneStatuslineRestore,
+} from './statusline-record.js';
 // What ZeroH turns on in the user's Claude Code settings by itself (owner
 // decision D-26, 2026-09-27), so the install prompt stays two commands:
 //
@@ -29,16 +33,30 @@ import {
   resolveClaudeSettingsPath,
   writeSettingsFile,
 } from './claude-settings.js';
-import { readJsonOr, writePrivateJson } from './private-fs.js';
+import {
+  readJsonOr,
+  writePrivateJson,
+} from '../packages/zeroh-disclosure-core/private-fs.js';
 import {
   choiceFor,
   currentEntry,
   isOurStatusLine,
   isOutdated,
   recordChoice,
+  recordStatuslineWrite,
+  readRecord,
   recordedPluginRoot,
+  showsZeroH,
   statuslineEntry,
+  wrapEntry,
+  writeRecord,
 } from './statusline-settings.js';
+import {
+  PUBLIC_MARKETPLACE_NAME,
+  PUBLIC_MARKETPLACE_REPO,
+  PUBLIC_PLUGIN_ID,
+  STALE_MARKETPLACE_COMPATIBILITY_REMOVE_IN,
+} from '../packages/zeroh-disclosure-core/product.js';
 
 export const FIRST_RUN_FILE = 'first-run.json';
 
@@ -52,31 +70,44 @@ export function removeFirstRunMarketplace({
   const record = readJsonOr(path.join(path.resolve(home), FIRST_RUN_FILE));
   const added = record?.installs?.[installId(settingsPath)]?.autoUpdate;
   if (added?.decision !== 'on' || !added.marketplace) return false;
-  const { document } = readSettings(settingsPath);
-  const markets = document.extraKnownMarketplaces;
-  const entry = markets?.[added.marketplace];
-  const source = added.source ?? knownSource(added.marketplace, env);
-  if (!source || !isDeepStrictEqual(entry, { source, autoUpdate: true })) {
-    return false;
-  }
-  // Records written before 1.0.4 (by 1.0.2 and 1.0.3) do not say whether
-  // ZeroH created the entry or added autoUpdate to the user's own, so only
-  // the entry ZeroH is known to have created goes; otherwise only autoUpdate.
-  if (added.created !== true) {
-    delete entry.autoUpdate;
-  } else {
-    delete markets[added.marketplace];
-    if (!Object.keys(markets).length) delete document.extraKnownMarketplaces;
-  }
-  writeSettingsFile(settingsPath, `${JSON.stringify(document, null, 2)}\n`);
-  return added.created === true ? 'entry' : 'autoUpdate';
+  let outcome = false;
+  let before = null;
+  const write = writeSettingsFile(settingsPath, (document, context) => {
+    before = { exists: context.exists, raw: context.raw };
+    const markets = document.extraKnownMarketplaces;
+    const entry = markets?.[added.marketplace];
+    const source = added.source ?? knownSource(added.marketplace, env);
+    if (!source || !isDeepStrictEqual(entry, { source, autoUpdate: true })) {
+      outcome = false;
+      return false;
+    }
+    // Records written before 1.0.4 do not say whether ZeroH created the
+    // entry, so only the autoUpdate key is known to be ours.
+    if (added.created !== true) {
+      delete entry.autoUpdate;
+      outcome = 'autoUpdate';
+    } else {
+      delete markets[added.marketplace];
+      if (!Object.keys(markets).length) delete document.extraKnownMarketplaces;
+      outcome = 'entry';
+    }
+    return true;
+  });
+  if (write.written)
+    advanceStatuslineRestore(home, settingsPath, before, {
+      exists: true,
+      raw: `${JSON.stringify(write.document, null, 2)}\n`,
+    });
+  return outcome;
 }
 
 export const FIRST_RUN_LINES = Object.freeze({
   statuslineOn:
     'Status line on · /zeroh-disclosure:settings statusline off to remove',
   statuslineTheirs:
-    'You have your own status line · /zeroh-disclosure:settings statusline on adds ZeroH to it',
+    "Added ZeroH's part on its own line under your status line · /zeroh-disclosure:settings statusline off to undo",
+  statuslineUnsupported:
+    "Your status line isn't a command ZeroH can add to, so it was left unchanged",
   autoUpdate: (name) =>
     `Auto-update on for the ${name} marketplace · turn it off in /plugin, Marketplaces`,
   replaced:
@@ -147,13 +178,16 @@ function knownSource(name, env) {
 
 // ZeroH's public marketplace. Until 25 September 2026 its manifest was named
 // `zeroh-marketplace`; a profile that added it then keeps it registered
-// under that name, so `zeroh-disclosure@zeroh` is "not found in marketplace
+// under that name, so the public plugin id is "not found in marketplace
 // zeroh" and Claude Code's hint names the wrong marketplace (Windows re-test,
 // finding 9). Only a GitHub source for this repository counts: a local
 // directory or another repository with the same name is a different
 // marketplace and is left alone.
-export const PUBLIC_MARKETPLACE_REPO = 'Blade-Labs/zeroh-marketplace';
-export const PUBLIC_MARKETPLACE_NAME = 'zeroh';
+export {
+  PUBLIC_MARKETPLACE_NAME,
+  PUBLIC_MARKETPLACE_REPO,
+  STALE_MARKETPLACE_COMPATIBILITY_REMOVE_IN,
+};
 
 function isPublicMarketplaceSource(source) {
   if (!source || typeof source !== 'object') return false;
@@ -188,7 +222,7 @@ export function staleMarketplaceName(env = process.env) {
 }
 
 export function staleMarketplaceText(name) {
-  return `Claude Code has ZeroH's public marketplace (GitHub ${PUBLIC_MARKETPLACE_REPO}) registered under its old name "${name}", so zeroh-disclosure@zeroh is not found and updates may stop. In a terminal, run: claude plugin marketplace remove ${name}, then claude plugin marketplace add ${PUBLIC_MARKETPLACE_REPO} and claude plugin install zeroh-disclosure@zeroh; then restart Claude Code.`;
+  return `Claude Code has ZeroH's public marketplace (GitHub ${PUBLIC_MARKETPLACE_REPO}) registered under its old name "${name}", so ${PUBLIC_PLUGIN_ID} is not found and updates may stop. In a terminal, run: claude plugin marketplace remove ${name}, then claude plugin marketplace add ${PUBLIC_MARKETPLACE_REPO} and claude plugin install ${PUBLIC_PLUGIN_ID}; then restart Claude Code.`;
 }
 
 // The status line part. Mutates `document`; returns { changed, line,
@@ -208,8 +242,23 @@ function statuslineDefault({ document, settingsPath, home }) {
     return { changed: false, line: null, choice: record };
   }
   if (has) {
-    if (choice === 'theirs')
-      return { changed: false, line: null, choice: null };
+    const wrappable =
+      entry &&
+      typeof entry === 'object' &&
+      !Array.isArray(entry) &&
+      (entry.type === undefined || entry.type === 'command') &&
+      typeof entry.command === 'string' &&
+      entry.command.trim() !== '' &&
+      !showsZeroH(entry);
+    if (wrappable && (choice === null || choice === 'theirs')) {
+      document.statusLine = wrapEntry(entry);
+      return {
+        changed: true,
+        line: FIRST_RUN_LINES.statuslineTheirs,
+        choice: 'on',
+        wrapped: entry,
+      };
+    }
     // Told once: their own status line from the start, or one that replaced
     // ZeroH's (the user's choice; ZeroH doesn't put its own back).
     return {
@@ -219,8 +268,8 @@ function statuslineDefault({ document, settingsPath, home }) {
           ? FIRST_RUN_LINES.replaced
           : choice
             ? null
-            : FIRST_RUN_LINES.statuslineTheirs,
-      choice: 'theirs',
+            : FIRST_RUN_LINES.statuslineUnsupported,
+      choice: choice === 'on' ? 'replaced' : choice === null ? 'theirs' : null,
     };
   }
   if (choice === 'on') {
@@ -230,6 +279,42 @@ function statuslineDefault({ document, settingsPath, home }) {
   if (choice) return { changed: false, line: null, choice: null };
   document.statusLine = statuslineEntry();
   return { changed: true, line: FIRST_RUN_LINES.statuslineOn, choice: 'on' };
+}
+
+function marketplaceDefault({ document, name, fallbackSource, at }) {
+  const markets =
+    document.extraKnownMarketplaces &&
+    typeof document.extraKnownMarketplaces === 'object' &&
+    !Array.isArray(document.extraKnownMarketplaces)
+      ? document.extraKnownMarketplaces
+      : null;
+  const entry = markets?.[name];
+  if (entry && Object.hasOwn(entry, 'autoUpdate')) {
+    return { changed: false, decision: { decision: 'user', at }, line: null };
+  }
+  const source = entry?.source ?? fallbackSource;
+  if (!source) {
+    return {
+      changed: false,
+      decision: { decision: 'no-source', at },
+      line: null,
+    };
+  }
+  document.extraKnownMarketplaces = {
+    ...(markets ?? {}),
+    [name]: { ...(entry ?? {}), source, autoUpdate: true },
+  };
+  return {
+    changed: true,
+    decision: {
+      decision: 'on',
+      marketplace: name,
+      source,
+      created: !entry,
+      at,
+    },
+    line: FIRST_RUN_LINES.autoUpdate(name),
+  };
 }
 
 // Decisions are recorded only after the settings file that carries them is
@@ -243,6 +328,7 @@ export function applyFirstRunDefaults({
   env = process.env,
   settingsPath = resolveClaudeSettingsPath({ env }),
   now = new Date(),
+  settingsWriteOptions = {},
 } = {}) {
   const lines = [];
   try {
@@ -257,48 +343,75 @@ export function applyFirstRunDefaults({
     const decided = { ...(installs[id] ?? {}) };
     let decidedChanged = false;
 
-    const { document } = readSettings(settingsPath);
-    let changed = false;
     const at = now.toISOString();
-
-    const statusline = statuslineDefault({ document, settingsPath, home });
-    changed ||= statusline.changed;
-    if (statusline.line) lines.push(statusline.line);
-
-    if (!decided.autoUpdate) {
-      const name = pluginRoot ? marketplaceOf(pluginRoot, env) : null;
-      if (name) {
-        const markets =
-          document.extraKnownMarketplaces &&
-          typeof document.extraKnownMarketplaces === 'object' &&
-          !Array.isArray(document.extraKnownMarketplaces)
-            ? document.extraKnownMarketplaces
-            : null;
-        const entry = markets?.[name];
-        if (entry && Object.hasOwn(entry, 'autoUpdate')) {
-          decided.autoUpdate = { decision: 'user', at };
-        } else {
-          const source = entry?.source ?? knownSource(name, env);
-          if (!source) {
-            decided.autoUpdate = { decision: 'no-source', at };
-          } else {
-            document.extraKnownMarketplaces = {
-              ...(markets ?? {}),
-              [name]: { ...(entry ?? {}), source, autoUpdate: true },
-            };
-            changed = true;
-            decided.autoUpdate = {
-              decision: 'on',
-              marketplace: name,
-              source,
-              created: !entry,
-              at,
-            };
-            lines.push(FIRST_RUN_LINES.autoUpdate(name));
-          }
-        }
-        decidedChanged = true;
-      }
+    const name =
+      !decided.autoUpdate && pluginRoot ? marketplaceOf(pluginRoot, env) : null;
+    const fallbackSource = name ? knownSource(name, env) : null;
+    let marketplace = null;
+    let marketplaceWrite = null;
+    let marketplaceBefore = null;
+    if (name) {
+      marketplaceWrite = writeSettingsFile(
+        settingsPath,
+        (document, context) => {
+          marketplaceBefore = { exists: context.exists, raw: context.raw };
+          marketplace = marketplaceDefault({
+            document,
+            name,
+            fallbackSource,
+            at,
+          });
+          return marketplace.changed;
+        },
+        settingsWriteOptions,
+      );
+    }
+    let statusline = null;
+    let before = null;
+    let restoreEligible = false;
+    pruneStatuslineRestore(home, settingsPath);
+    const write = writeSettingsFile(
+      settingsPath,
+      (document, context) => {
+        before = { exists: context.exists, raw: context.raw };
+        restoreEligible =
+          !Object.hasOwn(document, 'statusLine') ||
+          !isOurStatusLine(document.statusLine);
+        statusline = statuslineDefault({
+          document,
+          settingsPath,
+          home,
+        });
+        return statusline.changed;
+      },
+      settingsWriteOptions,
+    );
+    if (statusline?.line) lines.push(statusline.line);
+    if (statusline?.choice) {
+      recordChoice(home, settingsPath, statusline.choice);
+    }
+    if (statusline?.changed && before && restoreEligible && write.written) {
+      const marketplaceAfter = marketplaceWrite?.written
+        ? `${JSON.stringify(marketplaceWrite.document, null, 2)}\n`
+        : null;
+      const original =
+        marketplaceAfter !== null && before.raw === marketplaceAfter
+          ? marketplaceBefore
+          : before;
+      recordStatuslineWrite(home, settingsPath, original, {
+        exists: true,
+        raw: `${JSON.stringify(write.document, null, 2)}\n`,
+      });
+    }
+    if (statusline?.wrapped) {
+      const record = readRecord(home);
+      record.wrapped[path.resolve(settingsPath)] = statusline.wrapped;
+      writeRecord(home, record);
+    }
+    if (marketplace) {
+      decided.autoUpdate = marketplace.decision;
+      if (marketplace.line) lines.push(marketplace.line);
+      decidedChanged = true;
     }
 
     // Said once per settings file; doctor says it every time.
@@ -309,10 +422,6 @@ export function applyFirstRunDefaults({
       decidedChanged = true;
     }
 
-    if (changed) {
-      writeSettingsFile(settingsPath, `${JSON.stringify(document, null, 2)}\n`);
-    }
-    if (statusline.choice) recordChoice(home, settingsPath, statusline.choice);
     if (decidedChanged) {
       installs[id] = decided;
       writePrivateJson(file, { v: 1, installs });

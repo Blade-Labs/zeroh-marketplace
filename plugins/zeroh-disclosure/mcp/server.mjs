@@ -6,6 +6,11 @@
 // reduces exposure (it never creates or extends a grant). Nothing here makes
 // a network call.
 import readline from 'node:readline';
+import { readFileSync } from 'node:fs';
+
+const pluginVersion = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version;
 import {
   DURATION_OPTIONS,
   PERSONAL_DATA_TYPES,
@@ -21,12 +26,19 @@ import {
   isSecretType,
   normaliseKind,
   unmaskDialog,
-} from '../lib/unmask.js';
-import { reportMiss, validateMissInput } from '../lib/report-miss.js';
-import { envSessionId, projectRootFromEnv } from '../lib/session.js';
+} from '../packages/zeroh-disclosure-core/unmask.js';
+import {
+  reportMiss,
+  validateMissInput,
+} from '../packages/zeroh-disclosure-core/report-miss.js';
+import {
+  envSessionId,
+  projectRootFromEnv,
+} from '../packages/zeroh-disclosure-core/session.js';
+import { maskedAgainLine } from '../packages/zeroh-disclosure-core/protection-state.js';
 
 const USER_FORM_MESSAGE =
-  'Type the value ZeroH missed into this private form. Submit masks it from now on and keeps a local note of its shape (never the value); Cancel changes nothing. Reports stay on this computer.';
+  'Type the value ZeroH missed into this private form. Submit masks it from now on and keeps a local note of its shape (never the value); Cancel changes nothing. Reports stay on this computer. Sending miss reports to Blade Labs is planned for later.';
 
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 const content = (text) => ({ content: [{ type: 'text', text }] });
@@ -71,7 +83,7 @@ async function handle(message) {
       result: {
         protocolVersion: message.params?.protocolVersion,
         capabilities: { tools: {} },
-        serverInfo: { name: 'zeroh-disclosure', version: '1.0.0' },
+        serverInfo: { name: 'zeroh-disclosure', version: pluginVersion },
       },
     });
     return;
@@ -235,7 +247,7 @@ async function collectMissInput(input) {
 // Masking more is restorable and the note holds no value, so a report
 // needs no second question (1.0.1): the value is masked and the note kept.
 // When Claude reports a value on its own, the PostToolUse hook tells the
-// user in one line (lib/report-miss.js modelReportNotice).
+// user in one line (packages/zeroh-disclosure-core/report-miss.js modelReportNotice).
 async function reportMissedSecret(input) {
   // A slot is reserved before any dialog so a looping or injected caller
   // cannot keep opening forms, or race past the limit, once it is spent.
@@ -364,7 +376,7 @@ function endUnmask({ kind }) {
   }
   const kinds = [...new Set(ended.map((grant) => grant.kind))];
   return content(
-    `${kinds.join(', ')} masked again: the unmask ended. ${grantEndedNote(kinds)}`,
+    `${maskedAgainLine(kinds.join(', '))} ${grantEndedNote(kinds)}`,
   );
 }
 

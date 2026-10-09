@@ -35,3 +35,14 @@ sensitive-data-detectors
 
   Each upstream's own licence text is kept next to it under
   vendor/sensitive-data-detectors/vendor/.
+
+sslip.io and nip.io destination semantic test sources
+  test/shell-analysis/destinations/vendor includes pinned upstream source and
+  test fixtures from sslip.io (https://github.com/cunnie/sslip.io, commit
+  a754dfb9ac25e3efc34253302074c0a145c8f6a1) and nip.io
+  (https://github.com/exentriquesolutions/nip.io, commit
+  541ddad4aa8fc7e669baf28fd5899fbe001a2925). Both are Apache-2.0.
+  Copyright and licence terms are preserved in the source files and in
+  test/shell-analysis/destinations/vendor/sslip/LICENSE and
+  test/shell-analysis/destinations/vendor/nip/LICENSE.txt. File hashes and
+  upstream URLs are recorded in that directory's SOURCE.json.

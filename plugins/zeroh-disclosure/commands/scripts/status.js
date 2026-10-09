@@ -8,36 +8,55 @@ import {
   renderBanner,
   warningLines,
 } from '../../lib/banner.js';
-import { scanSessionContext } from '../../lib/context-scan.js';
-import { retentionLine } from '../../lib/receipt-retention.js';
+import { scanSessionContext } from '../../packages/zeroh-disclosure-core/context-scan.js';
+import { retentionLine } from '../../packages/zeroh-disclosure-core/receipt-retention.js';
 import { projectDir, proxyState } from '../../lib/hook-io.js';
-import { loadKnownSecrets } from '../../lib/secrets.js';
-import { proxyRuntimeStatus } from '../../lib/proxy-manager.js';
-import { loadConfig, uncertainMode } from '../../lib/config.js';
+import { loadKnownSecrets } from '../../packages/shell-analysis/secrets.js';
+import { proxyRuntimeStatus } from '../../packages/local-proxy/proxy-manager.js';
+import {
+  loadConfig,
+  uncertainMode,
+} from '../../packages/zeroh-disclosure-core/config.js';
 import { commandSessionId } from './_helpers.js';
+import { sessionPredatesInstall } from '../../lib/statusline.js';
+import {
+  storageProtectionStatus,
+  STORAGE_PROTECTION_NOTICE,
+} from '../../packages/zeroh-disclosure-core/private-fs.js';
 
 const root = projectDir();
 // The user's settings (and a repository's shorter receipt retention).
 await loadConfig({ cwd: root });
 const known = loadKnownSecrets(root);
 const sessionId = commandSessionId();
-const proxy = await proxyState({ sessionId });
+const startedBeforeZeroH = sessionPredatesInstall({
+  root,
+  sessionId,
+  env: process.env,
+});
+const proxy = await proxyState({ sessionId, root });
 const unmask = await activeUnmaskStatus({ root, sessionId });
 const contextFindings = scanSessionContext({ cwd: root, known });
 const runtime = await proxyRuntimeStatus().catch(() => null);
 
+const storage = storageProtectionStatus();
 const extra = proxyStatusLines({
   proxy,
   runtime,
   uncertain: uncertainMode(),
 });
 
+if (storage) extra.push(`Storage protection: ${storage}.`);
+if (storage === 'not confirmed') extra.push(STORAGE_PROTECTION_NOTICE);
+
 process.stdout.write(
   `${renderBanner({
     mode: 'full',
+    paused: false,
     markShown: false,
     known,
     proxy,
+    startedBeforeZeroH,
     unmaskStatus: unmask.status,
     retention: retentionLine(),
     uncertain: uncertainMode(),

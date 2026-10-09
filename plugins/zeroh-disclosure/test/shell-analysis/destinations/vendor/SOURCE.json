@@ -1,0 +1,55 @@
+[
+  {
+    "name": "sslip",
+    "repository": "https://github.com/cunnie/sslip.io",
+    "commit": "a754dfb9ac25e3efc34253302074c0a145c8f6a1",
+    "files": [
+      {
+        "path": "sslip/xip/xip.go",
+        "url": "https://raw.githubusercontent.com/cunnie/sslip.io/a754dfb9ac25e3efc34253302074c0a145c8f6a1/xip/xip.go",
+        "sha256": "2598db0612ed44fb09db0cfd583c96723f3ef0eababf9c64c756af83ce221c62"
+      },
+      {
+        "path": "sslip/xip/xip_test.go",
+        "url": "https://raw.githubusercontent.com/cunnie/sslip.io/a754dfb9ac25e3efc34253302074c0a145c8f6a1/xip/xip_test.go",
+        "sha256": "29bbb90ec81a6e9d7e466c45999a914d75e933206c609a4ef2156a2581930015"
+      },
+      {
+        "path": "sslip/LICENSE",
+        "url": "https://raw.githubusercontent.com/cunnie/sslip.io/a754dfb9ac25e3efc34253302074c0a145c8f6a1/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "path": "sslip/go.mod",
+        "url": "https://raw.githubusercontent.com/cunnie/sslip.io/a754dfb9ac25e3efc34253302074c0a145c8f6a1/go.mod",
+        "sha256": "b01a3ee98f3bbe814ff43047f30791107b427c8f3228e57832815cc8972c1a0e"
+      }
+    ],
+    "license": "Apache-2.0",
+    "pinResolution": "Canonical GitHub commit metadata acquired before immutable source download; no program under test used internet."
+  },
+  {
+    "name": "nip",
+    "repository": "https://github.com/exentriquesolutions/nip.io",
+    "commit": "541ddad4aa8fc7e669baf28fd5899fbe001a2925",
+    "files": [
+      {
+        "path": "nip/nipio/backend.py",
+        "url": "https://raw.githubusercontent.com/exentriquesolutions/nip.io/541ddad4aa8fc7e669baf28fd5899fbe001a2925/nipio/backend.py",
+        "sha256": "96d317dce9e411c9d3b45a6dadfc3d7d340896a84dc5bdd48e3fa7b7fecb9253"
+      },
+      {
+        "path": "nip/nipio_tests/backend_test.py",
+        "url": "https://raw.githubusercontent.com/exentriquesolutions/nip.io/541ddad4aa8fc7e669baf28fd5899fbe001a2925/nipio_tests/backend_test.py",
+        "sha256": "36347ab5232095a1cad3b16131178d92836567d372050c921afab1544ef619b7"
+      },
+      {
+        "path": "nip/LICENSE.txt",
+        "url": "https://raw.githubusercontent.com/exentriquesolutions/nip.io/541ddad4aa8fc7e669baf28fd5899fbe001a2925/LICENSE.txt",
+        "sha256": "9f36284b631f97e2852979cfd109fb11b2f98b458a1afcf30d7e2c33e0263616"
+      }
+    ],
+    "license": "Apache-2.0",
+    "pinResolution": "Canonical GitHub commit metadata acquired before immutable source download; no program under test used internet."
+  }
+]

@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
+export {
+  AWK_PROGRAMS,
+  GIT_WRITE_SUBCOMMANDS,
+  INTERPRETER_OPTIONS,
+  RUNNER_OPTIONS,
+  awkProgram,
+  commandAssignments,
+  execCommand,
+  ghCommand,
+  gitCommand,
+  interpreterCode,
+  interpreterSpec,
+  localProgramReach,
+  opensslCommand,
+  optionWrites,
+  optionWritesInto,
+  readAwkProgram,
+  readCode,
+  readOptions,
+  readSedScript,
+  sedProgram,
+  uncHost,
+} from './programs/index.js';

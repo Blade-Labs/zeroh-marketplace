@@ -9,6 +9,13 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = path.join(ROOT, 'vendor', 'gitleaks', 'gitleaks-v8.30.1.toml');
 const OUTPUT = path.join(ROOT, 'src', 'rules', 'gitleaks.generated.json');
+const OVERLAY = JSON.parse(
+  readFileSync(
+    path.join(ROOT, 'src', 'rules', 'GITLEAKS_OVERLAY.json'),
+    'utf8',
+  ),
+);
+const OVERLAY_BY_ID = new Map(OVERLAY.rules.map((rule) => [rule.id, rule]));
 
 const SOURCE_METADATA = Object.freeze({
   project: 'gitleaks/gitleaks',
@@ -388,6 +395,12 @@ function translateSegment(
           throw new Error('unterminated named group');
         prefix = source.slice(index, nameEnd + 1);
         bodyStart = nameEnd + 1;
+      } else if (
+        source.startsWith('?=', bodyStart) ||
+        source.startsWith('?!', bodyStart)
+      ) {
+        prefix = '(' + source.slice(bodyStart, bodyStart + 2);
+        bodyStart += 2;
       } else if (source[bodyStart] === '?') {
         throw new Error('unsupported RE2 group construct');
       }
@@ -422,10 +435,34 @@ export function translateRe2(source) {
   return { regex: translated, flags: 'g' };
 }
 
+export function parseGlobalAllowlist(text) {
+  const marker = /^\[allowlist\]\s*$/mu.exec(text);
+  if (!marker) return {};
+  const body = text.slice(marker.index + marker[0].length).split(/^\[/mu)[0];
+  const { regexes = [], stopwords = [], description } = parseAssignments(body);
+  return { description, regexTarget: 'secret', regexes, stopwords };
+}
+
+// RE2 is linear; JavaScript backtracks. Preserve the upstream language while
+// grouping its boolean alternatives and eliminating overlapping repetitions.
+export function safeAllowlistRegex(regex) {
+  if (regex === '(?i)^true|false|null$') return '(?i)^(?:true|false|null)$';
+  if (regex === '^\\{\\{[ \\t]*[\\w ().|]+[ \\t]*}}$')
+    return '^\\{\\{(?=[ \\t]*[\\w ().|])(?![ \\t]*[\\w().|][\\w ().|]*\\t[ \\t]*[\\w().|])[\\w \\t().|]+}}$';
+  if (regex.startsWith('^\\$\\{\\{[ \\t]*'))
+    // All further dotted path components are already in the suffix alphabet.
+    // One required component plus a disjoint tab guard removes both sources
+    // of ambiguous backtracking without changing the upstream language.
+    return '^\\$\\{\\{[ \\t]*(?:env|github|secrets|vars)\\.[A-Za-z]\\w(?![\\w "\'&./=|]*\\t[ \\t]*[\\w"\'&./=|])[\\w \\t"\'&./=|]*}}$';
+  return regex;
+}
+
 function translateAllowlist(allowlist) {
   const translated = { ...allowlist };
   if (Array.isArray(allowlist.regexes)) {
-    translated.regexes = allowlist.regexes.map((regex) => translateRe2(regex));
+    translated.regexes = allowlist.regexes.map((regex) =>
+      translateRe2(safeAllowlistRegex(regex)),
+    );
   }
   return translated;
 }
@@ -553,6 +590,7 @@ export function generateCatalog(text = readFileSync(SOURCE, 'utf8')) {
       imported: rules.length,
       skipped: skipped.length,
     },
+    globalAllowlist: translateAllowlist(parseGlobalAllowlist(text)),
     rules,
     skipped,
   };
@@ -715,7 +753,7 @@ function sampleSequence(source, variant, offset = 0) {
     const count = quantifier.count;
     if (typeof atom === 'object') {
       const preferred =
-        'ZEROHFAKE0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+-=';
+        'ZEROHFAKE0123456789aZbYcXdWeVfUgThSiRjQkPlOmNnMoLpKqJrIsHtGuFvEwDxCyBzA_+-=';
       for (let repeat = 0; repeat < count; repeat += 1) {
         atomIndex += 1;
         const wanted =
@@ -809,8 +847,8 @@ export function secretOf(rule, match) {
     const index = unnamedGroups(rule.regex).find((i) => match[i]);
     if (index) secret = match[index];
   }
-  if (secret && rule.id === 'kubernetes-secret-yaml')
-    secret = secret.replace(/^[\w.-]+:(?:[ \t]*(?:\||>[-+]?)\s+)?[ \t]*/u, '');
+  const prefix = OVERLAY_BY_ID.get(rule.id)?.secretInside;
+  if (secret && prefix) secret = secret.replace(new RegExp(prefix, 'u'), '');
   if (secret && /^(["'`]).+\1$/su.test(secret)) secret = secret.slice(1, -1);
   return secret;
 }

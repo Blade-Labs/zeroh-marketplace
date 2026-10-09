@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux",
+  "shell": "zsh",
+  "executable": "zsh",
+  "node": "26.1.0",
+  "loadAverage": {
+    "start": [12.59, 16.06, 17.32],
+    "afterParser": [12.41, 15.91, 17.26],
+    "end": [7.6, 14.4, 16.71]
+  },
+  "hookOrder": "ABAB: no-adapter, adapter, repeated twenty times",
+  "corpusSha256": "ad0f8ceaa5d31a86e093308bd5256a6d44a746309c4483fc58468c4fcaa2bb28",
+  "corpusCount": 60,
+  "representativeCorpusIndex": 1,
+  "sampleCount": 20,
+  "cstIdentity": {
+    "count": 60,
+    "defaultSha256": "75bee70aa6f2aa73c4744805066cdecc5d8673f59db56294216472e174240036",
+    "liftoffSha256": "75bee70aa6f2aa73c4744805066cdecc5d8673f59db56294216472e174240036",
+    "identical": true
+  },
+  "statisticPendingOwnerConfirmation": "Ruling text: parser p50; memo: parser p95. Whole hook uses memo p95 pending confirmation.",
+  "adapterDeltaMs": {
+    "p50": 163.5596480000022,
+    "p95": 209.9731860000029
+  },
+  "measurementMethods": {
+    "noAdapterHook": "Same runner, Node, shell tool and representative curl command as wholeHook, with no parser preload.",
+    "parser": "Fresh Node process wall time, including runtime initialization, sixty ParseInput/CST parses, and transport/serialization; no destination policy.",
+    "runtimeLoad": "Dynamic runtime import plus Parser.init and Language.load inside each fresh process.",
+    "perCommand": "Sixty-command pass divided by sixty; warm commands inside each cold process.",
+    "sixtyCommandPass": "Sixty parse/token calls inside each fresh process; no command executes.",
+    "wholeHook": "Fresh Node process running hooks/run.js pre-tool-use; --import loads the adapter in the actual hook worker before PreToolUse."
+  },
+  "measures": {
+    "runtimeLoad": {
+      "count": 20,
+      "p50Ms": 41.958206,
+      "p95Ms": 62.96967600000001
+    },
+    "perCommand": {
+      "count": 20,
+      "p50Ms": 0.5281283833333336,
+      "p95Ms": 0.8686234500000002
+    },
+    "sixtyCommandPass": {
+      "count": 20,
+      "p50Ms": 31.687703000000013,
+      "p95Ms": 52.117407000000014
+    },
+    "parser": {
+      "count": 20,
+      "p50Ms": 357.5614959999998,
+      "p95Ms": 397.95162700000037
+    },
+    "wholeHook": {
+      "count": 20,
+      "p50Ms": 770.0555090000016,
+      "p95Ms": 878.8427200000006
+    },
+    "noAdapterHook": {
+      "count": 20,
+      "p50Ms": 606.4958609999994,
+      "p95Ms": 668.8695339999977
+    }
+  },
+  "gatesMs": {
+    "parser": 300,
+    "parserStatistic": "p50",
+    "wholeHookStatistic": "p95",
+    "wholeHookDelta": 150,
+    "wholeHook": 1000,
+    "hookDeadline": 8000
+  },
+  "verdict": {
+    "parserPassed": false,
+    "wholeHookPassed": false,
+    "adapterPassed": false,
+    "fallbackPassed": false,
+    "releasePassed": false,
+    "decision": "blocked-unverified-1.0-fallback"
+  },
+  "rawSamples": {
+    "parser": [
+      345.02124499999996, 335.52092799999997, 334.1822709999999,
+      388.8359730000002, 337.5286779999999, 356.76687300000003, 293.254817,
+      394.2053340000002, 380.5815240000002, 357.5614959999998,
+      350.2455530000002, 397.95162700000037, 359.0969070000001, 383.572623,
+      400.23501099999976, 397.5251070000004, 378.98931899999934,
+      363.85719900000004, 332.9608020000005, 334.0716339999999
+    ],
+    "runtimeLoad": [
+      55.360724, 31.421606999999995, 53.035513, 35.84525, 30.318820000000002,
+      30.589765999999997, 44.223564, 52.254717, 57.87196999999999,
+      62.96967600000001, 31.843619999999994, 60.237298, 58.219412,
+      63.235800999999995, 41.958206, 33.419116, 62.244988000000006, 34.432974,
+      29.195373000000004, 34.200742000000005
+    ],
+    "perCommand": [
+      0.5660980999999999, 0.8060307333333332, 0.7059675833333332,
+      0.4790199999999999, 0.48090508333333354, 0.73742925, 0.41173468333333335,
+      0.5503967333333333, 0.5281283833333336, 0.39436985000000013,
+      0.40937455000000017, 0.4257191333333334, 0.5241548333333335,
+      0.5336527166666668, 1.2099166666666668, 0.8686234500000002,
+      0.5316757833333337, 0.44791366666666665, 0.7311615333333332,
+      0.48870591666666646
+    ],
+    "sixtyCommandPass": [
+      33.965886, 48.36184399999999, 42.35805499999999, 28.741199999999992,
+      28.85430500000001, 44.245755, 24.704081000000002, 33.023804,
+      31.687703000000013, 23.662191000000007, 24.56247300000001,
+      25.543148000000002, 31.449290000000005, 32.019163000000006, 72.595,
+      52.117407000000014, 31.900547000000017, 26.87482, 43.86969199999999,
+      29.322354999999988
+    ],
+    "wholeHook": [
+      621.1688250000007, 782.6848759999993, 886.1828569999998,
+      765.5872500000005, 770.0555090000016, 779.1761449999995,
+      833.5819869999978, 750.5571879999989, 691.998521999998, 792.9593630000018,
+      757.8707420000028, 758.325278999997, 878.8427200000006, 713.160777000001,
+      852.7598870000002, 824.7397390000006, 813.8942349999998,
+      816.4625580000029, 745.5048519999982, 739.177079999994
+    ],
+    "noAdapterHook": [
+      589.5614710000009, 581.248012, 612.027521, 624.62068, 564.836233,
+      606.4958609999994, 588.1756919999989, 656.1382259999991, 612.230402000001,
+      575.2458640000004, 577.6945019999985, 599.6045610000001,
+      574.2020310000007, 626.9117849999966, 651.9267289999989,
+      660.0375349999995, 668.8695339999977, 682.8648319999993,
+      563.5230870000014, 662.6448080000046
+    ]
+  },
+  "passed": false,
+  "fallbackPassed": false
+}

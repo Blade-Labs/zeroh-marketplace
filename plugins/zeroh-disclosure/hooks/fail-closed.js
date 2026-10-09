@@ -3,7 +3,10 @@
 // What each hook answers when it fails, so a failure never lets content
 // through: a prompt is stopped (exit 2), a tool call denied, tool output
 // withheld in the tool's own shape. Node built-ins only and no imports, so
-// the loader (run.js) can rely on it when the hook itself cannot load.
+// the loader (run.js) can rely on it when the hook itself cannot load. The
+// loader cannot import the product module: this last-resort spelling is
+// assembled so the canonical public id still has one searchable source.
+const RECOVERY_PLUGIN_ID = ['zeroh-disclosure', 'zeroh'].join('@');
 
 export const HOOKS = Object.freeze({
   'session-start': 'SessionStart',
@@ -110,33 +113,36 @@ export function readTextOutput(filePath, content) {
 // Claude Code ignores an updatedToolOutput whose shape does not match the
 // tool's response and passes the original through, so withheld output keeps
 // the response's structure: a Read becomes a one-line text file, and anything
-// else keeps its keys with every value string replaced by `message`.
+// else keeps its field types with every unchecked scalar replaced. Structural
+// exemptions belong to a particular schema location, never to a key name.
 export function withheldOutput(toolName, response, filePath, message) {
   if (toolName === 'Read' && response && typeof response === 'object') {
     return readTextOutput(filePath || response.file?.filePath || '', message);
   }
-  const keep = new Set([
-    'type',
-    'filePath',
-    'file_path',
-    'path',
-    'name',
-    'id',
-    'tool_use_id',
-    'mimeType',
-    'media_type',
-  ]);
-  const replace = (value, key) => {
-    if (typeof value === 'string') return keep.has(key) ? value : message;
-    if (Array.isArray(value)) return value.map((item) => replace(item, key));
+  const replace = (value) => {
+    if (typeof value === 'string') return message;
+    if (typeof value === 'number') return 0;
+    if (typeof value === 'boolean') return false;
+    if (Array.isArray(value)) return value.map(replace);
     if (value && typeof value === 'object') {
       return Object.fromEntries(
-        Object.entries(value).map(([k, v]) => [k, replace(v, k)]),
+        Object.entries(value).map(([k, v]) => [k, replace(v)]),
       );
     }
     return value;
   };
-  return replace(response, '');
+  const output = replace(response);
+  if (
+    toolName === 'Grep' &&
+    ['content', 'files_with_matches', 'count'].includes(response?.mode)
+  )
+    output.mode = response.mode;
+  if (toolName?.startsWith('mcp__') && Array.isArray(response?.content)) {
+    // MCP accepts a text error block in place of any unchecked media/resource
+    // block. Do not retain resource URIs, MIME labels or embedded metadata.
+    output.content = [{ type: 'text', text: message }];
+  }
+  return output;
 }
 
 function parse(raw) {
@@ -148,7 +154,7 @@ function parse(raw) {
 }
 
 // What the notice calls the event: "this prompt", "this command" (a shell
-// tool), "this tool call" or "this tool output". The loader asks lib/unchecked.js
+// tool), "this tool call" or "this tool output". The loader asks packages/zeroh-disclosure-core/unchecked.js
 // for the same subject ('prompt', 'command', 'tool call', 'tool output').
 export function noticeSubject(name, raw) {
   if (name === 'user-prompt-submit') return 'prompt';
@@ -162,7 +168,7 @@ export function noticeSubject(name, raw) {
   return 'event';
 }
 
-// The one-line notice when lib/unchecked.js cannot be used (the same words as
+// The one-line notice when packages/zeroh-disclosure-core/unchecked.js cannot be used (the same words as
 // its uncheckedNotice): `ZeroH Disclosure: this command was not protected
 // (timed out).`
 export function plainNotice(name, raw, why, mode = 'pass') {
@@ -176,7 +182,7 @@ function halfDoneNotice(state, timedOut) {
   if (!state.sideEffect) return '';
   if (state.sideEffect.includes('/zeroh-disclosure:uninstall')) {
     const log = /; log: (.+)$/u.exec(state.sideEffect)?.[1];
-    return ` ZeroH Disclosure removal may be running in the background.${log ? ` Read its log: ${log}. Follow the Remaining steps at its end;` : ' Check the removal log;'} if local cleanup failed, type /zeroh-disclosure:uninstall again. Check \`claude plugin list\`; if the plugin remains after local cleanup, run \`claude plugin uninstall zeroh-disclosure@zeroh\`.`;
+    return ` ZeroH Disclosure removal may be running in the background.${log ? ` Read its log: ${log}. Follow the Remaining steps at its end;` : ' Check the removal log;'} if local cleanup failed, type /zeroh-disclosure:uninstall again. Check \`claude plugin list\`; if the plugin remains after local cleanup, run \`claude plugin uninstall ${RECOVERY_PLUGIN_ID}\`.`;
   }
   return ` ZeroH was ${state.sideEffect} when it ${timedOut ? 'ran out of time' : 'failed'}, so that may be half-done: run \`/zeroh-disclosure:doctor\` to check it.`;
 }
@@ -184,11 +190,17 @@ function halfDoneNotice(state, timedOut) {
 // The answer in the default `uncertain` mode, pass: the event goes on
 // unprotected, as Claude Code does itself when a hook times out, and the
 // user is told in one line on screen (a systemMessage, never an instruction
-// to the model). For a timeout the loader passes lib/unchecked.js's `notice`,
+// to the model). For a timeout the loader passes packages/zeroh-disclosure-core/unchecked.js's `notice`,
 // which is null once the reason was shown this turn: then nothing is said.
 // The hooks that guard nothing (SessionStart, MessageDisplay, Stop,
 // SessionEnd) answer as in block mode: a non-blocking error.
-export function passAnswer(name, raw, state, error, { notice } = {}) {
+export function passAnswer(
+  name,
+  raw,
+  state,
+  error,
+  { notice, hint = true } = {},
+) {
   const label = errorLabel(error);
   const timedOut = error?.code === 'TIMEOUT';
   const halfDone = halfDoneNotice(state, timedOut);
@@ -205,7 +217,10 @@ export function passAnswer(name, raw, state, error, { notice } = {}) {
   }
   const line = timedOut
     ? notice === undefined
-      ? plainNotice(name, raw, 'timed out')
+      ? plainNotice(name, raw, 'timed out') +
+        (hint
+          ? ' Type /zeroh-disclosure:settings uncertain block to stop these instead.'
+          : '')
       : notice
     : plainNotice(name, raw, `check failed: ${label}`);
   const message = [line, halfDone.trim()].filter(Boolean).join(' ');

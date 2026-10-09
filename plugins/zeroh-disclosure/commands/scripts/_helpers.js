@@ -3,14 +3,14 @@
 // Shared helpers for the slash-command scripts: the project root and session
 // id the hooks use.
 import path from 'node:path';
-import { loadConfig } from '../../lib/config.js';
+import { loadConfig } from '../../packages/zeroh-disclosure-core/config.js';
 import {
   envSessionId,
   listTurns,
   loadSession,
   projectRootFromEnv,
   readJson,
-} from '../../lib/session.js';
+} from '../../packages/zeroh-disclosure-core/session.js';
 
 // The project root the hooks use, so a command run from a subdirectory reads
 // the same sessions and vault.

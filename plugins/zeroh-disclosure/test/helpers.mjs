@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import assert from 'node:assert/strict';
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -18,8 +19,9 @@ import readline from 'node:readline';
 import { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { encodeProjectPath } from '../lib/session.js';
+import { encodeProjectPath } from '../packages/zeroh-disclosure-core/session.js';
 import { asUser } from './as-user.mjs';
+import { spawnHookSync } from './tools/hook-child.mjs';
 
 export const PLUGIN = fileURLToPath(new URL('..', import.meta.url));
 // Fake values only. Shaped like real ones so the detector sees them.
@@ -42,8 +44,8 @@ export const PROSE_FIXTURES = [
 // did not mint with its own key.
 // A file or folder only its owner can use. POSIX: exactly `mode` (0600 for a
 // file, 0700 for a folder). Windows has no POSIX modes; there ZeroH gives its
-// home an ACL for the signed-in user and SYSTEM only (lib/private-fs.js
-// protectZerohHome), which everything inside inherits, so no other account or
+// home an ACL for the signed-in user and SYSTEM only (packages/zeroh-disclosure-core/private-fs.js
+// prepareWindowsHome), which everything inside inherits, so no other account or
 // group (Administrators included) may appear. `home` is the ZEROH_HOME the
 // writer ran with; without it (an in-process write outside the process's
 // ZeroH home) Windows has nothing to check.
@@ -52,11 +54,9 @@ export function assertPrivate(target, mode, message = target, { home } = {}) {
     assert.equal(statSync(target).mode & 0o777, mode, message);
     return;
   }
-  if (!home) return;
-  assert.ok(
-    existsSync(path.join(home, '.acl-protected')),
-    `${message}: ZeroH did not protect its home ${home}`,
-  );
+  // Windows ACLs are best effort. Direct library writes do not run preflight.
+  // When loader preflight confirmed the home, still verify its actual ACL.
+  if (!home || !existsSync(path.join(home, '.acl-protected'))) return;
   const tool = (name) =>
     path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', name);
   const user = execFileSync(tool('whoami.exe'), { encoding: 'utf8' })
@@ -92,7 +92,7 @@ export async function vaultUnsaveable(project) {
     chmodSync(dir, 0o500);
     return () => chmodSync(dir, 0o700);
   }
-  const { Vault } = await import('../lib/vault.js');
+  const { Vault } = await import('../packages/zeroh-disclosure-core/vault.js');
   const vault = new Vault(project.dir, {
     env: { ...process.env, ZEROH_HOME: project.home },
   });
@@ -195,7 +195,6 @@ for (const key of [
   'CLAUDE_PROJECT_DIR',
   'CLAUDE_CODE_SESSION_ID',
   'CLAUDE_SESSION_ID',
-  'CLAUDE_CONFIG_DIR',
   'CLAUDE_CODE_PLUGIN_CACHE_DIR',
 ]) {
   delete process.env[key];
@@ -426,7 +425,7 @@ export async function withProxy(
   { sessionId = 'test', markSeen = true } = {},
 ) {
   const { ensureDefaultProxy, stopDefaultProxy } =
-    await import('../lib/proxy-manager.js');
+    await import('../packages/local-proxy/proxy-manager.js');
   const env = {
     PATH: process.env.PATH,
     HOME: project.home,
@@ -434,8 +433,21 @@ export async function withProxy(
     ZEROH_CREDENTIAL_HOME: project.home,
     ZEROH_CLAUDE_SETTINGS: project.settings,
     ZEROH_SERVICE_MANAGER_DIR: project.serviceManager,
-    ANTHROPIC_BASE_URL: 'http://127.0.0.1:9',
   };
+  let settings = {};
+  try {
+    settings = JSON.parse(readFileSync(project.settings, 'utf8'));
+  } catch {
+    // A fresh test project has no settings yet.
+  }
+  mkdirSync(path.dirname(project.settings), { recursive: true });
+  writeFileSync(
+    project.settings,
+    JSON.stringify({
+      ...settings,
+      env: { ...settings.env, ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' },
+    }),
+  );
   const installed = await ensureDefaultProxy({
     env,
     root: project.dir,
@@ -459,7 +471,8 @@ export async function withProxy(
 
 // Stops the proxy a hook of `project` started (for t.after).
 export async function stopProxyOf(project) {
-  const { stopDefaultProxy } = await import('../lib/proxy-manager.js');
+  const { stopDefaultProxy } =
+    await import('../packages/local-proxy/proxy-manager.js');
   return stopDefaultProxy({
     env: {
       PATH: process.env.PATH,
@@ -501,7 +514,7 @@ export function runHook(
   event,
   { project, extraEnv = {}, pluginDir = PLUGIN } = {},
 ) {
-  const res = spawnSync(
+  const res = spawnHookSync(
     process.execPath,
     [path.join(pluginDir, 'hooks', 'run.js'), name],
     {
@@ -509,7 +522,19 @@ export function runHook(
       encoding: 'utf8',
       env: {
         PATH: process.env.PATH,
+        TMPDIR: process.env.TMPDIR,
+        TMP: process.env.TMPDIR,
+        TEMP: process.env.TMPDIR,
+        CLAUDE_CONFIG_DIR: path.join(project.home, 'claude'),
+        ZEROH_CLAUDE_BIN: process.env.ZEROH_CLAUDE_BIN,
+        ZEROH_PUBLISHED_VERSION_CHECK: 'off',
+        NODE_OPTIONS: process.env.NODE_OPTIONS,
         HOME: project.home,
+        TMPDIR: process.env.TMPDIR,
+        TMP: process.env.TMP,
+        TEMP: process.env.TEMP,
+        CLAUDE_CONFIG_DIR: path.join(extraEnv.HOME || project.home, '.claude'),
+        ZEROH_CLAUDE_BIN: process.env.ZEROH_CLAUDE_BIN,
         ZEROH_HOME: project.home,
         ZEROH_CREDENTIAL_HOME: project.home,
         ZEROH_CLAUDE_SETTINGS: project.settings,
@@ -524,6 +549,7 @@ export function runHook(
   const out = res.stdout.trim();
   return {
     code: res.status,
+    signal: res.signal,
     stderr: res.stderr,
     stdout: res.stdout,
     json: out ? JSON.parse(out.split('\n').pop()) : null,

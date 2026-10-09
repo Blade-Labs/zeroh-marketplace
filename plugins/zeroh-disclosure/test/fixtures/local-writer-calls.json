@@ -1,0 +1,165 @@
+{
+  "lib/banner.js": [
+    "writePrivateJson(file, { version: CONFIG_VERSION, mode: normalized })"
+  ],
+  "lib/claude-settings.js": [
+    "writeFile(target, data, { mode, durable: true, beforeRename: () => { const current = rawSettings(target); return current.exists === before.exists && current.raw === before.raw; }, })",
+    "writePrivateJson(restoreRecordPath(install.settingsPath), { version: 3, settingsPath: install.settingsPath, originalBaseUrlPresent: Boolean(install.originalBaseUrlPresent), originalBaseUrlValue: install.originalBaseUrlValue, createdEnv: Boolean(install.createdEnv), proxyUrl: install.proxyUrl || null, installedAt: install.installedAt, })",
+    "writePrivateJson(restoreRecordPath(settingsPath), { version: 3, settingsPath: path.resolve(settingsPath), off: true, offAt: new Date().toISOString(), })"
+  ],
+  "lib/cli/receipts.js": ["writePrivateFile(file, lines.join('\\n'))"],
+  "lib/cli/uncertain.js": ["writePrivateFile(file, lines.join('\\n'))"],
+  "lib/display-carry.js": ["writePrivateFile(carryFile(dir, index), held)"],
+  "lib/first-run.js": ["writePrivateJson(file, { v: 1, installs })"],
+  "lib/format-audit.js": [
+    "fs.writeFile(marker, String(turn), { mode: 0o600 })"
+  ],
+  "lib/statusline/render.js": [
+    "writePrivateJson(file, old.value)",
+    "stdout.write(`${JSON.stringify(statuslineData(model))}\\n`)",
+    "stdout.write(`${joinWrapped(theirs, line, style.position)}\\n`)",
+    "stdout.write(segment ? line : `${line}\\n`)"
+  ],
+  "lib/statusline-cache.js": [
+    "writePrivateFile( file, `${JSON.stringify({ v: 1, output, at: new Date(now).toISOString() })}\\n`, { mode: 0o600 }, )"
+  ],
+  "lib/statusline-launcher.js": [
+    "process.stdout.write(${JSON.stringify(SEGMENT_NOT_INSTALLED)})",
+    "writePrivateFile( path.join(directory, `${LAUNCHER_NAME}.mjs`), LAUNCHER_MODULE, { mode: 0o700 }, )",
+    "writePrivateFile( path.join(directory, LAUNCHER_NAME), '#!/bin/sh\\nexec node \"$(dirname \"$0\")/zeroh-statusline.mjs\" \"$@\"\\n', { mode: 0o700 }, )",
+    "writePrivateFile( path.join(directory, `${LAUNCHER_NAME}.cmd`), '@node \"%~dp0zeroh-statusline.mjs\" %*\\r\\n', { mode: 0o600 }, )"
+  ],
+  "lib/statusline-record.js": [
+    "writePrivateJson(path.join(path.resolve(home), RECORD_FILE), record)",
+    "writePrivateFile(target, raw, options)"
+  ],
+  "lib/statusline-settings.js": [
+    "process.stdout.write(a.includes('segment')?'':(t?t+((j(p.join(z,'presentation.json'))||j(p.join(z,'statusline-style.json')))?.position==='end'?' \\\\u00b7 ':'\\\\u000a'):'')+'\\\\u{1F6E1}\\\\u{FE0F} ZeroH \\\\u00b7 \\\\u{1F534} '+m)",
+    "writePrivateJson(pointer, { v: 2, roots: { ...roots, [config]: root }, recordedAt: { ...recordedAt, [config]: roots[config] === root && recordedAt[config] ? recordedAt[config] : new Date().toISOString(), }, })"
+  ],
+  "lib/style.js": ["writePrivateJson(file, style)"],
+  "packages/local-proxy/daemon/lifecycle.js": [
+    "writePrivateJson(pidFile, { pid: process.pid, port: Number(config.port) })"
+  ],
+  "packages/local-proxy/manager/install.js": [
+    "cpSync(path.join(pluginRoot, 'lib'), path.join(runtime, 'lib'), { recursive: true, })",
+    "cpSync(path.join(pluginRoot, 'packages'), path.join(runtime, 'packages'), { recursive: true, })",
+    "cpSync( path.join(pluginRoot, 'vendor', name), path.join(runtime, 'vendor', name), { recursive: true }, )",
+    "cpSync(path.join(pluginRoot, 'bin', name), path.join(runtime, 'bin', name))",
+    "writePrivateJson(path.join(runtime, 'package.json'), { private: true, type: 'module', })",
+    "writePrivateJson(path.join(runtime, 'build.json'), build)"
+  ],
+  "packages/local-proxy/proxy-state.js": [
+    "writePrivateJson(paths.config, config)",
+    "writePrivateJson(routePath(paths, sessionId), { version: 3, sessionId: String(sessionId), pluginDir: path.resolve(pluginDir), root: path.resolve(root), ...(install ? { install } : {}), optOut: Boolean(optOut), at: new Date().toISOString(), ...(down ? { down } : {}), ...(seen ? { seen } : {}), ...(ended ? { ended } : {}), })"
+  ],
+  "packages/local-proxy/service-manager.js": [
+    "writePrivateFile(definition, launchAgentDefinition(command))",
+    "writePrivateFile( definition, encodeWindowsTask( windowsTaskDefinition(windowsHeadlessCommand(command, context.env), { userId: windowsUserId(context.env), }), ), )",
+    "writePrivateFile(definition, systemdDefinition(command))",
+    "writePrivateFile(definition, desktopDefinition(command))"
+  ],
+  "packages/shell-analysis/late-bind/decide.js": [
+    "writeFileSync(file, `${contents}\\n`, { mode: 0o600 })",
+    "writeFileSync(file, `${contents}\\n`, { mode: 0o600 })"
+  ],
+  "packages/zeroh-disclosure-core/allow-rules.js": [
+    "writePrivateJson(file, document)"
+  ],
+  "packages/zeroh-disclosure-core/disclosure.js": [
+    "writeLocalJson(session.statePath, session.state)"
+  ],
+  "packages/zeroh-disclosure-core/private-fs.js": [
+    "rename(from, to)",
+    "writeFileSync(marker, PROTECTED_MARKER_VERSION, { mode: 0o600 })",
+    "writeFileSync(fd, data)",
+    "writePrivateFile( file, `${pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value)}\\n`, )",
+    "renameSync(file, `${file}.1`)",
+    "appendFileSync(file, `${line}\\n`, { mode: 0o600 })",
+    "writeFileSync( path.join(home, '.acl-status.json'), JSON.stringify(identity), { mode: 0o600 }, )",
+    "writeFileSync( path.join(home, PROTECTED_MARKER), `${JSON.stringify({ version: PROTECTED_MARKER_VERSION, ...identity })}\\n`, { mode: 0o600 }, )"
+  ],
+  "packages/zeroh-disclosure-core/receipt-retention.js": [
+    "writePrivateJson(marker, { at: new Date(now).toISOString(), retention: setting, removed, })"
+  ],
+  "packages/zeroh-disclosure-core/receipt-sink.js": [
+    "writePrivateFile(path, bytes)",
+    "write({ kind, path, bytes: Buffer.from(bytes), })"
+  ],
+  "packages/zeroh-disclosure-core/report/collect.js": [
+    "writePrivateJson(file, current)"
+  ],
+  "packages/zeroh-disclosure-core/report-store.js": [
+    "writePrivateJson(file, report)"
+  ],
+  "packages/zeroh-disclosure-core/session-status.js": [
+    "writePrivateJson(file, next, { pretty: false })"
+  ],
+  "packages/zeroh-disclosure-core/session.js": [
+    "writePrivateFile(file, key)",
+    "writePrivateJson(p, value)",
+    "writeLocalJson(statePath, state)",
+    "writeLocalJson(statePath, state)",
+    "writeLocalJson(statePath, state)"
+  ],
+  "packages/zeroh-disclosure-core/uninstall-handoff.js": [
+    "writeFileSync(fd, `${JSON.stringify(uninstallOwner())}\\n`)",
+    "renameSync(file, retired)",
+    "writePrivateFile(file, `${JSON.stringify(value)}\\n`, { mode: 0o600, durable: true, beforeRename: () => { try { return readFileSync(file, 'utf8') === expectedRaw; } catch { return false; } }, })",
+    "writePrivateFile( failureMarkerPath(env), `${JSON.stringify({ failed_at: new Date().toISOString(), ...(cleanupStartedAt ? { cleanup_started_at: cleanupStartedAt } : {}), })}\\n`, { mode: 0o600, durable: true }, )",
+    "renameSync(file, retired)",
+    "renameSync(retired, file)",
+    "writePrivateFile( file, `${JSON.stringify({ v: 2, state: 'pending', owner: normalized, pending_at: new Date(now).toISOString(), })}\\n`, { mode: 0o600, durable: true }, )"
+  ],
+  "packages/zeroh-disclosure-core/unmask.js": [
+    "writePrivateJson( file, { project: canonicalProjectPath(root), session_id: String(sessionId), written_at: new Date(now).toISOString(), }, { pretty: false }, )",
+    "writePrivateJson(file, document)"
+  ],
+  "packages/zeroh-disclosure-core/user-authority/authority.js": [
+    "writePrivateJson(file, record)",
+    "writePrivateJson(path.join(dir, `ticket-${id}.json`), { v: 1, argv_hash: argvHash(argv), secret_hash: createHash('sha256').update(secret).digest('hex'), exp: now + TICKET_TTL_MS, })",
+    "process.stdout.write(text)",
+    "writeSync(fd, text)",
+    "term.write( [ `ZeroH Disclosure: ${action}`, ` (${canonicalArgv(argv).join(' ')})`, ...details, `This changes what ZeroH Disclosure protects. To confirm, type the code ${code} and press Enter (anything else cancels): `, ].join('\\n'), )"
+  ],
+  "packages/zeroh-disclosure-core/vault/store.js": [
+    "writeFileSync(fd, bytes)",
+    "writeFileSync(keyPath, bytes, { mode: 0o600, flag: 'wx' })",
+    "process.stderr.write( `${label}: could not update the vault (${error.message}).\\n`, )",
+    "writePrivateFile(file, body, { durable: true })",
+    "writeFileSync(fd, ownerText)"
+  ],
+  "packages/zeroh-disclosure-core/signing-key.js": [
+    "writeLocalJson(publicPath, { keyId, publicJwk })",
+    "writeLocalJson(privatePath, privateJwk)"
+  ],
+  "lib/hook-io.js": [
+    "process.stdout.write(`${JSON.stringify(obj)}\\n`)",
+    "process.stderr.write(`${message}\\n`)"
+  ],
+  "hooks/message-display.js": [
+    "process.stdout.write( `${JSON.stringify({ hookSpecificOutput: { hookEventName: 'MessageDisplay', displayContent }, })}\\n`, )"
+  ],
+  "hooks/run.js": [
+    "process.stderr.write(`ZeroH Disclosure: unknown hook \"${name}\".\\n`)",
+    "process.stdout.write(oldNode.stdout)",
+    "process.stdout.write( `${JSON.stringify({ systemMessage: removalFailure })}\\n`, )",
+    "process.stdout.write(data, () => { pendingWrites -= 1; resolve(); })",
+    "process.stderr.write(answer.stderr)",
+    "process.stderr.write(message.data)",
+    "writeSync(fd, data, offset, data.length - offset)"
+  ],
+  "packages/local-proxy/upstream.js": ["process.stderr.write(`${message}\\n`)"],
+  "packages/zeroh-disclosure-core/user-authority/removal.js": [
+    "writeSync(lock.fd, `${nonce}\\n`, 0)"
+  ],
+  "packages/zeroh-disclosure-core/subprocess-host.js": [
+    "write(message.control.input)"
+  ],
+  "packages/zeroh-disclosure-core/windows-acl.js": [
+    "writeFileSync( restore, `${prefix}${name}\\r\\nD:P(A;OICI;FA;;;${sid})(A;OICI;FA;;;SY)\\r\\n`, 'utf16le', )"
+  ],
+  "hooks/session-start.js": [
+    "writeLocalJson(storageNoticePath, { noticed: true })"
+  ]
+}

@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { writeReceiptJson } from '../packages/zeroh-disclosure-core/receipt-sink.js';
 // Records what happened to non-text formats (PDFs, images, notebooks) on the
 // current turn, and shows each kind's notice once per session.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { formatCounts } from './report-counts.js';
-import { ensureDir, readJson, sessionDir, writeJson } from './session.js';
-import { acquireFileLock, releaseFileLock } from './vault.js';
+import { formatCounts } from '../packages/zeroh-disclosure-core/report-counts.js';
+import {
+  ensureDir,
+  readJson,
+  sessionDir,
+} from '../packages/zeroh-disclosure-core/session.js';
+import {
+  acquireFileLock,
+  releaseFileLock,
+} from '../packages/zeroh-disclosure-core/vault.js';
 
 export async function recordFormatOutcome({
   cwd,
@@ -17,7 +25,11 @@ export async function recordFormatOutcome({
   try {
     const dir = sessionDir(cwd, sessionId);
     await ensureDir(dir);
-    const state = await readJson(path.join(dir, 'state.json'));
+    const statePath = path.join(dir, 'state.json');
+    const state =
+      process.platform === 'win32'
+        ? await readJsonWithRetry(statePath)
+        : await readJson(statePath);
     const turn = Number(state?.turnCount ?? 0);
     if (turn < 1) return;
 
@@ -33,7 +45,7 @@ export async function recordFormatOutcome({
       addCounts(formatDisclosure.withheld, withheld);
       addCounts(formatDisclosure.passed_unmasked, passedUnmasked);
       ledger.format_disclosure = formatDisclosure;
-      await writeJson(turnPath, ledger);
+      await writeReceiptJson(turnPath, ledger);
     } finally {
       releaseFileLock(lock);
     }
@@ -45,12 +57,21 @@ export async function recordFormatOutcome({
 async function readJsonWithRetry(file, attempts = 5) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await readJson(file);
+      // readJson maps ENOENT to null. Windows can briefly report a
+      // delete-pending replacement that way even while we hold the lock.
+      const value = await readJson(file);
+      if (value !== null || attempt >= attempts - 1) return value;
     } catch (error) {
-      if (!(error instanceof SyntaxError) || attempt >= attempts - 1)
+      const transientWindowsRead =
+        process.platform === 'win32' &&
+        ['EPERM', 'EACCES', 'EBUSY'].includes(error.code);
+      if (
+        (!(error instanceof SyntaxError) && !transientWindowsRead) ||
+        attempt >= attempts - 1
+      )
         throw error;
-      await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 

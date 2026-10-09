@@ -1,0 +1,490 @@
+{
+  "schemaVersion": 1,
+  "status": "local-validation-passed-release-blocked",
+  "provenance": {
+    "date": "2026-10-05",
+    "run": "phase-43-second-continuation-network-enabled",
+    "host": "Linux capped cgroup",
+    "nodeVersions": ["22.23.2", "26.1.0"],
+    "oracleNode": "26.1.0",
+    "shells": ["bash 5.2.21", "zsh 5.9"],
+    "absentShells": ["pwsh"],
+    "packageManager": "offline cached corepack pnpm 11.18.0",
+    "isolationRoots": ["<isolated-run-root>/", "<isolated-run-root>b/"],
+    "oneFullSuiteAtATime": true,
+    "suiteConcurrency": "normal Node concurrency; only regression inventory runs separately"
+  },
+  "tests": {
+    "tooling": {
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true
+    },
+    "inventory": {
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true
+    },
+    "pluginWithoutInventory": {
+      "tests": 971,
+      "pass": 957,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 14,
+      "passed": true
+    },
+    "acceptance": {
+      "tests": 116,
+      "pass": 114,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 2,
+      "passed": true
+    },
+    "release": {
+      "tests": 47,
+      "pass": 47,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true
+    },
+    "roadmap": {
+      "tests": 117,
+      "pass": 117,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true
+    },
+    "greenfield": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true
+    },
+    "libraryTooling": {
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true
+    },
+    "plugin": {
+      "tests": 972,
+      "pass": 958,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 14,
+      "passed": true
+    },
+    "focused": {
+      "tests": 39,
+      "pass": 39,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "passed": true,
+      "scope": "destination, CI, file transport and lifecycle"
+    }
+  },
+  "nodeSummaryTotals": {
+    "tests": 1291,
+    "pass": 1275,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 16
+  },
+  "nxFullTarget": {
+    "exitCode": 0,
+    "signal": null,
+    "seconds": 467.057,
+    "passed": true
+  },
+  "lint": {
+    "exitCode": 0,
+    "errors": 0,
+    "warnings": 425,
+    "budget": 425,
+    "reverseImports": 7
+  },
+  "boundaryValidate": {
+    "exitCode": 0
+  },
+  "boundaryFormattingScope": {
+    "restrictedPaths": 0,
+    "experimentalPaths": 50
+  },
+  "libraryManifestVerify": {
+    "exitCode": 0,
+    "files": 81
+  },
+  "roadmapTypecheck": {
+    "exitCode": 0,
+    "priorAttemptExitCode": 2,
+    "correction": "Verification records moved from task text checks to phase-level checks."
+  },
+  "phaseValidation": {
+    "exitCode": 1,
+    "schemaFieldErrors": 0,
+    "reasons": [
+      "Dependency 42 is not complete",
+      "Dependency 46 is not complete"
+    ]
+  },
+  "oracleCollector": {
+    "failures": 0,
+    "pendingRequirements": 10,
+    "completeRequiredCiJobs": 0,
+    "bashArgv": 410,
+    "zshArgv": 410,
+    "bashParser": 48,
+    "zshParser": 48,
+    "wrongExpectationsDetected": true,
+    "loopbackEffects": "passed",
+    "historicalEffects": 32,
+    "installedProgramEffectGroups": 9,
+    "wildcardSemanticFixtures": 7
+  },
+  "releaseGate": {
+    "passed": false,
+    "errorCount": 302,
+    "staleFingerprints": 0,
+    "pendingRequirements": 10,
+    "blockingClassifications": 136
+  },
+  "independentReview": {
+    "reviewer": "/root/review_effects",
+    "scope": "read-only static fixture, isolation, runner and report review; unavailable runtime legs not certified",
+    "remainingFindings": 0
+  },
+  "outputRuleDeviation": "Early excerpts exposed prohibited marker/contact metadata and fake credential literals. No real credential files accessed. Values are not repeated.",
+  "networkPinResolutionDeviation": "Canonical commit metadata acquired before immutable source downloads; no program under test used internet.",
+  "prettier": {
+    "status": "passed",
+    "scope": "50 supported changed source/evidence files; immutable upstream files excluded",
+    "exitCode": 0
+  },
+  "gitDiffCheck": {
+    "exitCode": 0
+  },
+  "protectedSourcesUnchangedFromHead": {
+    "base": "72e0b1279",
+    "paths": [
+      "plugin/packages",
+      "plugin/hooks",
+      "packages/sensitive-data-detectors",
+      ".github"
+    ],
+    "status": "verified",
+    "exitCode": 0
+  },
+  "cleanup": {
+    "status": "verified",
+    "paths": ["<isolated-run-root>/", "<isolated-run-root>b/"],
+    "otherRunsUntouched": true
+  },
+  "historicalFirstContinuation": {
+    "schemaVersion": 1,
+    "status": "blocked",
+    "provenance": {
+      "date": "2026-10-05",
+      "host": "Linux sandbox",
+      "nodeVersions": ["22.23.2", "26.1.0"],
+      "shells": ["bash 5.2.21", "zsh 5.9"],
+      "absentShells": ["pwsh"],
+      "packageManager": "offline cached corepack pnpm 11.18.0",
+      "isolationRoot": "<isolated-run-root>/",
+      "fullSuitesSerial": true
+    },
+    "tests": {
+      "plugin": {
+        "tests": 913,
+        "pass": 552,
+        "fail": 349,
+        "cancelled": 0,
+        "skipped": 12,
+        "passed": false,
+        "filesAttempted": 106,
+        "passingFiles": 32,
+        "failedFiles": 74,
+        "timedOutFiles": 7,
+        "countScope": "completed-file summaries only; timed-out files have no complete counts"
+      },
+      "acceptance": {
+        "tests": 116,
+        "pass": 100,
+        "fail": 14,
+        "cancelled": 0,
+        "skipped": 2,
+        "passed": false
+      },
+      "release": {
+        "tests": 47,
+        "pass": 45,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0,
+        "passed": false
+      },
+      "tooling": {
+        "tests": 22,
+        "pass": 9,
+        "fail": 13,
+        "cancelled": 0,
+        "skipped": 0,
+        "passed": false
+      },
+      "roadmap": {
+        "tests": 117,
+        "pass": 63,
+        "fail": 54,
+        "cancelled": 0,
+        "skipped": 0,
+        "passed": false
+      },
+      "focused": {
+        "tests": 31,
+        "pass": 30,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "passed": true
+      },
+      "greenfield": {
+        "filesAttempted": 1,
+        "failedFiles": 1,
+        "timedOutFiles": 1,
+        "timeoutSeconds": 180,
+        "passed": false,
+        "countScope": "no complete test count from timed-out file"
+      }
+    },
+    "nxFullTarget": {
+      "exitCode": 130,
+      "passed": false,
+      "reason": "stalled legacy test after pipe-related failures; interrupted"
+    },
+    "lint": {
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 425,
+      "budget": 425,
+      "reverseImports": 7
+    },
+    "boundaryValidate": {
+      "exitCode": 0
+    },
+    "libraryManifestVerify": {
+      "exitCode": 0,
+      "files": 81
+    },
+    "oracleCollector": {
+      "exitCode": 1,
+      "passingRequiredJobs": 0,
+      "bashArgv": 410,
+      "zshArgv": 410,
+      "bashParser": 48,
+      "zshParser": 48,
+      "wrongExpectationsDetected": true,
+      "loopbackListeners": "HTTP and UDP rejected with EPERM"
+    },
+    "independentReview": {
+      "reviewer": "/root/review_gate",
+      "scope": "static gate, corpus and publication review; unavailable effects not certified"
+    },
+    "outputRuleDeviation": "Repository email metadata and fake credential literals appeared in early source excerpts; subsequent logs redacted. No real credential files accessed.",
+    "phaseSchema": {
+      "exitCode": 0
+    },
+    "releaseGate": {
+      "passed": false,
+      "errorCount": 297,
+      "staleFingerprints": 0,
+      "pendingRequirements": 5
+    },
+    "prettier": {
+      "exitCode": 0,
+      "scope": "52 supported changed source/evidence/report files; pinned vendor assets excluded"
+    },
+    "gitDiffCheck": {
+      "exitCode": 0
+    },
+    "protectedSourcesUnchangedFromBase": {
+      "base": "2fb7d4057",
+      "paths": [
+        "plugin/packages",
+        "plugin/hooks",
+        "packages/sensitive-data-detectors",
+        ".github"
+      ],
+      "exitCode": 0
+    },
+    "cleanup": {
+      "status": "verified",
+      "paths": ["<isolated-run-root>/", "/tmp/sol43-*"],
+      "otherRunsUntouched": true
+    }
+  },
+  "supersededSecondContinuationAttempts": [
+    {
+      "attempt": "nx-test-corrected",
+      "exitCode": 1,
+      "plugin": {
+        "tests": 972,
+        "pass": 956,
+        "fail": 2,
+        "skipped": 14
+      },
+      "causes": [
+        "statusline fixture omitted PATH",
+        "inventory VM watchdog contention"
+      ]
+    },
+    {
+      "attempt": "nx-test-final",
+      "exitCode": 1,
+      "pluginPassed": true,
+      "acceptancePassed": true,
+      "release": {
+        "tests": 47,
+        "pass": 33,
+        "fail": 14
+      },
+      "cause": "Python bytecode cache in immutable vendor subtree"
+    },
+    {
+      "attempt": "nx-test-clean",
+      "exitCode": 1,
+      "plugin": {
+        "tests": 972,
+        "pass": 957,
+        "fail": 1,
+        "skipped": 14
+      },
+      "cause": "pooled socket reused across deliberate daemon restart"
+    },
+    {
+      "attempt": "release-after-bytecode",
+      "exitCode": 1,
+      "release": {
+        "tests": 47,
+        "pass": 45,
+        "fail": 2
+      },
+      "cause": "inventory-only runner assumed inventory existed in minimal staged trees"
+    }
+  ],
+  "thirdContinuation": {
+    "date": "2026-10-05",
+    "node": "22.23.2",
+    "command": "corepack pnpm nx run zeroh-marketplace:test --skipNxCache",
+    "exitCode": 0,
+    "totals": {
+      "tests": 1306,
+      "pass": 1289,
+      "fail": 0,
+      "skipped": 17
+    },
+    "summaries": [
+      {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "tests": 976,
+        "pass": 961,
+        "fail": 0,
+        "skipped": 15
+      },
+      {
+        "tests": 116,
+        "pass": 114,
+        "fail": 0,
+        "skipped": 2
+      },
+      {
+        "tests": 57,
+        "pass": 57,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "tests": 117,
+        "pass": 117,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "tests": 17,
+        "pass": 17,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "tests": 16,
+        "pass": 16,
+        "fail": 0,
+        "skipped": 0
+      }
+    ],
+    "plugin": {
+      "tests": 977,
+      "pass": 962,
+      "fail": 0,
+      "skipped": 15
+    },
+    "acceptance": {
+      "tests": 116,
+      "pass": 114,
+      "fail": 0,
+      "skipped": 2
+    },
+    "release": {
+      "tests": 57,
+      "pass": 57,
+      "fail": 0,
+      "skipped": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 425,
+      "reverseImports": 7
+    },
+    "formatPassed": true,
+    "boundaryPassed": true,
+    "roadmapTypecheckPassed": true,
+    "roadmapValidation": {
+      "exitCode": 1,
+      "incompleteDependencies": [42, 46]
+    },
+    "destination": {
+      "baselineTriagePassed": true,
+      "releasePassed": false,
+      "evidenceErrors": 31
+    },
+    "node26": "Unavailable on this machine; no download/install attempted.",
+    "deviations": [
+      "First full-suite attempt failed on isolation guard: HOME beside TMPDIR. Corrected temp harness and staged publisher; final suite ran alone.",
+      "Retained committed differential observations are not regenerated CI evidence."
+    ],
+    "isolation": "Fresh fake homes/state below caller TMPDIR; all temporary files removed after verification."
+  }
+}

@@ -51,7 +51,28 @@ export type Risk = 'critical' | 'high' | 'medium' | 'low';
 /** A half-open [start, end) range of UTF-16 offsets. */
 export type Span = readonly [start: number, end: number];
 
+export type DetectionChannel = 'shell' | 'config' | 'code' | 'prose';
+export interface DetectionContext {
+  language?: string;
+  shell?: 'bash' | 'powershell' | 'cmd';
+  interpolation?:
+    | 'compose'
+    | 'dotenv'
+    | 'github-actions'
+    | 'helm'
+    | 'jinja'
+    | 'cmd'
+    | 'powershell'
+    | 'bash'
+    | 'python-format';
+  mixed?: boolean;
+}
+
 export interface DetectOptions {
+  /** A channel alone never establishes interpolation. */
+  channel?: DetectionChannel;
+  /** Known context adds findings; every unknown-context span stays covered. */
+  context?: string | DetectionContext;
   /**
    * `prompt` (default): secrets and personal data, for text a person writes.
    * `tool`: the same without national-format phone numbers, for tool output.
@@ -67,8 +88,8 @@ export interface DetectOptions {
   /** Only these types; `null` or omitted for all. */
   enabledTypes?: readonly string[] | null;
   /**
-   * Spans no finding may overlap, e.g. the caller's own placeholders, or a
-   * function that returns them for the text.
+   * Placeholder spans, or a function returning them for the text. Findings
+   * entirely inside are ignored; partial overlaps retain all outside parts.
    */
   ignore?: readonly Span[] | ((text: string) => readonly Span[]) | null;
 }
@@ -88,6 +109,8 @@ export interface Finding {
   imported?: true;
   /** Set when the value was found by its key name, not its own shape. */
   generic?: true;
+  /** Specific classes retained when overlapping findings merge. */
+  protectionTypes?: readonly DetectedType[];
 }
 
 export interface EntropyWarning {
@@ -177,6 +200,15 @@ export interface GitleaksCatalog {
     readonly source: number;
     readonly imported: number;
     readonly skipped: number;
+  };
+  readonly globalAllowlist: {
+    readonly description?: string;
+    readonly regexTarget: 'secret';
+    readonly regexes: readonly {
+      readonly regex: string;
+      readonly flags: string;
+    }[];
+    readonly stopwords: readonly string[];
   };
   readonly rules: readonly GitleaksRule[];
   readonly skipped: readonly unknown[];
