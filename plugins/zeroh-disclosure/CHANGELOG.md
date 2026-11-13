@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.1.2
+
+Features: ~guard.shell (see [docs/features.md](docs/features.md))
+
+- **The zeroh-roadmap CLI from the installed plugin stays stopped, and the stop now says what to run instead.** `node <Claude config>/plugins/cache/<marketplace>/zeroh-roadmap/<version>/bin/roadmap.mjs status` or `phase validate` was stopped with the general "would change or run Claude Code settings, plugin files or hooks" message. It is still stopped: both commands run the repository's TypeScript records, so they are not read-only, and ZeroH cannot confirm which interpreter or loaders run the plugin file or who wrote it. The message now names the repository's own copy of the CLI, which runs normally (in the ZeroH repository, `node apps/zeroh-marketplace/plugins/zeroh-roadmap/bin/roadmap.mjs phase validate --all` or `pnpm roadmap:status`). Running the cached CLI through its own shebang, another interpreter named `node`, or a link to it is now stopped too, and the message is the same when the path is spelled with `$HOME` or `$CLAUDE_CONFIG_DIR`, or reached with `cd` first. Not recognized by this message: other runners (`tsx`, `bun`, `deno`, `ts-node`), `node -e "import(…)"`, a path held in a shell variable and the stdin forms. They keep the general protected-path decision, which in the default warn mode still lets them run.
+- Destination checks are unchanged from 1.1.1 (the 1.0 analyzer and its allow commands); the task 44.9 fixes listed under 1.1.1 are not in this release and move to 1.1.3.
+
+### Still not checked in 1.1.2 (unchanged from 1.1.1; fixes now planned for 1.1.3)
+
+1.1.2 changes only the guard messages above. It ships the same destination checks as 1.1.1, with the same allow commands. The new destination engine (task 44.9), opt-in strict mode and the destination dialog, announced for 1.1.2, now come in 1.1.3. Each case below is listed with its notice.
+
+ZeroH 1.1.2 keeps the destination checks from 1.1.1: 112 safe-command stops, 8 missed protections and 16 notice gaps. Fixes are planned for 1.1.3 (task 44.9).
+
+43-bash-FINDINGS3: Bash: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.3 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.3, task 44.9.
+
+43-bash-curl-default-config: Bash: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.3, task 44.9.
+
+43-zsh-FINDINGS3: zsh: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.3 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.3, task 44.9.
+
+43-zsh-curl-default-config: zsh: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.3, task 44.9.
+
+43-pwsh-FINDINGS3: PowerShell 7: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.3 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.3, task 44.9.
+
+43-pwsh-curl-default-config: PowerShell 7: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.3, task 44.9.
+
+43-powershell-FINDINGS3: Windows PowerShell 5.1: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.3 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.3, task 44.9.
+
+43-powershell-curl-default-config: Windows PowerShell 5.1: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.3, task 44.9.
+
+43-cmd-FINDINGS3: cmd: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.3 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.3, task 44.9.
+
+43-cmd-curl-default-config: cmd: curl reads its default configuration. Deferral reason: an existing missing default-configuration warning, with no new stop or command change; the replacement will inspect configuration effects. Notice: Curl can load a default configuration even without -K; ZeroH 1.1.0 does not inspect it or warn about its destinations. Review it yourself before sending a secret. Next release: 1.1.3, task 44.9.
+
+43-pwsh-reference-suffix: PowerShell 7: $STRIPE_KEY_SUFFIX is a different variable from $STRIPE_KEY. Deferral reason: an existing missed variable warning, with no new stop or command change; correct variable boundaries need the 1.1.3 parser. Notice: A secret loaded inside a PowerShell command through a suffixed variable may go unchecked without a warning. ZeroH 1.1.0 does not reliably track that variable; review its destination yourself. Next release: 1.1.3, task 44.9.
+
+43-pwsh-reference-boundary: PowerShell 7: ${STRIPE_KEY}_SUFFIX builds a value at run time. Deferral reason: an existing missed interpolation warning, with no new stop or command change; interpolation handling belongs in the 1.1.3 parser. Notice: A secret joined to other text inside a PowerShell command may go unchecked without a warning. ZeroH 1.1.0 does not reliably track the joined value; review its destination yourself. Next release: 1.1.3, task 44.9.
+
+43-powershell-reference-suffix: Windows PowerShell 5.1: $STRIPE_KEY_SUFFIX is a different variable from $STRIPE_KEY. Deferral reason: an existing missed variable warning, with no new stop or command change; correct variable boundaries need the 1.1.3 parser. Notice: A secret loaded inside a PowerShell command through a suffixed variable may go unchecked without a warning. ZeroH 1.1.0 does not reliably track that variable; review its destination yourself. Next release: 1.1.3, task 44.9.
+
+43-powershell-reference-boundary: Windows PowerShell 5.1: ${STRIPE_KEY}_SUFFIX builds a value at run time. Deferral reason: an existing missed interpolation warning, with no new stop or command change; interpolation handling belongs in the 1.1.3 parser. Notice: A secret joined to other text inside a PowerShell command may go unchecked without a warning. ZeroH 1.1.0 does not reliably track the joined value; review its destination yourself. Next release: 1.1.3, task 44.9.
+
+43-spike-03: Bash: curl -K reads a configuration file. Deferral reason: an existing missing configuration-file warning, with no new stop or command change; keep the shipped analyzer until the 1.1.3 replacement. Notice: Curl configuration files can change where data goes; ZeroH 1.1.0 does not inspect them or show a per-command warning. Review the file and its destinations yourself. Next release: 1.1.3, task 44.9.
+
+43-spike-33: Bash: a heredoc inside command substitution builds the curl payload. Deferral reason: an existing missing dynamic-value warning in a recorded analysis seed, with no new stop or command change; the 1.1.3 parser must track the construct. Notice: A value built by a heredoc inside command substitution may be sent without ZeroH checking it or showing a warning. Review that command and destination yourself. Next release: 1.1.3, task 44.9.
+
 ## 1.1.1
 
 Features: ~install.plugin (see [docs/features.md](docs/features.md))

@@ -51,7 +51,7 @@ function evidence(cases) {
       classification: 'correct',
     });
   return {
-    releaseVersion: '1.1.2',
+    releaseVersion: '1.1.3',
     sourceCommit: 'c'.repeat(40),
     differential: {
       schemaVersion: 1,

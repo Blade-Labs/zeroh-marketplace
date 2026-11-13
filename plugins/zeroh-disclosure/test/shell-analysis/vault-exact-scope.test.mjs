@@ -14,6 +14,7 @@ import {
   exactValueHits,
   scrub,
 } from '../../packages/shell-analysis/secrets.js';
+import { matchers } from '../../packages/shell-analysis/secrets/rewrite.js';
 import { tempProject } from '../helpers.mjs';
 
 const WORD = 'pay' + 'load';
@@ -215,4 +216,93 @@ test('legacy entries without matchScope retain the old compatibility predicate',
     assert.equal(reloaded.entryOf(token).matchScope, undefined);
     assert.deepEqual(exactValueHits(`echo ${WORD}`, { vault: reloaded }), []);
   });
+});
+
+// Phase 789.1: receipt.html re-masks every stored label of every turn at each
+// Stop, through scrub() with no `known` list. A fresh default `known` per call
+// missed the per-vault memo, so each label rebuilt the matcher of the whole
+// vault: 27 s at 1,000 turns and a timed-out Stop (no receipt) at 3,000.
+test('scrub calls without a known list share one vault matcher, which still masks values added later', () => {
+  const p = tempProject({ env: false });
+  withHome(p.home, () => {
+    const vault = new Vault(p.dir);
+    const first = 'quokka-' + '7319';
+    const second = 'marmot-' + '8842';
+    const firstToken = vault.tokenFor('PASSWORD', first, 'detected', {
+      matchScope: 'bare',
+    });
+    assert.equal(
+      output(`note ${first} end`, vault).text,
+      `note ${firstToken} end`,
+    );
+    const matcher = matchers.get(vault)?.matcher;
+    assert.ok(matcher, 'the first call builds the vault matcher');
+    output('another label', vault);
+    assert.equal(
+      matchers.get(vault).matcher,
+      matcher,
+      'a second call without `known` reuses the vault matcher',
+    );
+    const secondToken = vault.tokenFor('PASSWORD', second, 'detected', {
+      matchScope: 'bare',
+    });
+    assert.equal(
+      output(`${second} and ${first}`, vault).text,
+      `${secondToken} and ${firstToken}`,
+      'a value recorded after the matcher was built is still masked',
+    );
+    assert.equal(matchers.get(vault).matcher, matcher);
+  });
+});
+
+// Phase 789.1 review: Vault.touch and refreshKnown replace an entry object in
+// place when its source changes. A matcher shared across calls without a
+// known list must see that, or an upgraded value would pass unmasked.
+test('an entry whose source is upgraded in place to reported is matched by the next call without a known list', () => {
+  const token = '[PASSWORD-ffffff]';
+  const entries = new Map([
+    [token, { type: 'PASSWORD', value: WORD, source: 'detected' }],
+  ]);
+  const vault = { entries };
+  const hits = () =>
+    exactValueHits(`send(${WORD})`, { vault }).map((h) => h.value);
+  assert.deepEqual(hits(), []);
+  entries.set(token, { ...entries.get(token), source: 'reported:2026-11-11' });
+  assert.deepEqual(hits(), [WORD]);
+  entries.set(token, { ...entries.get(token), source: 'detected' });
+  assert.deepEqual(hits(), [], 'a downgrade stops the bare match again');
+});
+
+// Architect review, 2026-11-11: the matcher keeps the first candidate for a
+// value. When an earlier entry becomes exact-matchable, its unbounded encoded
+// form must win over a later bounded entry with the same text, as in a fresh
+// build, or the encoded value embedded in other text passes unmasked.
+test('a promoted earlier entry masks as a freshly built matcher does', () => {
+  const plain = 'quokka-' + '7319';
+  const encoded = Buffer.from(plain, 'utf8').toString('base64');
+  const earlier = '[PASSWORD-aaaaaa]';
+  const entries = new Map([
+    [
+      earlier,
+      {
+        type: 'PASSWORD',
+        value: plain,
+        source: 'detected',
+        matchScope: 'in-context',
+      },
+    ],
+    [
+      '[PASSWORD-bbbbbb]',
+      { type: 'PASSWORD', value: encoded, source: 'detected' },
+    ],
+  ]);
+  const vault = { entries };
+  const text = `blob=x${encoded}x`;
+  const hits = () => exactValueHits(text, { vault }).map((h) => h.value);
+  assert.deepEqual(hits(), [], 'a bounded value is not matched inside a word');
+  entries.set(earlier, { ...entries.get(earlier), matchScope: 'bare' });
+  const warmed = hits();
+  matchers.delete(vault);
+  assert.deepEqual(warmed, hits(), 'warmed and fresh matchers agree');
+  assert.deepEqual(warmed, [encoded]);
 });

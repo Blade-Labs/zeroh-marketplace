@@ -200,10 +200,17 @@ export class ExactMatcher {
 // the vault once.
 export const matchers = new WeakMap();
 
+// Callers without a `known` list (scrub's default, the receipt's stored-label
+// masking) pass a new empty array each time; one shared empty list keeps them
+// on the vault's memo instead of rebuilding the matcher per call (phase 789).
+const NO_KNOWN = Object.freeze([]);
+
 export function exactMatcher(vault, known) {
+  if (known == null || (Array.isArray(known) && known.length === 0))
+    known = NO_KNOWN;
   const entries = vault?.entries instanceof Map ? vault.entries : null;
   let cached = vault ? matchers.get(vault) : null;
-  if (!cached || cached.known !== known || cached.entries !== entries) {
+  const build = () => {
     const matcher = new ExactMatcher();
     for (const s of known)
       matcher.addWithVariants({
@@ -211,20 +218,46 @@ export function exactMatcher(vault, known) {
         type: s.type,
         source: `known:${s.name}`,
       });
-    cached = { matcher, known, entries, seen: new Set() };
+    cached = { matcher, known, entries, seen: new Map() };
     if (vault) matchers.set(vault, cached);
-  }
-  if (entries && cached.seen.size !== entries.size) {
+  };
+  if (!cached || cached.known !== known || cached.entries !== entries) build();
+  if (entries) {
+    // Vault.touch and refreshKnown replace an entry object in place (a new
+    // last_used, or a source upgraded to known: or reported:), so each entry
+    // is compared by identity. A change that leaves its exact-match decision
+    // as it was costs nothing. A new entry is appended, as a fresh build in
+    // vault order would add it last. Any changed decision for an entry
+    // already seen rebuilds the matcher in vault order: the matcher keeps the
+    // first candidate for each value (and its encodings), and that candidate
+    // decides the word-boundary rule. Decision changes are rare.
+    let rebuild = false;
+    const pending = [];
     for (const [token, entry] of entries) {
-      if (cached.seen.has(token)) continue;
-      cached.seen.add(token);
-      if (!exactFromVault(entry)) continue;
-      cached.matcher.addWithVariants({
+      const prior = cached.seen.get(token);
+      if (prior?.entry === entry) continue;
+      const exact = exactFromVault(entry);
+      const candidate = {
         value: entry.value,
         type: entry.type,
         source: entry.source ?? 'detected',
-      });
+      };
+      const bounded = boundedCandidate(candidate);
+      cached.seen.set(token, { entry, exact, bounded });
+      if (!prior) {
+        if (exact) pending.push(candidate);
+      } else if (
+        prior.exact !== exact ||
+        (exact && prior.bounded !== bounded)
+      ) {
+        rebuild = true;
+      }
     }
+    if (rebuild) {
+      build();
+      return exactMatcher(vault, known);
+    }
+    for (const candidate of pending) cached.matcher.addWithVariants(candidate);
   } else if (!entries && vault?.knownValues) {
     for (const entry of vault.knownValues()) {
       if (!exactFromVault(entry)) continue;

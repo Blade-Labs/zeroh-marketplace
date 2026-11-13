@@ -67,3 +67,7 @@ files accompanying this table for this round.
 ## Dated release-target amendment, 2026-10-09
 
 Owner ruling, 2026-10-09: 1.1.1 is the URL-only patch (test guide: https://bladelabs.io/try/). Phase 44 and task 44.9 (112 false stops, 8 missed protections and 16 notice gaps), strict mode and the destination dialog move to 1.1.2. Both 1.1.0 and 1.1.1 ship the unchanged 1.0 destination analyzer and its allow commands. This supersedes the earlier 1.1.1 destination release target; all other gates remain unchanged.
+
+## Dated release-target amendment, 2026-11-10
+
+Owner approval, 2026-11-09: 1.1.2 is the guard-fix patch (PR #1969), not yet released. After review (Astra, 2026-11-10) it no longer allows the zeroh-roadmap CLI from the plugin cache; it keeps the denial and names the repository copy of the CLI. Following the 2026-10-09 precedent above, phase 44 and task 44.9 (112 false stops, 8 missed protections and 16 notice gaps), strict mode and the destination dialog move to 1.1.3. 1.1.0, 1.1.1 and 1.1.2 ship the unchanged 1.0 destination analyzer and its allow commands; the 136 deferrals move to 1.1.3 through dated V112 amendments with history kept. This supersedes the 1.1.2 destination release target; all other gates remain unchanged.

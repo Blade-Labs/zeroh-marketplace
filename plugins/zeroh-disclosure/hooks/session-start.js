@@ -287,11 +287,26 @@ if (contextFindings.length) {
 
 lines.push('', `Receipt signing key: ${session.signingKey.keyId} (local).`);
 
-const tokens = await collectActiveTokens(session.dir);
-if (tokens.size > 0) {
-  lines.push('', 'Active tokens carried in from prior turns:');
-  for (const [token, type] of tokens) {
+// The newest tokens only: Claude Code keeps hook context in the model's
+// context only up to a limit, and a long session's full list (about 28
+// characters a token) pushed this whole briefing out to a file (phase 789).
+const CARRIED_TOKENS_SHOWN = 40;
+const tokens = [...(await collectActiveTokens(session.dir))];
+if (tokens.length > 0) {
+  const shown = tokens.slice(-CARRIED_TOKENS_SHOWN);
+  lines.push(
+    '',
+    shown.length < tokens.length
+      ? `Active tokens carried in from prior turns (the ${shown.length} newest):`
+      : 'Active tokens carried in from prior turns:',
+  );
+  for (const [token, type] of shown) {
     lines.push(`  ${token} = ${type.toLowerCase()}`);
+  }
+  if (shown.length < tokens.length) {
+    lines.push(
+      `  …and ${tokens.length - shown.length} more; each token names its kind, as in [API_KEY-…].`,
+    );
   }
 }
 

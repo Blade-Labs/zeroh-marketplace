@@ -103,6 +103,15 @@
         "a typed plain word is masked where its key names it, not bare in later output"
       ],
       "liveScenarios": []
+    },
+    "long-session-789": {
+      "unitTests": [
+        "scrub calls without a known list share one vault matcher, which still masks values added later",
+        "an entry whose source is upgraded in place to reported is matched by the next call without a known list",
+        "a promoted earlier entry masks as a freshly built matcher does",
+        "a resumed long session keeps the briefing short: the 40 newest carried tokens, tool or turn, and a count of the rest"
+      ],
+      "liveScenarios": []
     }
   }
 }

@@ -34,6 +34,10 @@ import {
 } from './explicit-writes.js';
 import { commandNamesClaudeControl, controlOptions } from './claude-control.js';
 import { VERIFIED_CLI } from './management.js';
+import {
+  cachedRoadmapCliDenial,
+  cachedRoadmapCliWordTest,
+} from './roadmap-cli.js';
 
 export function codeNamesProtected(code, isProtected) {
   if (PROTECTED_TEXT_RE.test(code) || PROTECTED_VARIABLE_RE.test(code))
@@ -344,11 +348,13 @@ function entryOptionsNameProtected(entry, isProtected) {
   );
 }
 
-function entryNamesUncertainTarget(entry, isUncertain) {
+// True when `entry` names a matching path: a word (`wordTest`), or a redirect
+// target or option path (`targetTest`).
+function entryNames(entry, wordTest, targetTest = wordTest) {
   return (
-    words(entry).some(isUncertain) ||
-    (entry.redirects || []).some((redirect) => isUncertain(redirect.target)) ||
-    entryOptionsNameProtected(entry, isUncertain)
+    words(entry).some(wordTest) ||
+    (entry.redirects || []).some((redirect) => targetTest(redirect.target)) ||
+    entryOptionsNameProtected(entry, targetTest)
   );
 }
 
@@ -375,47 +381,51 @@ export function protectedShellDecision(
     .filter((reading) => reading.ok)
     .map((reading) => ({
       entries: commandDirectories(reading, commandCwd, command, opts).map(
-        (context) => ({
-          ...context,
-          isUncertain: (word) =>
-            Boolean(
-              word && context.unknown && unknownProtectedName(word, opts),
-            ),
-          isProtected: (word) => {
-            if (!word) return false;
-            // A ZeroH CLI path supplied relative to the policy root is still
-            // an attempted plugin invocation when run from another cwd. Only
-            // the validated presentation invocation may use that plugin file.
+        (context) => {
+          // A ZeroH CLI path supplied relative to the policy root is still
+          // an attempted plugin invocation when run from another cwd. Only
+          // the validated presentation invocation may use that plugin file.
+          const verifiedCli = (word) =>
+            !ignoredPath &&
+            !word.dynamic &&
+            ignoredControlPath(word.value, VERIFIED_CLI, root, opts);
+          // Does `word` name a protected path when the entry runs from
+          // `directory`?
+          const protectedFrom = (directory, word) => {
+            if (verifiedCli(word)) return true;
             if (
-              !ignoredPath &&
+              ignoredPath &&
               !word.dynamic &&
-              ignoredControlPath(word.value, VERIFIED_CLI, root, opts)
+              ignoredControlPath(word.value, ignoredPath, directory, opts)
             )
-              return true;
-            return context.directories.some((directory) => {
-              if (
-                ignoredPath &&
-                !word.dynamic &&
-                ignoredControlPath(word.value, ignoredPath, directory, opts)
-              )
-                return false;
-              if (protectedWordTest(directory, opts)(word)) return true;
-              const zeroH = wordPathValues(word, opts.env, opts.platform).some(
-                (value) =>
-                  isZeroHSettingsPath(
-                    opts.pathImpl.resolve(directory, value),
-                    root,
-                    {
-                      ...opts,
-                      home: opts.env.ZEROH_HOME,
-                    },
-                  ),
-              );
-              if (zeroH) zeroHNamed = true;
-              return zeroH;
-            });
-          },
-        }),
+              return false;
+            if (protectedWordTest(directory, opts)(word)) return true;
+            const zeroH = wordPathValues(word, opts.env, opts.platform).some(
+              (value) =>
+                isZeroHSettingsPath(
+                  opts.pathImpl.resolve(directory, value),
+                  root,
+                  { ...opts, home: opts.env.ZEROH_HOME },
+                ),
+            );
+            if (zeroH) zeroHNamed = true;
+            return zeroH;
+          };
+          return {
+            ...context,
+            protectedFrom,
+            isUncertain: (word) =>
+              Boolean(
+                word && context.unknown && unknownProtectedName(word, opts),
+              ),
+            isProtected: (word) =>
+              Boolean(word) &&
+              (verifiedCli(word) ||
+                context.directories.some((directory) =>
+                  protectedFrom(directory, word),
+                )),
+          };
+        },
       ),
     }));
   const namesProtected = commandNamesClaudeControl(
@@ -425,21 +435,58 @@ export function protectedShellDecision(
     ignoredPath,
   );
   const tokenNamed = contexts.some(({ entries }) =>
-    entries.some(
-      ({ entry, isProtected }) =>
-        words(entry).some(isProtected) ||
-        (entry.redirects || []).some((redirect) =>
-          isProtected(redirect.target),
-        ) ||
-        entryOptionsNameProtected(entry, isProtected),
-    ),
+    entries.some(({ entry, isProtected }) => entryNames(entry, isProtected)),
   );
   const unknownTarget = contexts.some(({ entries }) =>
-    entries.some(({ entry, isUncertain }) =>
-      entryNamesUncertainTarget(entry, isUncertain),
-    ),
+    entries.some(({ entry, isUncertain }) => entryNames(entry, isUncertain)),
   );
   if (!namesProtected && !tokenNamed && !unknownTarget) return none;
+  const decision = protectedPathDecision(contexts, {
+    none,
+    mode,
+    command,
+    shell,
+    zeroHNamed,
+    lineNamesProtected: namesProtected || tokenNamed || unknownTarget,
+  });
+  // The zeroh-roadmap CLI run from a plugin cache, by node, an interpreter
+  // named node, its own shebang or a link, is denied in both modes; the denial names
+  // the repository copy instead (roadmap-cli.js, Astra PR #1969). When the
+  // same line also writes or reads another protected path (a redirect into
+  // Claude settings, ZeroH's own files), the protected-path refusal above
+  // keeps its message: the cached CLI is not the only reason.
+  const roadmapDenial = cachedRoadmapCliDenial(contexts, opts);
+  if (!roadmapDenial) return decision;
+  if (
+    decision.deny &&
+    (zeroHNamed || unknownTarget || protectedBeyondCache(contexts, opts))
+  )
+    return decision;
+  return roadmapDenial;
+}
+
+// True when an entry names a protected path other than the cached
+// zeroh-roadmap CLI itself (or the folder a `cd` enters to reach it): another
+// word, a redirect target or an option path.
+function protectedBeyondCache(contexts, opts) {
+  const cacheWord = cachedRoadmapCliWordTest(contexts, opts);
+  return contexts.some(({ entries }) =>
+    entries.some((context) =>
+      entryNames(
+        context.entry,
+        (word) => context.isProtected(word) && !cacheWord(context, word),
+        context.isProtected,
+      ),
+    ),
+  );
+}
+
+// The protected-path decision for a line that names one (the body of
+// protectedShellDecision before the roadmap CLI special case).
+function protectedPathDecision(
+  contexts,
+  { none, mode, command, shell, zeroHNamed, lineNamesProtected },
+) {
   if (mode === 'block') {
     // The shell's own reading decides; it must be a plain read.
     return plainSafeRead(analyzeShell(command, shell))
@@ -454,17 +501,13 @@ export function protectedShellDecision(
   }
   if (!contexts.length)
     return { deny: false, reason: null, unchecked: 'unparseable' };
-  const ctx = {
-    lineNamesProtected: namesProtected || tokenNamed || unknownTarget,
-    depth: 0,
-  };
+  const ctx = { lineNamesProtected, depth: 0 };
   let effect = null;
   for (const { entries } of contexts)
     for (const { entry, isProtected, isUncertain } of entries) {
       const entryEffect = protectedEffect(entry, { ...ctx, isProtected });
       effect = worse(effect, entryEffect);
-      if (entryNamesUncertainTarget(entry, isUncertain))
-        effect = worse(effect, UNCERTAIN);
+      if (entryNames(entry, isUncertain)) effect = worse(effect, UNCERTAIN);
     }
   if (effect === WRITE)
     return {

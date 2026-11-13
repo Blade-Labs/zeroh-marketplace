@@ -596,7 +596,7 @@ test('benchmark hooks run interleaved ABAB with twenty cold samples in each leg'
   );
 });
 
-test('the URL-only patch keeps exactly the 1.0 baseline; 1.1.2 requires the new analyzer', () => {
+test('the URL-only and guard-fix patches keep exactly the 1.0 baseline; 1.1.3 requires the new analyzer', () => {
   const fixtureEvidence = () => {
     const evidence = passingEvidence();
     // Release validation uses synthetic evidence; a public staged tree has no Git history.
@@ -606,7 +606,7 @@ test('the URL-only patch keeps exactly the 1.0 baseline; 1.1.2 requires the new 
     for (const leg of evidence.differential.legs) leg.commitSha = sourceCommit;
     return evidence;
   };
-  for (const releaseVersion of ['1.1.0', '1.1.1']) {
+  for (const releaseVersion of ['1.1.0', '1.1.1', '1.1.2']) {
     const evidence = fixtureEvidence();
     evidence.releaseVersion = releaseVersion;
     assert.deepEqual(validateDestinationRelease(evidence), []);
@@ -622,19 +622,30 @@ test('the URL-only patch keeps exactly the 1.0 baseline; 1.1.2 requires the new 
     );
   }
   const engine = fixtureEvidence();
-  engine.releaseVersion = '1.1.2';
+  engine.releaseVersion = '1.1.3';
   const errors = validateDestinationRelease(engine);
   assert.ok(errors.some((error) => error.includes('false stop outside')));
   assert.ok(errors.some((error) => error.includes('lacks passing evidence')));
 });
 
-test('every current destination target is backed by the dated V111 owner amendment', () => {
+test('every current destination target is backed by the dated V112 owner amendment', () => {
   const evidence = readDestinationEvidence(path.join(PLUGIN, DESTINATIONS));
   for (const current of evidence.deferrals) {
-    assert.equal(current.nextRelease, '1.1.2');
+    assert.equal(current.nextRelease, '1.1.3');
     const previous = evidence.previousDeferrals.find(
       (entry) => entry.id === current.id,
     );
+    const v112 = evidence.updates.find(
+      (update) =>
+        update.id === current.id &&
+        update.explicit === true &&
+        update.date === '2026-11-10' &&
+        update.rulingReference.startsWith('owner ruling 2026-11-09') &&
+        update.beforeHash === evidenceHash(previous) &&
+        update.afterHash === evidenceHash(current),
+    );
+    assert.ok(v112, current.id);
+    // The V112 amendment supersedes, and keeps, the dated V111 owner amendment.
     assert.ok(
       evidence.updates.some(
         (update) =>
@@ -643,7 +654,7 @@ test('every current destination target is backed by the dated V111 owner amendme
           update.date === '2026-10-09' &&
           update.rulingReference.startsWith('owner ruling 2026-10-09') &&
           update.beforeHash === evidenceHash(previous) &&
-          update.afterHash === evidenceHash(current),
+          update.afterHash === v112.supersedesAfterHash,
       ),
       current.id,
     );

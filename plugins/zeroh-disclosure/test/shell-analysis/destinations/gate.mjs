@@ -107,7 +107,7 @@ export function validateOracleCoverage(
   return errors;
 }
 
-export const RELEASES_WITH_1_0_ANALYZER = new Set(['1.1.0', '1.1.1']);
+export const RELEASES_WITH_1_0_ANALYZER = new Set(['1.1.0', '1.1.1', '1.1.2']);
 
 export const OWNER_RULING = 'owner ruling 2026-10-05, ruling 1';
 export const BASELINE_HASH =
@@ -598,10 +598,10 @@ export function validateDestinationRelease(
         entry.rulingReference !== OWNER_RULING ||
         entry.noticePhase !== '55.4' ||
         entry.nextReleaseTask !== '44.9' ||
-        entry.nextRelease !== '1.1.2'
+        entry.nextRelease !== '1.1.3'
       )
         errors.push(
-          `baseline deferral ${entry.id} lacks the owner ruling, 55.4 notice or 1.1.2 task 44.9`,
+          `baseline deferral ${entry.id} lacks the owner ruling, 55.4 notice or 1.1.3 task 44.9`,
         );
     } else if (entry.classification !== 'missed-protection') {
       errors.push(

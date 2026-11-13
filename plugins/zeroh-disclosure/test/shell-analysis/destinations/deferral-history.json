@@ -4353,6 +4353,1366 @@
       "beforeHash": "15245bca58d899b9005b0adb82d45c9e43bc68f3ebb2187fa7fda83534d52d66",
       "afterHash": "e86443a58056c795de9111940e9b443eb017226f452449e755b81ad58845d71b",
       "supersedesAfterHash": "8d31a9bcb43287292248ace8743e0163dcf096691e657cb795a07ba626b06ed7"
+    },
+    {
+      "id": "43-bash-ssh-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "292960244c69680f268458f6ec4670fbc229f5631de6c2e82944ae9a8f450181",
+      "afterHash": "ee6b3be7f7b7b7178896797bb38323bd85de527a733483e7ce90445b5e978c7b",
+      "supersedesAfterHash": "221259653e112fabd93f6c9e74fc526d8a3bf0986add27cca9dc0d969237d85c"
+    },
+    {
+      "id": "43-bash-ssh-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "da104db0df891180e44f92a968dec71c505d2df8ab200b4cfdfba9f22d93b664",
+      "afterHash": "f9dd5b4c8f918000f530132271645aeec645560b5cce20a0226537713b37b100",
+      "supersedesAfterHash": "c805e6e4bfd897090e1eb8b4d7364cee050597ca6afbef2f26c92df92504322f"
+    },
+    {
+      "id": "43-bash-ssh-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a70e78df789adeac9732bfff8e13180caa4f5b32704fd95273248b1fc6d32dd7",
+      "afterHash": "bd5386dd75ac1250a0cdcb911650ac6b1899b5311e0437a2901b272ade8143ee",
+      "supersedesAfterHash": "1f4c9a6607813fbd77e28966e3433cfd59715893a8a6a2844862105502f93e08"
+    },
+    {
+      "id": "43-bash-ssh-0-ansi-c",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3652cf6245358c01c66bb7bfc0e67aadd62171b06eb57f9ba4a1fc7962893b41",
+      "afterHash": "0d47e3c63514a7422e600b4e9f0d0cfdb5e63d2b518641dcd073967afe833cbf",
+      "supersedesAfterHash": "f5d8b25d294172a41575961a8520e3b804c39de08c3c72e4caeaa79ecd231983"
+    },
+    {
+      "id": "43-bash-ssh-0-escape",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "ff9ba3b66ca8f52eeb80a22db7e36b1d289973928dfc7276ec6f73ed9b20a1c1",
+      "afterHash": "dfe7246e750f14e3481b9c92e379957dd46bdf62e976470eed6752918a952e11",
+      "supersedesAfterHash": "0ca90f466cf712abcc05fdfe12701e7df969970af19930228289ae330942d71f"
+    },
+    {
+      "id": "43-bash-ssh-0-concatenation",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "dfb3c6a90461b2b148b072a04c328d322f7d2c19e6355f71214485aca38ef17d",
+      "afterHash": "cbceae8741cc4ebe4c170694be57f2e6cba765c0b94342467db719066487decc",
+      "supersedesAfterHash": "12d3fa12a094623fcb073e246ef045ce1b1729b8455e76bf3a950b7f31dc5d5c"
+    },
+    {
+      "id": "43-bash-ssh-0-substitution",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3e138d0036641dd35053ef9cc1673f5b8ea64d4ca4c991a8d31a7d518ca41388",
+      "afterHash": "c1553138062127775441d020e31767590bcbd7be56569b80f639b819be338723",
+      "supersedesAfterHash": "6ee80a8434da281a254a0ae0c7c17d83a0308fe9f73eb2984ba983dc66cd2bf2"
+    },
+    {
+      "id": "43-bash-ssh-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a206a1a4b337d734f68cf1829247093dd6a5ae7e0c0ce71471e0d6a8fae28ac0",
+      "afterHash": "03f6f3ecde03d94ea73089434c39c649a835cd8aa392d18d63594b08587ccd04",
+      "supersedesAfterHash": "2568600a691a708c0ce62f4550ae1a63fcbadd41f3a0eefb8efa4c1c2bd17029"
+    },
+    {
+      "id": "43-bash-ssh-1-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c3e60a2c55c230683f5fcd3f4fecee9a759fbe6b1ffb1e51c6e1c7c1cc1b442c",
+      "afterHash": "fe51c89427defe161714151746245cb2c1bfb168807461f340d844e39d3eaea8",
+      "supersedesAfterHash": "65e40ee81232f7cf6e988fd6e02f78be6a4303391bb731c9058438e034a60424"
+    },
+    {
+      "id": "43-bash-ssh-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "91995bbc54853b176e85b78b5473f9e1326b99df79ace36ad0240b5f0e7a996e",
+      "afterHash": "9960c6ac16e47b111cf6b6d39dc5e20fb1bbc3e4fa98558761344c9d00764d48",
+      "supersedesAfterHash": "bcbad476362cab6f2ca7accbb9099d019acc9722207b79b1fd1dbc83f3341d7f"
+    },
+    {
+      "id": "43-bash-ssh-1-ansi-c",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "deb34676ed5e19fece1ab326bb59fdc8dab41062a7a3154f6ef9626fecc573b4",
+      "afterHash": "3f2e771ecd504a314a48bf2eda10e858ead65fbb74a48ce30079c2a4ebba55d8",
+      "supersedesAfterHash": "c25315562aef94177a7249e8eadbc00306ab6fbd4ee26fadf1c771f833512fb8"
+    },
+    {
+      "id": "43-bash-ssh-1-escape",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c3a69a35a26afea1b2325ca51fcfad305dc27e5b3a6b62bac97376cab96ef11b",
+      "afterHash": "8454fdabe6b6081db83f55423e587b0b49c9d14955925d3a55a09c6ad0f7eb9d",
+      "supersedesAfterHash": "519462872eec4487a8441d766958bd2fa1f9c9252c3578773c1cbd799c51a10b"
+    },
+    {
+      "id": "43-bash-ssh-1-concatenation",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "62f4d087d16b236f4a2d0ad92d38f50742ea5bccf6a965d6648bc42db6696b6c",
+      "afterHash": "8864e520a75b2eee18209ca320c98703257bbbe42127fd70bf8dd6e3d64d5f83",
+      "supersedesAfterHash": "f9c46c0e33d3b21a3ba803b7767b6e7b667d4740bac6a04620955c836e61aad9"
+    },
+    {
+      "id": "43-bash-ssh-1-substitution",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "caa96553dc5f9aaeb0fef71ec0981013e2d402dd7d185e56044c8b67da629bf3",
+      "afterHash": "03839db7ce6c96f99a491d8123d3d2be760dbffd0f3868573776edf678a40ad9",
+      "supersedesAfterHash": "5b671826c960c96045cc2abb23c80f5dca69610cb38dee8bfde8d1e93e3ecba6"
+    },
+    {
+      "id": "43-bash-openssl-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c799a8f543a91bb031f1750fa6618714f8d5fd3dd28dd03995848c075fa29f9a",
+      "afterHash": "2e385566cbd6925666531b4475a5956fc24b4741b9f39a60e379dee789e32f95",
+      "supersedesAfterHash": "ccd26ce928ea65c1293d2295bf339b6f184428dffce18141588f1693befca7ff"
+    },
+    {
+      "id": "43-bash-openssl-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e78e9574ba75d68fc67d8e112da0e6b7e52d56ac4f1647476543e16c666f39f2",
+      "afterHash": "9c28f264f650b4071a7c1d4f9ed7cef1236f0b620bde4729f0320dd1062b1eff",
+      "supersedesAfterHash": "ebdb90b027acdc3aac255b574086eb35f07104f6120d85a6f4d41b50f5f2fd5b"
+    },
+    {
+      "id": "43-bash-openssl-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f021f03efa027c2940aabaaf8daa71cb9a8e17697336cc27f34f3630cf40637a",
+      "afterHash": "e966f419e3f53cd1a09c87126904b7144aab3dcc12ee060e0b9596558da78aa1",
+      "supersedesAfterHash": "eaf385aeb696f1e70222c43124572c9fe2e17eb56cb7d87b5b618777f2590245"
+    },
+    {
+      "id": "43-bash-openssl-0-ansi-c",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e66a10c6cfe783441214d65cce06bc9cfac5c3970c9c4612eddd2ec1fa249fd1",
+      "afterHash": "989d6703a0b59646bcce84d40030a04f3add2935c7cabe9ddfa1c703cd14c38e",
+      "supersedesAfterHash": "f4af9ec3348daa550f714e07a990ad36f04f770e409119e8c9e520f4a88940a6"
+    },
+    {
+      "id": "43-bash-openssl-0-escape",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6765519c2806d0577801871682f717bcf6a5986dca2c8aeb2e55b86ea4b28203",
+      "afterHash": "24badb54b73129705bea428fd97c96d25960c2cdd02e158d59aad3c316467c2d",
+      "supersedesAfterHash": "a28c5207ee0581da56a4fc28c6f27fae6db68969b9c845212ab4aaa994337b37"
+    },
+    {
+      "id": "43-bash-openssl-0-concatenation",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d3642c652beb3784115ee90e75b32833e7e2d2a4b94d3e70acc316097f13dec5",
+      "afterHash": "1aacfca018f1a87868fb787a452e2387cf1464e9706e60eefc0dd3c00ced6431",
+      "supersedesAfterHash": "3f42a34be550bdfba124fb9345ccf1b84a781c9d8118921db32cd1c8539e69cc"
+    },
+    {
+      "id": "43-bash-openssl-0-substitution",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a99ee2e95ae09b29bfc3e921436d0e0f6a74eaa3d5203dac271c8e3e468ca36c",
+      "afterHash": "f6469970ef55dec1f41ff2c7d86fca566bc4904615e7716b5fae4b24962d0f00",
+      "supersedesAfterHash": "2071b00c20a139322013aca07b238a5e982351976c9b6f887c3f5e6fc8064b14"
+    },
+    {
+      "id": "43-bash-FINDINGS3",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "251cfb9a0d883609efb8226effad29d2e8ca2e31d0f5f90565114bf5347aa985",
+      "afterHash": "f6fb8a94a5cd6f8ec4892a11a92f22612e12aa21f83eea38128cc12fbb496916",
+      "supersedesAfterHash": "add3cc373ff29e3eeec62de9914394251478aac9720ca588f958637ef5fe8b61"
+    },
+    {
+      "id": "43-bash-live-tsig",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "85f067f6bfd3f2964300c08032a582eb2dc8ca1744cf7806b392671fff194241",
+      "afterHash": "3920c6872782cc13d62e8ecc3601f1c6f6b7c68f901d943eac40fa9b7ea982d5",
+      "supersedesAfterHash": "96eda2c9c4eb5c4e63e155b972d8b46c5d12ec672305a2d330646df439ec12cc"
+    },
+    {
+      "id": "43-bash-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b6b86e1dac95674666095c4cea156a9f37ce2aab4b137e5be2936ac2fc96e578",
+      "afterHash": "e78650ece684f83f044d1b3d006d5e011100469d301ebd4fa924d128f02627cb",
+      "supersedesAfterHash": "2a9863d4465baa2e79f8ef1dd3a4bc476bc71ca9939d9adcf16984b7affafc51"
+    },
+    {
+      "id": "43-bash-curl-default-config",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3128d9805855df41de39620abcaa67754b11008fd41ba8b6b366cdabed680bb6",
+      "afterHash": "a9f47e11aba10650c0dc7eb95a3cb27c0b5552369182a51c0a1678951091a8d9",
+      "supersedesAfterHash": "63d1bb00610099929f5fd2612145f43d58ce927f576a1599eeae928b91fff719"
+    },
+    {
+      "id": "43-bash-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "0cec2c07ba629c2f540bd5f75e90b1b04dd9c3e6d5cf2f807b3ed2d1a7b145ef",
+      "afterHash": "9ae7b14e02744a0a686b188e269768d58cb46904e1c3fd24f8061bd3b9de8556",
+      "supersedesAfterHash": "72613f4628461eaa71ebea57565e1e1db32687442c9a54c64c5f628b2ef62bdc"
+    },
+    {
+      "id": "43-bash-resolvectl-search",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "64c73261aae6a9808636863b3756ec6e13c78f1e5c350501d2237ba7a5833c74",
+      "afterHash": "012455c7c7838107d731a3529fb77a488b52c790d0a770fcde0f134e704d3963",
+      "supersedesAfterHash": "b28446a6356dbc6b4b10b5e1ab7fab65f78cbee861dd4548a4bd1a2757b254ce"
+    },
+    {
+      "id": "43-zsh-ssh-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a89e99c435b8b9abf302eb08cebd1a76c4ded967483b22172d6b1bd9a86c4d0c",
+      "afterHash": "b3f9e2b88a2aec0599fceed23d3b160a8b19eb33d8724711915c8842c66026f4",
+      "supersedesAfterHash": "43d3bfc787e2102f59ac9eb552f5cffea04b2268f72e4076cf13068a8dfa1aac"
+    },
+    {
+      "id": "43-zsh-ssh-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a1737b1a861f773f662b2c1feaa8b0288615358b206bd04d5e36d7062df0213c",
+      "afterHash": "e2e720278d877fd9bc56ed6bbd3ff90bd27119864d319bb36c29a10ae16bf25f",
+      "supersedesAfterHash": "97bc86eaede48b7753668e41f25fa8e8580d2b38e57f12c03e5a6e9047817e78"
+    },
+    {
+      "id": "43-zsh-ssh-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "56a6c980673c303a7047cd5d45b9947d88da3add5780cd11010a129f0d089cf4",
+      "afterHash": "4ffb85d436c0e8a20c68fb710e3fddc955c804a69b6cdd2f632db89bfdac113c",
+      "supersedesAfterHash": "46ece61ca2206e10452516154d6ef9b63f0110d93e530cded75b7621378eca9d"
+    },
+    {
+      "id": "43-zsh-ssh-0-ansi-c",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a90e2874fe39203a6c8ed5b1d11db95950e70c4af48131b1389e67adcf2f2d6c",
+      "afterHash": "95dabfe5a7f6de16af47a6d219ab6de9faa8fe2ec2ce08951a9dfb3c7cbc71b0",
+      "supersedesAfterHash": "3ea474f737fe4759318f6706c69b9b00b5e5683c7a1a4234fb3bd72b6866cbc7"
+    },
+    {
+      "id": "43-zsh-ssh-0-escape",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9a7f8c42af5fadad086754adfd4c55f5e2e1861d7e2598da8fc2de1d573fce78",
+      "afterHash": "8fe359f6c3d35b948eb033cf1f5b38213e8c077d6b3c3557f3fa345b2c52d98f",
+      "supersedesAfterHash": "c856ae2d6048e0a5bb0201da9ae100364b06bfc2cb6d76d19a685b235a028752"
+    },
+    {
+      "id": "43-zsh-ssh-0-concatenation",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "0068491d42afc39fdb3a11c141c0bbd0cf57e05a06a5cb08230c780550007e7c",
+      "afterHash": "1457ef67e4c64f8732d8e2f32e3345dabfd39c4a33ad8063723844a8d2c7e28c",
+      "supersedesAfterHash": "126ce134e5fc63307b7e11e734092e445884e7f5a06d3837c6638a5ae5704d0f"
+    },
+    {
+      "id": "43-zsh-ssh-0-substitution",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "878153f1f54430e79a7ebb0f4710d29730de721df0564e83e65785b4571d2bfc",
+      "afterHash": "96d29853698ad6264b8d7882fd0c9f5601ced5fbb5cd45836d0d658b2e2a55f2",
+      "supersedesAfterHash": "7bbe749bc619f2b7f4e47893ab61b0c545b6b2f0845ed9b6a50d3ee335e84321"
+    },
+    {
+      "id": "43-zsh-ssh-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5bb0c7c25c2c91896451941ea2753c10c1b5dd02007707e637460b79ea783cd9",
+      "afterHash": "75db5f2dbcfa2b3de04776e94b7a915841d4b48781d8a715cb81e05737732568",
+      "supersedesAfterHash": "4ba671cadb819d7a5964b7b391d3833e332d6409b5c651e633f0780871680b6a"
+    },
+    {
+      "id": "43-zsh-ssh-1-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2372e4e601cce1b61160f24c7f5ccd306cb736cbd6bcb940378ed7a9dd4f4f90",
+      "afterHash": "e11f8d941e8630d1d629f490e903c5308d175a9c904100a8c2492c305dd820c4",
+      "supersedesAfterHash": "6727cb492c53eae773bfeb2e573a2e98f8f2b5e8131f79eee44cd46a16297735"
+    },
+    {
+      "id": "43-zsh-ssh-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "bc7bbb9571b413949db55a398e4c7d060966fd8a7fa7049b407f55291fa347c0",
+      "afterHash": "093d7b8eb22f3b578e067c21db3256df1521ac83273fc7a780386e2667e0bc4b",
+      "supersedesAfterHash": "274b0d773b1a4dfd5a8f7bb7cb1e4e72bb3a5260ebfcc106bdbfc89cd2adda61"
+    },
+    {
+      "id": "43-zsh-ssh-1-ansi-c",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2c12b07787fd88891b8380f2f0228389a36399a14a79ce48d7111a76b905fda4",
+      "afterHash": "0b45f06f48e13d0e5ddefd8ab48134445f15271e74518d867c5d1bd39ec4106a",
+      "supersedesAfterHash": "56b676172a774ffc542a8061e924dc8785bebb5a4dae2d090f04bfd2bc3ecb4b"
+    },
+    {
+      "id": "43-zsh-ssh-1-escape",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d947c31aa91f2d2591797e649ae42038f59ebe934d1cd7c33fc61c7626b424f8",
+      "afterHash": "39f7b5c378391b63d8150e0b710c27c023be41ce93492a13e3c5bd24fce2ffab",
+      "supersedesAfterHash": "fbfaf1c5bcca3bd915fc4e6a55e9157463ef5bd07e6a1f4ccffd62805bc856ba"
+    },
+    {
+      "id": "43-zsh-ssh-1-concatenation",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "be20b3acb85ece64cecd078a656716bb0ee798f484a4a9c1626359ee38f98cbd",
+      "afterHash": "7d80ff9b996d8793ca3f91461ea2bb20c111d30807f595bc1be8739755d656ff",
+      "supersedesAfterHash": "1e6789006fb3aa44fdc2cb80b692cc9aa7db3fecb31546c548f55c99a6d4f5aa"
+    },
+    {
+      "id": "43-zsh-ssh-1-substitution",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "4cca2405207cc4bbfe868c6680d22f5e09ae371cd19f29ca2cad20649c2b9dfb",
+      "afterHash": "0a282d8cc985c5b70933cf536fcdd18af06821e91741737d73b2433d4b490f9f",
+      "supersedesAfterHash": "97017e9a47d31ed3480a385f1e9ed24f94018ba94b7a4978a1c9d36e564c9e63"
+    },
+    {
+      "id": "43-zsh-openssl-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2bc9f3ad3ee5a8bad49a4dad93227e99d95d6d7723a2c83f7d0542b06686b4e2",
+      "afterHash": "5f9311ee33009cc91bea7c5e651b5f9f03e927661ef25381623138f82397c4c8",
+      "supersedesAfterHash": "8f000437d33862695dc8678bdf60d51c62baa518542958e49e8798506e17f6e6"
+    },
+    {
+      "id": "43-zsh-openssl-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "95c13cb1b0ab98244e5606b19c9b041053947ef94a54ab0981d8a6e46070b148",
+      "afterHash": "4bb421ea46b9ddaab6c357f07ebd0708de0b72341874834c0b48d3ac0cf554b3",
+      "supersedesAfterHash": "8d3d5a429e8751915eb177b1407bf5954b77b677100a2c47cd3e909b20210257"
+    },
+    {
+      "id": "43-zsh-openssl-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "dc2df44e430cae94ca4583193cef60edf73c25ef12493cbc46d3ae2d0888f732",
+      "afterHash": "2e40e5acff3c4c59b605309dd24c37ed5542f6c9d2f83ffe0ab2d1ade4d3ddb2",
+      "supersedesAfterHash": "3c0e7caa142e2277e1e3ecd3c575252974b088a6c6faa63186dcc1a8efff081d"
+    },
+    {
+      "id": "43-zsh-openssl-0-ansi-c",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6eea40fb07c5388c05ae2c5d51f4abaa2bf08fcecb33d08f6e5c04b6852657dc",
+      "afterHash": "65dd0bbd58a40caf50663a13059ee03d9911cff8689280877aba869872c1e29f",
+      "supersedesAfterHash": "daa3ebee077e74f2a6757de7484d7e588c6ed88f03784bfbe71fa255269a8208"
+    },
+    {
+      "id": "43-zsh-openssl-0-escape",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3c8eb1026b28489b13739d21e01210575eeef619e184e70a205cdf2f821f4ea1",
+      "afterHash": "9801c50dee3f14ec4cead37df71250fe3380b776f4ce039cbd1374e2c33e9fda",
+      "supersedesAfterHash": "cd6e580248bd1009e8a802dcd3bca5ce8c685202ed955966f062ed3064f865e0"
+    },
+    {
+      "id": "43-zsh-openssl-0-concatenation",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c44ac73354ac008750d4197bf837c3c1e5b9dbebbe9fc6a0b1c2c4e898fafabe",
+      "afterHash": "d5a5d31b9cf12cfc80eae83b4ea63af6fb1ad836a72c35b1f2ec58270d54b48f",
+      "supersedesAfterHash": "ea90c0b6dfbda7088e952877a5f8b9496141814d77deb430d1fa50f60d534b65"
+    },
+    {
+      "id": "43-zsh-openssl-0-substitution",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b1fa654af51b38a44c625faefc2ea29eace7ecd20ce73e64573019e0155a0b24",
+      "afterHash": "2b2a144a3e19587b3fd5d3b8c1ab84a1ffe5665ef00cc9033c6e94632b644b97",
+      "supersedesAfterHash": "b41e23d1c09c796cb9f9fdf0d23787b4151586adfd458a77345b77fcca56e602"
+    },
+    {
+      "id": "43-zsh-FINDINGS3",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "716a7d1064afb72f0df8839213e5d57b68367ddc7d0d4a95a9c63bd8d806a264",
+      "afterHash": "aaf19158c1ac7a0e3e5d1a19078efd0c00023eb29505ce8f113b564ad77cd1bd",
+      "supersedesAfterHash": "f20777f3079266a8763fc85dff12f1f1ab30491f7e3a06e583e739d606ed0a97"
+    },
+    {
+      "id": "43-zsh-live-tsig",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "4e123c7366b49cd0738acbba535e027429cd4b8fb77ae1e2e337030670071523",
+      "afterHash": "8a9cdd7404bcdc0c72c20a128cdb2640887ead86e770144f5a9b21d30843b5b1",
+      "supersedesAfterHash": "05dc3dcc426e831a46a9da84e54e3fbb7445153d7d1c48aab01b8aff5300e4f1"
+    },
+    {
+      "id": "43-zsh-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b44b9e2ea40511cb554b47667a6ef8554b8ce04e74ee833c196c4000189fe5e9",
+      "afterHash": "4423acc4c8313a68eddff6d96b26a1f27786baca64fa521bc21ef3c2b0ced20b",
+      "supersedesAfterHash": "c5b6ad3b50cbf3b4d049233204aa2b57d201858651b4f5959574a76a0c65b0c3"
+    },
+    {
+      "id": "43-zsh-curl-default-config",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "ec9bf1e73ca787666d79dab9924ac20e308e00192c46ff696933656259d63614",
+      "afterHash": "45581bbc0e36041e528675ab3e4b9704e80abc9638528bab86d9d297d210eed6",
+      "supersedesAfterHash": "b3455dfb6c39357170447668a02396654080faa60cc8d4ac191daf2f966c1bad"
+    },
+    {
+      "id": "43-zsh-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3715cc9eb643877b1dd52da4f49fa5774e8c964b67997a231ee16114c52140d9",
+      "afterHash": "4a81230a5d55275a9db26fa7c966c3bfafbee5daf61db1dd96bc11348384c8ac",
+      "supersedesAfterHash": "54f29c1c3c522f66629e65f0efdaaf06e3697b449b8f2e956a501c2b42ca5d7a"
+    },
+    {
+      "id": "43-zsh-resolvectl-search",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c4976ea13aad20a27ed23a8edb0525ebae31f059a783762570a16c56ceeb5d4a",
+      "afterHash": "2a98faafde83ac6933a5c1cb8bf0617088037fc1152949cf5d3c1516321ef919",
+      "supersedesAfterHash": "472c9ed16269f3bfbeb47c99346c7e2b6115966590ffbeb23c4b42aecc6588ad"
+    },
+    {
+      "id": "43-pwsh-ssh-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "82be4cf2bf9da23629dd73a233f2e4e1ccb83a976a954cd1bd347360dd9b8114",
+      "afterHash": "5c92861149a584bd7614b97c20ca91e4f4d0004c1149c0782f8c9c1c109f7364",
+      "supersedesAfterHash": "e078ec3b5794e1fb8085d6492ad8013a1bbc3d0fcbfd45eda5b9876ef351cf3a"
+    },
+    {
+      "id": "43-pwsh-ssh-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e64aa8650cbe02c8ae4e28b29489a1308d4d978b9500f878f8f498549fd1a1de",
+      "afterHash": "b9c5379ce5960a70bd1c7fdaa8fb1e29bb2ec2b113adccf57ecc815251b9fd1b",
+      "supersedesAfterHash": "85715c9a2994a2b0657322bc65a0fb034e697a1fd823a459b71d7583f6778212"
+    },
+    {
+      "id": "43-pwsh-ssh-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "fc6d48675e82084bf032f4a26c54a595b7f919964016e77ec3cbe8ca920c2e11",
+      "afterHash": "e11c01e91407de778f48c40eabef05498baa4b742cbbca0500e83dd3c53b41cb",
+      "supersedesAfterHash": "491195c17479c13ab02c5c2f306611bce38208b5f299160976c3b3417334eff1"
+    },
+    {
+      "id": "43-pwsh-ssh-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a709ff50cbf861e12aceac32a6dc999516843b790db3c328cd2c98cfd89ebf19",
+      "afterHash": "b3e618aeef979aa29c47cff3eec0cc407fe7153b3835e7e6279e451d2961d4c5",
+      "supersedesAfterHash": "5ddd4e6d1ad7296e60fd21c201afbcad6877cd4c52f0ff15ea28d84d7ec382a1"
+    },
+    {
+      "id": "43-pwsh-ssh-1-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "946433cf0ad9cd526a040726eaf069b1720033435c9e1d2b911b952c10d81886",
+      "afterHash": "1b7b87c28968967e24be3f9a24291e63c25a390f2ad2e117c2505d194f1cfcd7",
+      "supersedesAfterHash": "92d4c206ed4074962c50c52068eda253b6878f96ebb78d419321ec6a9bd91494"
+    },
+    {
+      "id": "43-pwsh-ssh-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "188f42b895d97783fbf2a12d181c19b941cd986d187bb3d0000108e1572ba0d8",
+      "afterHash": "4d89d446ddab7c5cafa23c9a15c87ed204b500320ca22c03321626f9c6ba0625",
+      "supersedesAfterHash": "b1586ef7e2e49f8c4ebcdc3abe8634fee71d6acc35f03d3a49b618e853a8a960"
+    },
+    {
+      "id": "43-pwsh-openssl-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b8e5a88b0bdb12ff830363118d0f5b4d73ca43015a7410bca6ef5f408b766861",
+      "afterHash": "b70c60f1a8361d78c615d3aa86e5f2559f036268526db327448d4c635e4183d2",
+      "supersedesAfterHash": "4de650fb1189183f6786b2b10ebdc6f3d722bb6e63f6d9aa9490aabaad98cbb3"
+    },
+    {
+      "id": "43-pwsh-openssl-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "18268434dae621dd2542f93338d203a8a3557a68f70c6c59658dc37e026699e6",
+      "afterHash": "efd9b959a2bf86f6fd9bd9eb41b177ddcb242fc9f96d7105e8205685d81b99db",
+      "supersedesAfterHash": "3b503b0862bb84cb356d30eeea79385d4113e945da8935baaa7c95e08ad3d2f9"
+    },
+    {
+      "id": "43-pwsh-openssl-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c5219dea48627dc28cbef73b0da5323680b1e3f5c4f876ed9b15c57b79d8fe36",
+      "afterHash": "b45fba65c68545acce00617558939d8e7e212cd6a1b1977092fcfdd50e93b5c0",
+      "supersedesAfterHash": "c6357ee9ab9e8b9537e6e2b9566b0f17ccc6070204939b534acf5a023d58a6f9"
+    },
+    {
+      "id": "43-pwsh-git-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "fd0eec2b666ed1022a18fa1351fae83af6032c2befc20faa1fdf78fd99bbbe18",
+      "afterHash": "0e4904177aa57477e2fc94d9bcd85d0d715803cd2c29c03c808b3557dab5a0f1",
+      "supersedesAfterHash": "342450c4927eb6704cf1c103c592c5d32f448fcdd706612a363c046717c458f3"
+    },
+    {
+      "id": "43-pwsh-git-1-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f5edc640e4a5766ca24c19b83371211320031c764731817481813abed0e6cd53",
+      "afterHash": "e479101d9dc4f09d6b5b380b92bbc7878b4275105c32fa490f113a6cfeef2e4b",
+      "supersedesAfterHash": "adaeda5b8ec6ab006cf19835eeb7b2682e1a0598f1ff4a1378db0dde2dd6279b"
+    },
+    {
+      "id": "43-pwsh-git-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b73f93a8a326449de23b53bc8bd277e9a16f4f34ea9bb057288001d7fd4f8687",
+      "afterHash": "1d1f01822b7e9e6f3e884ff8da9ef4da9e311d1ebe0a224b02a52865a75153cf",
+      "supersedesAfterHash": "dbbef08e1b359b4a90d4728c468d93117ed1869fcda3158153fc82b1c6931a3a"
+    },
+    {
+      "id": "43-pwsh-FINDINGS3",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "971262e7c96e345f8bb538c653cd3c6bf472049524889e17db65996c6ec0ade8",
+      "afterHash": "9dbaeae7782eba39df7b0809e17c838e3436016fe17715d317e9b92e23e8b740",
+      "supersedesAfterHash": "d28b302e251582d9501084872fe24894bf72837364d3db68e543f5a214e9c7d0"
+    },
+    {
+      "id": "43-pwsh-live-tsig",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7a6cc2d4ee5d032fd08d3c830fde66d1aa1b164e98cdcafed3cb249abbbc14ab",
+      "afterHash": "9a52c2813ae9847d8bc7ecf6646d57e5d2a8d03c36ea23faf097d7cd7c3da047",
+      "supersedesAfterHash": "602d1334d60d08ed43eb38efa154635929fcef2f1354b4e409567c5af4992722"
+    },
+    {
+      "id": "43-pwsh-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b82fdb82fe71b7951279256aadb5cb328f96fc944f8c97c23170fc344c28ca4c",
+      "afterHash": "9f235916f290adb3440916ff9ab959f1aa248ec65700165c335a124d286d67dd",
+      "supersedesAfterHash": "bc5b8227d86b5a8a3ffa9627571f9897f6d02e1ed92537b56de05c865d2743dc"
+    },
+    {
+      "id": "43-pwsh-curl-default-config",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7eb4093935e02d763ac5705a799ddf0f2f844aaf5792621c1421cc62f98bac6c",
+      "afterHash": "16bdd397adabe538400235054607022948013dab608aaa574e94d43a4dee796e",
+      "supersedesAfterHash": "c53c8babd8d8118d4c035f41bf5cf7395ae6da5eb3f9b05066891c39a4d792c1"
+    },
+    {
+      "id": "43-pwsh-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "adb89542d3bce51db79dadeb1d7ad1ece2e4b1ad48aa9d8b44bc5fa61a5ec46c",
+      "afterHash": "803a4bf0fb1d6eced7ad7c71543e1fe978c8ce32c501fbeae785c7e549f2a2d1",
+      "supersedesAfterHash": "442f0a7435326479c1cd45b8f891c07367c91ab6440d0af2e607632c7a39349c"
+    },
+    {
+      "id": "43-pwsh-resolvectl-search",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "56897cff15546b1f54cf1169f23682bcdeca40c48929a4cb1e7a3fba67212bc6",
+      "afterHash": "2a8a82f053438c6cebf23a425816fd857104a4d7e3c44b3ca169de652042894f",
+      "supersedesAfterHash": "024462ca1cd4b1e75f441fa590dd7c921091a38becaa332ce53da2d6e2f76dd5"
+    },
+    {
+      "id": "43-powershell-ssh-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c2fcf1c3b7a9d96ee7f8694ac077d196f5a9a7b012d169f7d2250d584825e62a",
+      "afterHash": "e439050d0818b7eff242a257925a3b3405ecabf76f74a955142e2bb2df136142",
+      "supersedesAfterHash": "d8487f58a22d4986014c353f82cd9931051ea42ab37722b29cb4c7598b11c815"
+    },
+    {
+      "id": "43-powershell-ssh-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a142f40f600312c4f8ed43f0191fb468e1dd4ca9ea5273df354c08b9333a4d41",
+      "afterHash": "d0bf833ba9014ad31da6db4a12beb2c5bcc0d161e49a52c2dd22f79a715f6435",
+      "supersedesAfterHash": "a9f3182eade37fa35c9826a38d6f42dc674cb75149465b3c6e089e3788932f42"
+    },
+    {
+      "id": "43-powershell-ssh-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9a20cb95ae76aa1c9120aa2aac8015509ef5d6f0149328e5c962423b0fdda67b",
+      "afterHash": "23cc62563f14e9620b48744a35f6943b66b570a69686726c46bffc713b13f9af",
+      "supersedesAfterHash": "2f890750109066e8c7096acc53f4c179507dd168fa7af2a57e9449a08118bd27"
+    },
+    {
+      "id": "43-powershell-ssh-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5247d4855eeae64505f0f1b1f13c0a926baffd9148b7437b7f231933438a425d",
+      "afterHash": "4d560f52081c3244e1e8dce460afc26e7e129282787520f5617f5ea6c31b7a7f",
+      "supersedesAfterHash": "22bad287a6224b1b71ed5f9a402272164a4ef9e68d81eb8f826c31c68a453adc"
+    },
+    {
+      "id": "43-powershell-ssh-1-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "728ea67e69f64a44f4d9e71159c967a76bfa5a909d9130ae984500107908c792",
+      "afterHash": "6f950edb39592988c794b10aad5f91589ed98125397de4e6981a13d7a9327fa2",
+      "supersedesAfterHash": "96109bbb8b82d0e4f4e41fe75a3cccd452e1aa375c2410b388a7190656b3fa05"
+    },
+    {
+      "id": "43-powershell-ssh-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e99b0fd7079b39021c26273631f300c3d22fa4b7d1d6d0d1466de13b3f976b2b",
+      "afterHash": "12af0a6d1ce429145d093d3f164a437214a492a9bcda0eb34da57ed3fbb6b365",
+      "supersedesAfterHash": "83580a2c3ffb0a1caee07b45ad53561cd9e3f913ccb0d5935f7477632d30f459"
+    },
+    {
+      "id": "43-powershell-openssl-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b224c2d08db8ce0418a5fa4e9597eebefa7eb97509c5115a6b3c973120e1e117",
+      "afterHash": "e2de3c6fe090973d6a386a9a4b1876d60ca5c60f119ab7039c8f5b6e6408bacf",
+      "supersedesAfterHash": "6df2efa0d7e080f45b29bf1f1fe7605f90f043b9d359af3b1cc01508e610ddaf"
+    },
+    {
+      "id": "43-powershell-openssl-0-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "81a2c0adbf162fae87183603564a633cb26366d8b174398227ca5a34b30c0032",
+      "afterHash": "7170d743a9339d9da07e3a7d950bcd83b9a7654ae5aab1b08beb1a1569ae3f4b",
+      "supersedesAfterHash": "d99db074d421595f4e0c45113542ce209bb99ce9e17c1f270ece8d1b6d79f851"
+    },
+    {
+      "id": "43-powershell-openssl-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "febcf0cdd9e369b9f073e4c33dac110fe68de9501831618cc90cd96b764f4586",
+      "afterHash": "5172bd6b2dfe2a8a2a1e9454e6474b69e7dc8712d84660da4c65f3f3e786b69f",
+      "supersedesAfterHash": "24a6fc84caaeb3202bc1ccc8c08094b8a5ed5c3ed5359e441eedfc927fee049f"
+    },
+    {
+      "id": "43-powershell-git-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "89fcdc841f45c0a1400dc63a1d50024382cc64c437d90e690d6d9be226cbf4e1",
+      "afterHash": "1209621c1b6c9c1989c3881e0d00f483eda4b0b3ddf40280bf791630bbe91581",
+      "supersedesAfterHash": "53a870d7ce9d46cc589479bbfba0535d09531d4bde79cb9ea6c7cdc27eba71ea"
+    },
+    {
+      "id": "43-powershell-git-1-single",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "0906720e2ef3176cd1304ac173bf851fb8286c80b758b68e41385aac65eb8ca2",
+      "afterHash": "88bf1b25ba41b66f09ce149634bc66e017356bf1c5a7120dc9458ce57462fc97",
+      "supersedesAfterHash": "e595050a5c3f48bc46a799070d5eccdfa01ade35b88d5f9f0e5f50ab15d90ac5"
+    },
+    {
+      "id": "43-powershell-git-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "662edf3c7c4c46537bfe24dcab1e4ce305ea3aae0dfaf43fe4f9f37972876108",
+      "afterHash": "414b2e45161d2a2d0400ef84b1ef953de1fe1edb5c7ff6948fed70cd9c8b3487",
+      "supersedesAfterHash": "5363fb1264e5ac3b6c1c30c83015eb846699168b06d2e37db23eea560e3f92ba"
+    },
+    {
+      "id": "43-powershell-FINDINGS3",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "247698785176e93ba0beca50a6aab07438d25f2ff07c0b751f6a48aba3a508fc",
+      "afterHash": "1d51ade59ba80e99d2acf6ca9a1edd9ef1a9d78d211cc8249eeccbd0765d9384",
+      "supersedesAfterHash": "ddb961196cab5eac542e549a028db197f583978f97e8d1a2248a6502feadd725"
+    },
+    {
+      "id": "43-powershell-live-tsig",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "38e26c8fe91a44594e0718e297501468b7e1de0c3da2bacd54c17a7fa735fe08",
+      "afterHash": "112b6de314545a0be29c5518470502fc93f7e8350e23d346d77a0a0e84bdfbdc",
+      "supersedesAfterHash": "33a3e0b0e1a46243a2e92772887d42491788df1c4929cc6a46d6d4e262399994"
+    },
+    {
+      "id": "43-powershell-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "934a05c7dda8a0ced076b04d6ee67988a48984fa1c02852c243d0560357138fb",
+      "afterHash": "07b17dc03e4955ef6de8ded8d87ab1e310e5ac5dd2d75233f90aed6ee2038671",
+      "supersedesAfterHash": "8c883515df1c73ab3623b3a2bd8b7822fc1483e46d9f3f486691a35164ef789a"
+    },
+    {
+      "id": "43-powershell-curl-default-config",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e890f47cc54b649b216afdbd3f07dc23b1a1c4513c3345e0bc6af69667500e02",
+      "afterHash": "73b31b20cf5ff6054132945380155463ead74b97ba3280c1e82194975dbca960",
+      "supersedesAfterHash": "896d9ce16997b5c9e9e81e5188641947c08f0d6c0cfb682a7fd8b2c612d1c55e"
+    },
+    {
+      "id": "43-powershell-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9da9c5b9fe671bc790ca7becd364aa8e63cffdef9ccaf5cd79289c3c945a769d",
+      "afterHash": "e8c965e0129c10bb810f0b7da6753c4b4a2178df98229998af94c78ebc8ad930",
+      "supersedesAfterHash": "aa728c4312adbed97efd090626a81ced5c9431476d78b99cb0d29066f64030f0"
+    },
+    {
+      "id": "43-powershell-resolvectl-search",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f71d58c875009be1450d59e69d088e1581afb5a90ddbd67857e6217312c58742",
+      "afterHash": "723a01921b0fab46dd6aac9d9c5bb0b74679cbc6fd82a270ce6df7357c4f006e",
+      "supersedesAfterHash": "40c5864110763aa3364a788b9bb2f7bc162c5f22b7e59d3106193431c35d45a3"
+    },
+    {
+      "id": "43-cmd-ssh-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9473db8d49096d1f6766e8a04c14f817a9f82537771fa7b37ad3c92b32727282",
+      "afterHash": "4a6493679dd0674702580ca22b8470534f9e4610b1a45c94cdf1fa2605f0289b",
+      "supersedesAfterHash": "e3b817e0d4801136a01cf743146bc9b0f91df251e98d818ab65bcc8314209255"
+    },
+    {
+      "id": "43-cmd-ssh-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "23a5211b432a237325662562c483be034637f50a60f34e12c314ff9b2261efb2",
+      "afterHash": "2ee2c09799967e80803d51a8e70b3f2bd98b95474f30fb56dd539462e79e2002",
+      "supersedesAfterHash": "6806bddaf7b93863689aa9f57ec26a675255f15bb10d3ca4a64bd54ff448bf40"
+    },
+    {
+      "id": "43-cmd-ssh-1-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "8d5d3899576e5c0da3e7f07c1eb95dfaf1e4fce7af253bf543656825dfa6b113",
+      "afterHash": "810ade1f6ad92d47a4ad000ac425f87a7f16623bb9145d7809fd24032da69446",
+      "supersedesAfterHash": "d0a4b93990d868b2a05790cefa03211c70993bb460f75ad4168de12498d48b4e"
+    },
+    {
+      "id": "43-cmd-ssh-1-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "da9ca505c7a9f0d27ea72f4c762a93285781fbb85620fb0b994cf71486010cf0",
+      "afterHash": "6dd5bd4b8794a34d2fb1c74dd983ba6a4cceec27c406edecb500d4fcd1597e21",
+      "supersedesAfterHash": "a6f8f1a137e3c2b6fb39b9d03a1eaa9f4745d733d8db9ece654aa56818ee5eb8"
+    },
+    {
+      "id": "43-cmd-openssl-0-none",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a03829adbda3a5fdecbefd125acf91ea7b4aef771e459e1bcdb33eababe90b62",
+      "afterHash": "ef968ab24017e51e6d490c3ef0411041c76e81d684c2836592547c94dd29dfff",
+      "supersedesAfterHash": "211501f25529f8ff8cf56d9cdbfc969349ce64d74fca305d479a4f3bbf5b8fd0"
+    },
+    {
+      "id": "43-cmd-openssl-0-double",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a0f509a3923cbaa881ab95eedce787f5a0b63ddf0418edbc2f0dbc3b2032abca",
+      "afterHash": "98a9c8311e79100dbf63cfe54b7fcb76191a5312e736639f8af47b3ec7a139ca",
+      "supersedesAfterHash": "22ccccbd5dd9cc6d1cf67ad65437d4b2866eb640d130ab52994c757cca04a38c"
+    },
+    {
+      "id": "43-cmd-FINDINGS3",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b78a9c4fa28d52f0c9b3fb6f7f23ee7be8eb4431c035e63f62d67163b14510e9",
+      "afterHash": "f09dc18499df9d10c067c9367587d83a77af2904adf9aef785777ea1560b2b01",
+      "supersedesAfterHash": "ebe42a9df8ad45729fa7ef1f1015790779f3533a5ea53906ad91ab59de48c295"
+    },
+    {
+      "id": "43-cmd-live-tsig",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5e00ab4884863610378f69e903ab23a9d17df77b0afb9015a0f6f2d1c03d2366",
+      "afterHash": "6d2862bed5cdd37a38467c28ed1b8cbee7b04f9ef5f4f8263ddc68b59ab3ec57",
+      "supersedesAfterHash": "297e28dbb1c3d3b2fb1e4451dd379a26d75f55347de601a5a003258ec7a618a8"
+    },
+    {
+      "id": "43-cmd-redirect-cross-host",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "53ad562d009ddf3cdefcf0949ae1fda67e019369888486f82bd8b507dfaf7423",
+      "afterHash": "d461cf28bb75d5e6f74e8b15f1a1f971d10a98a20ee635690ce763b5453c8c34",
+      "supersedesAfterHash": "052171ed86d675d861e558fda61606fa6858674db98e9085413053167c85b2f0"
+    },
+    {
+      "id": "43-cmd-curl-default-config",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "c1e38e65163d43a44090ead01b95f26383a27e45ed003d3f707792a63a2cfba0",
+      "afterHash": "8f73f041f82b5408f5931f823f8823b3bb6b09f6d75f551b14785804027ecbdb",
+      "supersedesAfterHash": "a37f13fc3970a90cd5423ca024e736ef42dfb6f0b2446bb1975ea0ec62620e4b"
+    },
+    {
+      "id": "43-cmd-nslookup-srchlist",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "61cc5239a77e30f4a865c7646fdf8ddcb51da6cb84e7414edcbc02bad2033b25",
+      "afterHash": "f12e5e4a30880a7d184688e19efd61034f253a2dc044d41a59c38c1e05b8f42a",
+      "supersedesAfterHash": "07649b7a83d610fcebb4f8485f8731ae47d5c7a3a4272f064172feebe4194590"
+    },
+    {
+      "id": "43-cmd-resolvectl-search",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "bc8d9476e1aff3e5f1a068d7b503ca5c96cb03889e906659e3a6358ca0bc6e8d",
+      "afterHash": "d95bd8172caa09099e3666c12bfe1c6b70f3ae646774f51fc92dbb97847cdb33",
+      "supersedesAfterHash": "93efff8e26456b1576a8d434dfcc28b08cef4610a8ebe240ba17c64f52dd987d"
+    },
+    {
+      "id": "43-bash-comment",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9da36f195b0a60ff6bb527e45f8f114217024ff50d2e057324cbe47bee2ab528",
+      "afterHash": "953ad7925f2f7c68ebee87902b6c28ffd10e2e5c36bfed746dddea53845e7dc4",
+      "supersedesAfterHash": "8e6af769e73daf2e8de69fa7c5845d375d503d2523bb8c52c7d7704e6b2a3032"
+    },
+    {
+      "id": "43-zsh-comment",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "f6c36d009ffd8f10301b6a2831ab77cd2395f4121cf2c8677eba727721163ebe",
+      "afterHash": "a7c93c0e64b7242ec8127060f0ff547b15322b711e7d3079850e68e65f1d8628",
+      "supersedesAfterHash": "652f06917cef1801c8b95816ca5dc0046ce45ad8fdb54a3df89385b1b310352d"
+    },
+    {
+      "id": "43-pwsh-reference-suffix",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "67ceafd0947850320db4bfbdfe27bf314b429863d3f5cf96e440f452be2a9143",
+      "afterHash": "e782a99df4d4672e833015a82d783a16affc30ef5f97702fa2c10aeda4b80b6f",
+      "supersedesAfterHash": "c9190aa1f2aa2dcb617fc9c05533af91ebf3f09322537687bd94191ff353a13a"
+    },
+    {
+      "id": "43-pwsh-reference-boundary",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "02f768069b3f66b3b065a3afa4cbcafd764c44b5cd0915b7b281420b53c4b33d",
+      "afterHash": "ba95dcf9ed3c414cca260fe253bd20f28a81d87fe7f60b67fec66a15d62b610d",
+      "supersedesAfterHash": "e5c29c09d0efae95b20da7a5ac13a27a666413b5570646fe337cb715e0a505cf"
+    },
+    {
+      "id": "43-powershell-reference-suffix",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d3fe54e45f72937df4f4c351509efc5ff0b563e90951e6518b6dd23c25487a8d",
+      "afterHash": "ea5f796c0f60edd2c0b76d878da6bc15d9c72187e784c96a1c7fc88a6700c33a",
+      "supersedesAfterHash": "8bcd487bd2eb344f1e65d97c6e0605637fc862ff51e8a80087e587a1c367f37e"
+    },
+    {
+      "id": "43-powershell-reference-boundary",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5347e950764009d073dbb7e913d6cba7a2fb573ad6a30a9c443b1a4682db353e",
+      "afterHash": "37bed750111ac124a7a7e4e2e5d5972031b497d3af087df0b25c304e28d7d7c0",
+      "supersedesAfterHash": "59c5f612d9b51badf01333c55e6ab07234e3c679424bc285f522f0956073e3ec"
+    },
+    {
+      "id": "43-spike-03",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "aa2416ef94d5a98276e060ba4e09f09478f41bb70af059f6b473e258fca7bbc7",
+      "afterHash": "d98a574cb3ad796dec64ccf78f396937461d903d64e0566fce98456423c5e4f3",
+      "supersedesAfterHash": "93ff36ef89eff8efe6e471cf34e71f48396a69d6a81c44313cab8b9b71fd5233"
+    },
+    {
+      "id": "43-spike-09",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e775a7bfe7a4a5a5d1daf3c85d4a163838c8bfdf0d01303ff82941fec380d6b9",
+      "afterHash": "8dd615be7af94e5d43b6d292a24ee00298339d215ad031be5f83ac899991c002",
+      "supersedesAfterHash": "297b16f2d224201aa690efbfbf4949773f2991ab1599118a53706cdef345fa7d"
+    },
+    {
+      "id": "43-spike-20",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "b1f51f8c8b7fbd1b8cf51474b86510fe005890e6c4b4dab2add3754fafce297d",
+      "afterHash": "9c008e41e306f53e31a2ad5a2ac04a9070c402645303b05d4a127564302c8f18",
+      "supersedesAfterHash": "b4f99c82fa0a8e004296dfe8d6d89f6a44411c698eaca0badb077ea24bca8e1e"
+    },
+    {
+      "id": "43-spike-32",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "43a4bf038fbe0a2ac64cfab53e087bb9d3dd9727b2bc586d89474ab354266dea",
+      "afterHash": "13c3c81220f0a9b19e1947326d0ced315db3c844a89067663307aa8c9dbd9c42",
+      "supersedesAfterHash": "1228b3444e4000d6253670e6b00b9d9cf3f3f03cea70ab77afec5b2a20782cd3"
+    },
+    {
+      "id": "43-spike-33",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a910f74dc4d18fc45113bf0a90c9de9126ba00cea9137a06e5e0e25048da5278",
+      "afterHash": "cdfa23c81bbd7cec4eddf556e4bb92ccfe85686806f0ac3c1bff1d7a6e40f876",
+      "supersedesAfterHash": "830e3c1b4fc96e9539054191bc7faff00da2a10fb0fd3ca5240592314f4422c2"
+    },
+    {
+      "id": "43-spike-44",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "46edfa0b8dd9e5dad30559e1eca5ed192cd14974aa083f44b541f5f37ea7c4e1",
+      "afterHash": "5b9a5c6ca00612526f39e623a3bb4bb9e9434858a40311eec80dbfb7e0e6bb14",
+      "supersedesAfterHash": "cdc3fef593e211b7fe1467db85653a2bd1250d5cc47c6cbfeb5f621610ffca09"
+    },
+    {
+      "id": "43-bash-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "74b7d8fde0b8d8e9932d11f326379978bf3330f8fa6b71ccfe8a9e839b87f581",
+      "afterHash": "9aeadf7ce7f683e787fb3fdffbcd2ba5b76a98956d419130428a823847e63081",
+      "supersedesAfterHash": "b2af5bdb70dbf7b42d9b59007d3b8e6c3ca62052267d12a7e0479f22b98f3c47"
+    },
+    {
+      "id": "43-bash-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "9089c6d9ed5d5f416a5043f689bdcc3c8fdf66dc3004959de2563cbfda83c3c8",
+      "afterHash": "918fe28a8a602295eb944a6ea6ed925ff33a7a64f7c79e312bd6a973b66013cd",
+      "supersedesAfterHash": "d2dc31a37c0fb5fb1beef1bdb04c6f81591d868608bdcf07899319c28ce35660"
+    },
+    {
+      "id": "43-bash-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a02c892f8378733aaca44ec3d1d04b1737f4324850b05a5380db6804a07dfaec",
+      "afterHash": "158a06a0ec7456208d74c2b7c32df07d2c42ceb2bce87da6e8cf8e356901fe1d",
+      "supersedesAfterHash": "a7de7978ccde0a14a714f58730154f49c20831e0e9dd27b1012c7cd6d202d24a"
+    },
+    {
+      "id": "43-bash-curl-5-ansi-c-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "ae29983aa41f657280b832b534e7e435d38e046240bcce660bedf681e4d3d359",
+      "afterHash": "5d7dcdff02e67fc0a07691bd66cb638dffcc93a96aff2e00246e861e8330e6d2",
+      "supersedesAfterHash": "2b7ad6f8ae71229bf97fadd0322d74b98f151bf84f89fa1ec632458dbb17c83b"
+    },
+    {
+      "id": "43-bash-curl-5-escape-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7355b6d9f6011995d483217586ff7a55e96c510ee75bedc86c6fab1d2d744ec5",
+      "afterHash": "2f741b5d54f31b2aa444d36396ab570b7e15af2e5ec049d7acc22f63ac22b027",
+      "supersedesAfterHash": "a4d9c5f2e7e2953cdfbbeaeaaefcab7bcec488a8e1caebbdaedc7a9ebd4f571c"
+    },
+    {
+      "id": "43-bash-curl-5-concatenation-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "82546e0360eb0a67fabcbb9732e276d93329ea27469e149fb32f8640ff525415",
+      "afterHash": "516a1ee17bd260c5b3fa35baaef816d809c15063535ba0b00e316d3bff10c6e6",
+      "supersedesAfterHash": "8fbf597b3caf0d53ebb0313af8f5be3b507669b26d15b1473d0cf0ac188b9c57"
+    },
+    {
+      "id": "43-zsh-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e4cb74d5752f2d87b6e2ebd494c50aab1e032c2e04a018404ecbed7486f575ae",
+      "afterHash": "90d8d8a975d3a779ad9fc523271e8da34e145de281347dd51c79ce449a095e72",
+      "supersedesAfterHash": "dd99a27cb365a37dcdd38845a808b0b2a839f4fcc53d727c21a6ff9bd49fe888"
+    },
+    {
+      "id": "43-zsh-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "074f2df7f3cee76894cf8d7b162d22365dd469c97acebb8416b267e6f233eb9e",
+      "afterHash": "bbcc3d9f98815f46da1bfb35d104e0df9481bd301aef758fa0b25289d40f90a5",
+      "supersedesAfterHash": "ed482a27ec0d7d43c98feca4827d77bf7b84bb0154f3c27996d604364cbc1634"
+    },
+    {
+      "id": "43-zsh-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6e0270c5bc84868f6cbafcb2cb21f6b4b8189a11215e971751b30c89bacb1c98",
+      "afterHash": "c7b728a1947a8daebddf025b1d132e0e324053fbcf6df8a41cf4a95fc107f685",
+      "supersedesAfterHash": "ebf82be2370a8458f682cc9817cb998ea43340adaa0941704754410ef25c08e6"
+    },
+    {
+      "id": "43-zsh-curl-5-ansi-c-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "e80420cfe82376ed53299361485c473ce88130b4b8e90f0bbaa283b0e236373f",
+      "afterHash": "363512e6a41c0a1e283748f18cbc0297d3dbfce091b4672e13755059d9e515d5",
+      "supersedesAfterHash": "2fd53be7c63df117317c7c77817fc45586770e0f906c7f066fe73c19978dd527"
+    },
+    {
+      "id": "43-zsh-curl-5-escape-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "7ff1c69af6d289dd7c622980b847c388ea2dcc8e877c286792324fe3e47e278b",
+      "afterHash": "fb1542eb15803fc4e3e501ac1fa3b46ca385db4d0c7fc34525169fc3889498ed",
+      "supersedesAfterHash": "4c53f8a697b4fb7c95891442cb9db9995de164a8738d9aa4e58319350dbbca8f"
+    },
+    {
+      "id": "43-zsh-curl-5-concatenation-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "41f7ba036896c2148af10a5c0a7403cc5445cb7c737c6cd0fb4702134ce26b31",
+      "afterHash": "66e76513f210fff3214a8cb491860611e6b2ed225fa7f2a6de897d407fc28c11",
+      "supersedesAfterHash": "1a23a8055f9e8f98e4c1ecf94ea2e2b46f4d1949adf5acff005eb717062574b1"
+    },
+    {
+      "id": "43-pwsh-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "6ab772e65a6a6e0e54b71d1674b2588386d7751a2dc046b5d12c941837db4116",
+      "afterHash": "028fe625e1409d6222c27e5ec5d57001ea25cac0816f5908fa6241e5ea4a6130",
+      "supersedesAfterHash": "41c8ac8acfb28c970c7bb282d4423b834ec3eec5a971238d71543983de614eeb"
+    },
+    {
+      "id": "43-pwsh-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "d3ea3474913c46cf6dcf7512c5597d6ed66f8e6217777e3aab94487ae116d92b",
+      "afterHash": "937438846a761cda56af39d53abc80cefb5e86ec48e7149f7d2b7853dc44d001",
+      "supersedesAfterHash": "c451997a0d82485b032a4bbbb22526f885db50036c9cca87433d4fda7bd19276"
+    },
+    {
+      "id": "43-pwsh-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "3217d92c815380253d1172ab3c7ce565a6a30499c2bce69a087c6fa4b2cda327",
+      "afterHash": "2a49ab9cdcb49c1851a127e920960da2cc982570a3e9456af4f13a6e1ed9647c",
+      "supersedesAfterHash": "20138d014da875d481cb579d9e0c5607603ae225943f0ee3c7ff7449c26a215a"
+    },
+    {
+      "id": "43-powershell-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "a699cbfc30d3cb2cc9db5c37ceb310bf6f6fea592c0e2b2dea3f6ee2c03dee3a",
+      "afterHash": "71d13c4d199ea1e0de4bd674ae037c9696969d8f150adb4fe07ed1eec7453c98",
+      "supersedesAfterHash": "76327ad76a0540328a8991ad63778e289d21e62b1c84a716886444cf7d213b16"
+    },
+    {
+      "id": "43-powershell-curl-5-single-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "5c735b1ef8b20a035fbe067ee6c9313d0b9f8e06d32f50d688b65613fe732303",
+      "afterHash": "57ffc63352fa94a4d098e7edcd7890abae10b0dd555c46363ce63e9b97f301be",
+      "supersedesAfterHash": "7a398a0af506cd7c89aa6753c9f61f26332e3f16ce9868174a650768747c7873"
+    },
+    {
+      "id": "43-powershell-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "837d7575c895a745e9fb2347054a69eb99e151906cfa49bad13f8847f93e4607",
+      "afterHash": "cb6dcdd165c79132c6c82627f33aaf7cc8fe5d1711a994bb5d5e747a2b870fbd",
+      "supersedesAfterHash": "23331370380494313b3a8ef0c0e4cd53aae3eb45b63fbd3a87b654e1689dae87"
+    },
+    {
+      "id": "43-cmd-curl-5-none-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "2e78b1e23e09a81c3cd0d7d2d917bd0e4dd7a7f21d7cf4a6feccd948b700ee7a",
+      "afterHash": "37cc429892a8e5ab6f5ea81b50a8602b430c2c04e2462a539a283f7a833c916f",
+      "supersedesAfterHash": "808e381fcbe457c986620a3de66f53f1773fe70f6658004b91f4726e7493bced"
+    },
+    {
+      "id": "43-cmd-curl-5-double-allowed",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "1afed3b75e20c6590519aa80908f8b63e47e983386f34e8d2b0f0117af211961",
+      "afterHash": "02cdf4d09e1b69420ff8e93b85d0101809e6cf5aac7be5302c95bca70629cc3b",
+      "supersedesAfterHash": "5d5c2f1fde0d38ea5c1472036a95a9673fed3ca89224cd497dd0736086796eb9"
+    },
+    {
+      "id": "43-bash-historical-tar-protected-extraction",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "4423d93b24ae644cea7c47dc39a24477ba65cdde48ed443d0dbdd6f7e7310f74",
+      "afterHash": "c182d3f8c93023c2c48e5543cda507fa8420bf2e4c5005fa48d3b7c0b4530c8a",
+      "supersedesAfterHash": "4d218a338455e23327875b189efe7d60a66443450cb71944dedad46844656ee5"
+    },
+    {
+      "id": "43-zsh-historical-tar-protected-extraction",
+      "explicit": true,
+      "date": "2026-11-10",
+      "rulingReference": "owner ruling 2026-11-09 (V112 guard-fix patch; destination engine moves to 1.1.3)",
+      "reason": "V112: move destination fixes to 1.1.3; 1.1.2 is the guard-fix patch and retains the 1.0 analyzer, following the 2026-10-09 V111 precedent. Supersedes the V111 target amendment; preserves the original history snapshot and all prior updates.",
+      "beforeHash": "15245bca58d899b9005b0adb82d45c9e43bc68f3ebb2187fa7fda83534d52d66",
+      "afterHash": "9b9eea0b2498387ef455539cea742cd2f8ac93be7fb7535bc71ca6a8d7ae8b63",
+      "supersedesAfterHash": "e86443a58056c795de9111940e9b443eb017226f452449e755b81ad58845d71b"
     }
   ],
   "historyUpdates": [

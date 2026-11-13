@@ -386,10 +386,34 @@ export async function collectActiveTokens(dir) {
   } catch {
     return map;
   }
+  // Turn and tool records in the order they were written (created_at), so
+  // the Map lists tokens first seen earliest first and a later record's kind
+  // wins. Ties and records without a time fall back to tool before turn,
+  // numeric turn order, then name: the same on every filesystem (phase 789).
+  const turnOf = (name) => Number(name.match(/^turn-(\d+)\.json$/)?.[1]);
+  const records = [];
   for (const name of entries) {
-    if (!/^turn-\d+\.json$/.test(name) && !/^tool-.+\.json$/.test(name))
-      continue;
+    const turn = turnOf(name);
+    const tool = /^tool-.+\.json$/.test(name);
+    if (!tool && !Number.isFinite(turn)) continue;
     const record = await readJson(path.join(dir, name));
+    const at = Date.parse(record?.created_at ?? '');
+    records.push({
+      name,
+      record,
+      at: Number.isFinite(at) ? at : -Infinity,
+      kind: tool ? 0 : 1,
+      turn: tool ? 0 : turn,
+    });
+  }
+  records.sort(
+    (a, b) =>
+      a.at - b.at ||
+      a.kind - b.kind ||
+      a.turn - b.turn ||
+      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  );
+  for (const { record } of records) {
     const replacements =
       record?.replacements ||
       record?.fields?.flatMap((f) => f.replacements || []) ||
