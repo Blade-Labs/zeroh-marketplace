@@ -1,0 +1,61 @@
+{
+  "phase": 43,
+  "date": "2026-09-08",
+  "consumerFingerprint": {
+    "repo": "zeroh-marketplace",
+    "language": "typescript",
+    "corpusSize": 44
+  },
+  "taskCount": 8,
+  "keyFiles": [
+    "docs/roadmap/roadmap.config.json",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/run.mjs",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/scenarios.mjs",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/preflight.mjs",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/score.mjs",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/report.mjs",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/fixtures.mjs",
+    "plugins/zeroh-roadmap/scripts/gauntlet-3.0/gauntlet-3.0.test.mjs",
+    "plugins/zeroh-roadmap/GAUNTLET-3.0.md",
+    "plugins/zeroh-roadmap/gauntlet-3.0/results.json"
+  ],
+  "gate": {
+    "green": true,
+    "slots": [
+      {
+        "slot": "lint",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "types",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "build",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "lint-diff"
+      },
+      {
+        "slot": "unit",
+        "exitCode": 0,
+        "durationMs": 1028463
+      },
+      {
+        "slot": "integration",
+        "declaredAbsent": true
+      },
+      {
+        "slot": "history-comments",
+        "exitCode": 0,
+        "durationMs": 0
+      }
+    ]
+  },
+  "attribution": {
+    "plannedBy": {
+      "model": "unverified"
+    }
+  }
+}
