@@ -3,12 +3,10 @@
     "graft": {
       "command": "npx",
       "args": [
-        "graft",
+        "-y",
+        "@nanonets/graft",
         "mcp"
-      ],
-      "env": {
-        "GRAFT_NO_REFRESH": "1"
-      }
+      ]
     }
   }
 }

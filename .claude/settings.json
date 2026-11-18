@@ -54,6 +54,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/helpers/graft-hooks.cjs\" stop",
+            "timeout": 8000
+          }
+        ]
+      }
     ]
   },
   "footerLinksRegexes": [
@@ -61,7 +72,10 @@
   ],
   "permissions": {
     "allow": [
-      "Bash(npx graft:*)"
+      "Bash(npx graft:*)",
+      "Bash(graft:*)",
+      "Bash(graft-dev:*)",
+      "Bash(node dist/cli.js:*)"
     ]
   }
 }
