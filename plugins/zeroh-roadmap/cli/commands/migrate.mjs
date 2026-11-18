@@ -51,6 +51,7 @@ export default async function migrate(args) {
   const repo=execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim()
   const root=roadmapRoot(repo), arcPath=fs.realpathSync(path.resolve(options['--arc']))
   if(path.dirname(arcPath)!==fs.realpathSync(path.join(root,'arcs'))) throw new Error('Select an arc directly inside the discovered roadmap root')
+  let legacyStringRatifications=0
   const decisions=options['--decisions']?JSON.parse(fs.readFileSync(options['--decisions'],'utf8')):{}
   if(Object.keys(decisions).some(k=>!['intent','scope','status'].includes(k))) throw new Error('Decisions may supply only intent, scope and status; repair evidence in its actual record')
   const {source,record:old}=readRecord(arcPath,'arc',repo)
@@ -62,6 +63,13 @@ export default async function migrate(args) {
   const arc=project(old,'arc')
   arc.phases=old.phases ?? old.planes?.flatMap(p=>p.phases)
   arc.acceptanceCriteria=old.acceptanceCriteria?.map(c=>({id:c.id, description:c.description ?? ['job','signal','bar'].filter(k=>c[k]).map(k=>`${k}: ${c[k]}`).join('\n')}))
+  // Consumer repair (viky-agent-2, 2026-09-09): legacy string-shaped criteriaRatifications cannot become native
+  // object ratifications without fabricating owner fields; they stay verbatim under
+  // extensions.roadmapMigration.original.criteriaRatifications and the migrated criteria text already embodies them.
+  if(Array.isArray(arc.criteriaRatifications)&&arc.criteriaRatifications.some(r=>typeof r==='string')){
+    legacyStringRatifications=arc.criteriaRatifications.filter(r=>typeof r==='string').length
+    arc.criteriaRatifications=arc.criteriaRatifications.filter(r=>typeof r!=='string')
+  }
   // Legacy arc status was often absent even after execution: never silently reset it.
   Object.assign(arc,decisions)
   if(['done','historical','cancelled'].includes(arc.status)) throw new Error('Migration cannot establish completion; preserve historical records unchanged')
@@ -101,7 +109,7 @@ export default async function migrate(args) {
   if(existing===schema && !facade) gaps.push('Root-local schema already exists: preserve it as legacy-schema.ts and review its relative imports before migration; no overwrite attempted')
   if(!facade && fs.existsSync(native)) gaps.push('native-schema.ts already exists; refusing to overwrite')
   if(facade && fs.readFileSync(native,'utf8')!==fs.readFileSync(template,'utf8')) gaps.push('Installed native schema differs from this version; review its upgrade first')
-  const warnings=['Review preserved comments and extensions.roadmapMigration.original for task steps, design rulings and constraints; legacy engine settings are data, not executable policy.', 'Existing scripts/hooks/CI that call retired commands still require adaptation.', 'Before execution, establish a reviewed committed literal intent baseline; this command does not grant approval or certify completion.']
+  const warnings=[...(legacyStringRatifications?[`${legacyStringRatifications} legacy string criteriaRatifications preserved verbatim under extensions.roadmapMigration.original; the native criteriaRatifications start empty and the migrated criteria text is the ratified state`]:[]),'Review preserved comments and extensions.roadmapMigration.original for task steps, design rulings and constraints; legacy engine settings are data, not executable policy.', 'Existing scripts/hooks/CI that call retired commands still require adaptation.', 'Before execution, establish a reviewed committed literal intent baseline; this command does not grant approval or certify completion.']
   const retiredCallers=[], legacySchemaCallers=[]
   for(const file of execFileSync('git',['ls-files','-z'],{cwd:repo,encoding:'utf8'}).split('\0').filter(Boolean)) {
     if(!/\.(?:json|mjs|cjs|ts|sh|md|ya?ml)$/.test(file) || /(?:^|\/)(?:node_modules|arc-evals|phases|arcs|archive)(?:\/|$)/.test(file)) continue
